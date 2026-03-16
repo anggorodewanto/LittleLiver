@@ -20,7 +20,7 @@ A personal-use web application for parents to track daily health metrics of an i
 ### 2.2 Authorization
 - A baby profile has **unlimited authorized parents** (Google account IDs). No maximum.
 - All authorized parents have equal read/write access to all data for that baby.
-- Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. A cron job periodically deletes ALL invite codes older than 24 hours (both used and unused) across all babies. The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic "invalid or expired code" error for all failure cases.
+- Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. On code collision (uniqueness violation), retry with a new random code up to **5 times**. A cron job periodically deletes ALL invite codes older than 24 hours (both used and unused) across all babies, keeping active code count low and collision risk negligible. The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic "invalid or expired code" error for all failure cases.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
 - **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
@@ -77,7 +77,7 @@ Each row represents a single wet diaper event (logged with a timestamp). Urine a
 
 | Field | Type | Notes |
 |-------|------|-------|
-| Date | date | |
+| Timestamp | datetime | Auto-filled, editable (full datetime like all other metrics) |
 | Weight (kg) | number | To 2 decimal places (e.g., 4.35) |
 | Measurement source | enum | `home_scale`, `clinic` |
 | Notes | text | |
@@ -139,7 +139,7 @@ New or worsening bruising can indicate vitamin K deficiency / coagulopathy.
 | Medication name | text | Pre-populated suggestions: `UDCA (ursodiol)`, `Sulfamethoxazole-Trimethoprim (Bactrim)`, `Vitamin A`, `Vitamin D`, `Vitamin E (TPGS)`, `Vitamin K`, `Iron`, `Other` |
 | Dose | text | e.g., "50mg", "0.5mL" |
 | Frequency | enum | `once_daily`, `twice_daily`, `three_times_daily`, `as_needed`, `custom` |
-| Scheduled times | time[] | e.g., [08:00, 20:00] for twice daily. Stored as **local time strings** (not UTC). Interpreted per the medication's stored timezone (see §6.2). |
+| Scheduled times | time[] | e.g., [08:00, 20:00] for twice daily. Stored as **local time strings** (not UTC). Interpreted per the medication's stored timezone (see §6.2). `custom` = arbitrary user-defined list of daily times (functionally the same as other frequencies but with user-chosen times). `as_needed` = null/empty schedule array, no push notifications sent. |
 | Timezone | text | IANA timezone (e.g., `America/New_York`), set at creation time from the creator's `X-Timezone` header. All notification scheduling uses this timezone, not the individual user's timezone. This prevents dose drift and double-dosing across timezone boundaries. |
 | Given at | datetime | Set to `NOW()` when parent taps "given" (not `scheduled_time`). Null when skipped. |
 | Skipped | boolean | Mutually exclusive with `given_at`: `skipped=true` → `given_at` is null; `skipped=false` → `given_at` is non-null. |
@@ -268,6 +268,8 @@ DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 
 Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/medications`, `/med-logs`, `/labs`, `/notes`
 
+**Photo signed URLs:** For metric types that support photos (see §5.4), the `photo_keys` array in API responses contains signed URLs (TTL: 1 hour) rather than raw R2 keys.
+
 **Edit authorization:** Any linked parent can edit or delete any entry for that baby, regardless of who originally logged it (equal access). The `logged_by` field is immutable — it always reflects the original author. An `updated_by` field (nullable `TEXT REFERENCES users(id)`) is set to the editing user's ID on any update.
 
 **Pagination:** All metric list endpoints use **cursor-based pagination**, sorted newest-first. Default **50 items per page**. All entity IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers), which encode creation time and are naturally sortable newest-first. This means `WHERE id < cursor` with `ORDER BY id DESC` gives correct newest-first pagination without a separate timestamp sort. The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results).
@@ -287,6 +289,10 @@ POST   /api/babies/:id/upload      → Upload photo (baby-level auth check) → 
 1. Client uploads the photo via `POST /api/babies/:id/upload`. The server stores the file in R2, creates a `photo_uploads` row, and returns the **R2 key** in the response.
 2. Client includes the R2 key(s) in the metric entry creation or update request body, in the `photo_keys` JSON array field.
 3. Server validates that each R2 key in `photo_keys` exists in the `photo_uploads` table with a matching `baby_id`. If valid, the server sets `linked_at` on the corresponding `photo_uploads` rows.
+
+**Photo support scope:** Only the following metric types support photos (`photo_keys` column): `stools`, `abdomen_observations`, `skin_observations`, `bruising`, and `general_notes`. Photos are explicitly NOT supported for: `feedings`, `weights`, `temperatures`, `urine`, `lab_results`, `med_logs`.
+
+**Signed URLs on read:** When metric entries containing `photo_keys` are returned by the API (list or detail), the server replaces each R2 key with a **signed URL** (TTL: 1 hour). No separate photo URL endpoint is needed — clients always receive ready-to-use URLs.
 
 Photos are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) on the relevant metric entry — no join table. **Photo unlink on edit:** When a metric entry is updated and a photo key is removed from `photo_keys`, the server sets `linked_at = NULL` on the corresponding `photo_uploads` row. No synchronous R2 deletion occurs during PUT requests — the orphan cleanup cron handles eventual deletion. **Orphan cleanup:** A cron job deletes `photo_uploads` rows where `linked_at` is null and `uploaded_at` is older than 24 hours, and garbage-collects the corresponding R2 objects.
 
@@ -308,7 +314,7 @@ DELETE /api/push/subscribe                    → Unregister
 
 ### 5.6 Reports
 ```
-GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON for charts). Response includes an `active_alerts` array containing entry IDs that trigger alerts (based on the most recent entries of each alert type). Frontend compares this with the local dismissed set and removes dismissed IDs for alerts that now have recovery entries.
+GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON for charts). When `from`/`to` are omitted, defaults to today. Trends view uses the same endpoint with different date ranges (e.g., `?from=2026-03-09&to=2026-03-16` for 7-day view). All aggregation is server-side. Response includes an `active_alerts` array containing entry IDs that trigger alerts (based on the most recent entries of each alert type). Frontend compares this with the local dismissed set and removes dismissed IDs for alerts that now have recovery entries.
 GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PDF (always includes all photos within date range)
 ```
 
@@ -336,7 +342,7 @@ Action: Opens app to medication logging screen with pre-filled medication.
 
 ### 6.4 Suppression & Follow-ups
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
-- **Suppression check:** Before sending any notification (initial or follow-up), the server checks for any `med_log` for that `medication_id` (given OR skipped) within **±30 minutes** of the scheduled time being checked. The check uses `given_at` for given doses and `created_at` for skipped doses. This is a simple per-medication check — it does not need to match a specific `scheduled_time` field on the `med_log`. If found, the notification is suppressed.
+- **Suppression check:** Before sending any notification (initial, +15 min follow-up, or +30 min follow-up), the server checks for any `med_log` for that `medication_id` (given OR skipped) within **±30 minutes of the original scheduled time** — not ±30 min of the follow-up firing time. The check is identical regardless of which notification tier is being evaluated. The check uses `given_at` for given doses and `created_at` for skipped doses. This is a simple per-medication check — it does not need to match a specific `scheduled_time` field on the `med_log`. If found, the notification is suppressed.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
 - **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up re-runs the suppression check before sending.
 - **Missed notifications:** If the server was down and a scheduled time + 15 min or + 30 min has already passed, the follow-up is simply skipped. No backfill of missed notifications.
@@ -353,10 +359,10 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
-- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type**, regardless of age — there is no lookback window or auto-expiry. **Temperature alerts** track which measurement method triggered the alert. Only a same-method sub-threshold reading clears it. If a different method is logged below that method's threshold, the fever alert persists (e.g., if a rectal 38.5°C triggers an alert, only a rectal sub-38.0°C reading clears it; an axillary 37.0°C does not clear it). The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another rectal reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
+- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type**, regardless of age — there is no lookback window or auto-expiry. **Temperature alerts:** Only one temperature alert exists at a time, based on the **single most recent temperature entry** regardless of method. If that entry exceeds the threshold for its method, the alert fires. If the most recent entry is sub-threshold for its own method, there is no alert — regardless of prior readings by other methods. Since only the most recent entry matters, "recovery" simply means the newest temperature entry is sub-threshold for its own method. The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
-Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
+Uses the same `GET /api/babies/:id/dashboard?from=&to=` endpoint with the desired date range. Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
 - **Stool color over time** — scatter plot, color-coded by stool color rating
 - **Weight curve** — with WHO percentile bands (3rd, 15th, 50th, 85th, 97th) overlaid
 - **Temperature** — line chart with fever threshold line
@@ -742,7 +748,7 @@ primary_region = "iad"      # Choose closest region
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
 - **Rate limiting** — basic rate limiting on API endpoints (personal use, but good hygiene).
-- **Invite codes** — 6-digit numeric strings (e.g., `"483921"`). Single-use, fixed **24-hour expiration**. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). The `POST /api/babies/:id/invite` response includes both the `code` and the `expires_at` timestamp. A cron job periodically deletes ALL codes older than 24 hours (both used and unused). The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic `"invalid or expired code"` error for all failure cases (expired, used, invalidated, nonexistent, race condition).
+- **Invite codes** — 6-digit numeric strings (e.g., `"483921"`). Single-use, fixed **24-hour expiration**. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). On uniqueness violation (code collision), retry with a new random code up to **5 times** before returning an error. With cron cleanup keeping active code count low, collision risk is negligible. The `POST /api/babies/:id/invite` response includes both the `code` and the `expires_at` timestamp. A cron job periodically deletes ALL codes older than 24 hours (both used and unused). The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic `"invalid or expired code"` error for all failure cases (expired, used, invalidated, nonexistent, race condition).
 
 ---
 
