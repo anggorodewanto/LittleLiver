@@ -45,7 +45,7 @@ A personal-use web application for parents to track daily health metrics of an i
 | Duration (min) | number | For breastfeeding sessions |
 | Notes | text | Free-form (e.g., "tolerated well", "vomited after") |
 
-**Caloric intake calculation:** The backend auto-converts kcal/oz to mL using `1 oz = 29.5735 mL`. Formula: `kcal = volume_ml × (cal_density / 29.5735)`. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`.
+**Caloric intake calculation:** All feed types (including `solid` and `other`) can optionally specify `cal_density` and `volume_ml`. When both are provided, calories are calculated using the standard formula: `kcal = volume_ml × (cal_density / 29.5735)` (where `1 oz = 29.5735 mL`). If either field is missing, caloric intake is left null for that entry. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`.
 
 ### 3.2 Urine Output (multiple entries per day)
 
@@ -135,8 +135,9 @@ New or worsening bruising can indicate vitamin K deficiency / coagulopathy.
 | Frequency | enum | `once_daily`, `twice_daily`, `three_times_daily`, `as_needed`, `custom` |
 | Scheduled times | time[] | e.g., [08:00, 20:00] for twice daily. Stored as **local time strings** (not UTC). Interpreted per the medication's stored timezone (see §6.2). |
 | Timezone | text | IANA timezone (e.g., `America/New_York`), set at creation time from the creator's `X-Timezone` header. All notification scheduling uses this timezone, not the individual user's timezone. This prevents dose drift and double-dosing across timezone boundaries. |
-| Given at | datetime | Logged when parent taps "given" |
-| Skipped | boolean | With required reason text |
+| Given at | datetime | Set to `NOW()` when parent taps "given" (not `scheduled_time`). Null when skipped. |
+| Skipped | boolean | Mutually exclusive with `given_at`: `skipped=true` → `given_at` is null; `skipped=false` → `given_at` is non-null. |
+| Skip reason | text | Optional even when `skipped=true`. |
 | Notes | text | e.g., "spit up half the dose" |
 
 **Reminder system:** see §6 (Push Notifications).
@@ -249,6 +250,8 @@ DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 
 Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/medications`, `/med-logs`, `/labs`, `/notes`
 
+**Edit authorization:** Any linked parent can edit or delete any entry for that baby, regardless of who originally logged it (equal access). The `logged_by` field is immutable — it always reflects the original author. An `updated_by` field (nullable `TEXT REFERENCES users(id)`) is set to the editing user's ID on any update.
+
 **Pagination:** All metric list endpoints use **cursor-based pagination**, sorted newest-first. Default **50 items per page**. All entity IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers), which encode creation time and are naturally sortable newest-first. This means `WHERE id < cursor` with `ORDER BY id DESC` gives correct newest-first pagination without a separate timestamp sort. The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results).
 
 **Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Med-log entries support full `PUT` (edit) and `DELETE` (hard delete) — parents can correct mistakes freely, and adherence is calculated from current data only. Keep it simple.
@@ -259,9 +262,15 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 
 ### 5.4 Photos
 ```
-POST   /api/babies/:id/upload      → Upload photo (baby-level auth check) → returns R2 URL
+POST   /api/babies/:id/upload      → Upload photo (baby-level auth check) → returns R2 key
 ```
-Photos are uploaded separately and their R2 keys are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) on the relevant metric entry — no join table. Uploads are staged in a `photo_uploads` table (see §10). When a metric entry is created or updated with photo keys, the server sets `linked_at` on the corresponding `photo_uploads` rows. **Orphan cleanup:** A cron job deletes `photo_uploads` rows where `linked_at` is null and `uploaded_at` is older than 24 hours, and garbage-collects the corresponding R2 objects.
+
+**Photo upload flow:**
+1. Client uploads the photo via `POST /api/babies/:id/upload`. The server stores the file in R2, creates a `photo_uploads` row, and returns the **R2 key** in the response.
+2. Client includes the R2 key(s) in the metric entry creation or update request body, in the `photo_keys` JSON array field.
+3. Server validates that each R2 key in `photo_keys` exists in the `photo_uploads` table with a matching `baby_id`. If valid, the server sets `linked_at` on the corresponding `photo_uploads` rows.
+
+Photos are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) on the relevant metric entry — no join table. **Orphan cleanup:** A cron job deletes `photo_uploads` rows where `linked_at` is null and `uploaded_at` is older than 24 hours, and garbage-collects the corresponding R2 objects.
 
 ### 5.5 Medications & Reminders
 
@@ -271,7 +280,7 @@ The medication resource includes both the drug definition and its schedule (no s
 POST   /api/babies/:id/medications           → Create medication (name, dose, frequency, schedule times)
 GET    /api/babies/:id/medications            → List medications (active and inactive)
 PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
-POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
+POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). `given_at` and `skipped` are mutually exclusive: when logging as "given", the server sets `given_at` to `NOW()` (current time, not `scheduled_time`); when logging as "skipped", `given_at` is null. `skip_reason` is optional even when `skipped=true`. Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
 GET    /api/babies/:id/med-logs?medication_id=&from=&to=&cursor=  → List med-logs, filterable by medication and date range
 PUT    /api/babies/:id/med-logs/:entryId     → Edit a med-log entry
 DELETE /api/babies/:id/med-logs/:entryId     → Hard-delete a med-log entry
@@ -281,7 +290,7 @@ DELETE /api/push/subscribe                    → Unregister
 
 ### 5.6 Reports
 ```
-GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON for charts)
+GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON for charts). Response includes an `active_alerts` array containing entry IDs that trigger alerts (based on the most recent entries of each alert type). Frontend compares this with the local dismissed set and removes dismissed IDs for alerts that now have recovery entries.
 GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PDF (always includes all photos within date range)
 ```
 
@@ -311,7 +320,8 @@ Action: Opens app to medication logging screen with pre-filled medication.
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
 - **Initial notification:** Before sending the initial reminder, the server checks for an existing `med_log` with `given_at` within **±30 minutes** of `scheduled_time`. If found, the initial notification is suppressed.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
-- **Follow-ups:** Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up **re-checks** for an existing `med_log` with `given_at` within ±30 min of `scheduled_time` before sending. If a dose was logged since the initial notification, the follow-up is suppressed.
+- **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up **re-checks** for an existing `med_log` with `given_at` within ±30 min of `scheduled_time` before sending. If a dose was logged since the initial notification, the follow-up is suppressed.
+- **Missed notifications:** If the server was down and a scheduled time + 15 min or + 30 min has already passed, the follow-up is simply skipped. No backfill of missed notifications.
 - Max **2 follow-ups** per dose.
 
 ---
@@ -408,9 +418,10 @@ CREATE TABLE baby_parents (
 
 -- Invite codes (one active code per baby; generating a new code hard-deletes ALL prior codes for that baby)
 -- A cron job periodically deletes expired unused codes.
--- Non-redeemable codes (expired, used, or nonexistent) return a generic "invalid or expired code" error
+-- Codes are 6-digit numeric strings (e.g., "483921")
+-- All failure cases (expired, used, invalidated, nonexistent, race condition) return a generic "invalid or expired code" error
 CREATE TABLE invites (
-    code        TEXT PRIMARY KEY,
+    code        TEXT PRIMARY KEY,  -- 6-digit numeric string
     baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE,
     created_by  TEXT REFERENCES users(id),
     used_by     TEXT REFERENCES users(id),
@@ -424,6 +435,7 @@ CREATE TABLE feedings (
     id          TEXT PRIMARY KEY,
     baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),  -- set on edit, null initially
     timestamp   DATETIME NOT NULL,
     feed_type   TEXT NOT NULL,
     volume_ml   REAL,
@@ -438,6 +450,7 @@ CREATE TABLE stools (
     id              TEXT PRIMARY KEY,
     baby_id         TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     logged_by       TEXT REFERENCES users(id) NOT NULL,
+    updated_by      TEXT REFERENCES users(id),  -- set on edit, null initially
     timestamp       DATETIME NOT NULL,
     color_rating    INTEGER NOT NULL CHECK (color_rating BETWEEN 1 AND 7),
     color_label     TEXT,
@@ -454,6 +467,7 @@ CREATE TABLE urine (
     id          TEXT PRIMARY KEY,
     baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),  -- set on edit, null initially
     timestamp   DATETIME NOT NULL,
     color       TEXT,               -- clear, pale_yellow, dark_yellow, amber, brown
     notes       TEXT,
@@ -461,9 +475,107 @@ CREATE TABLE urine (
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Similar tables: weights, abdomen, temperatures, skin_observations,
--- bruising, lab_results, general_notes
--- All have ON DELETE CASCADE on babies(id) foreign keys.
+CREATE TABLE weights (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),
+    timestamp   DATETIME NOT NULL,
+    weight_kg   REAL NOT NULL,
+    percentile  TEXT,               -- auto-calculated note from WHO growth standards
+    notes       TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE temperatures (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),
+    timestamp   DATETIME NOT NULL,
+    value       REAL NOT NULL,
+    method      TEXT NOT NULL,      -- rectal, axillary, ear, forehead
+    notes       TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE abdomen_observations (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),
+    timestamp   DATETIME NOT NULL,
+    firmness    TEXT NOT NULL,       -- soft, firm, distended
+    tenderness  BOOLEAN DEFAULT FALSE,
+    girth_cm    REAL,
+    photo_keys  TEXT,               -- JSON array of R2 object keys
+    notes       TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE skin_observations (
+    id              TEXT PRIMARY KEY,
+    baby_id         TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by       TEXT REFERENCES users(id) NOT NULL,
+    updated_by      TEXT REFERENCES users(id),
+    timestamp       DATETIME NOT NULL,
+    jaundice_level  TEXT,            -- none, mild, moderate, severe
+    scleral_icterus BOOLEAN DEFAULT FALSE,
+    rashes          TEXT,
+    bruising        TEXT,
+    photo_keys      TEXT,            -- JSON array of R2 object keys
+    notes           TEXT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE bruising (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),
+    timestamp   DATETIME NOT NULL,
+    location    TEXT NOT NULL,
+    size_cm     REAL,
+    color       TEXT,
+    photo_keys  TEXT,               -- JSON array of R2 object keys
+    notes       TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE lab_results (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),
+    timestamp   DATETIME NOT NULL,
+    test_name   TEXT NOT NULL,
+    value       TEXT NOT NULL,
+    unit        TEXT,
+    normal_range TEXT,
+    notes       TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE general_notes (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),
+    timestamp   DATETIME NOT NULL,
+    content     TEXT NOT NULL,
+    photo_keys  TEXT,               -- JSON array of R2 object keys
+    category    TEXT,               -- behavior, sleep, vomiting, irritability, skin, other
+    notes       TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- photo_uploads.baby_id uses ON DELETE SET NULL (not CASCADE). A cleanup job
 -- finds photo_uploads rows with NULL baby_id, deletes the corresponding R2
 -- objects, then deletes the rows.
@@ -487,10 +599,11 @@ CREATE TABLE med_logs (
     medication_id   TEXT REFERENCES medications(id) ON DELETE CASCADE NOT NULL,
     baby_id         TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     logged_by       TEXT REFERENCES users(id) NOT NULL,
+    updated_by      TEXT REFERENCES users(id),  -- set on edit, null initially
     scheduled_time  DATETIME,          -- full UTC datetime, computed by server from local schedule + user timezone; nullable for ad-hoc doses
-    given_at        DATETIME,
-    skipped         BOOLEAN DEFAULT FALSE,
-    skip_reason     TEXT,
+    given_at        DATETIME,          -- set to NOW() when logging as given; null when skipped=true
+    skipped         BOOLEAN DEFAULT FALSE,  -- mutually exclusive with given_at: skipped=true → given_at is null; skipped=false → given_at is non-null
+    skip_reason     TEXT,              -- optional even when skipped=true
     notes           TEXT,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -595,7 +708,7 @@ primary_region = "iad"      # Choose closest region
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
 - **Rate limiting** — basic rate limiting on API endpoints (personal use, but good hygiene).
-- **Invite codes** — single-use, expire after 24 hours. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). A cron job periodically deletes expired unused codes. Any non-redeemable code (expired, used, or nonexistent) returns a generic "invalid or expired code" error.
+- **Invite codes** — 6-digit numeric strings (e.g., `"483921"`). Single-use, expire after 24 hours. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). A cron job periodically deletes expired unused codes. All failure cases (expired, used, invalidated, nonexistent, race condition) return a generic `"invalid or expired code"` error.
 
 ---
 
