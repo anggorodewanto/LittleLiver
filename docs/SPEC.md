@@ -22,7 +22,7 @@ A personal-use web application for parents to track daily health metrics of an i
 - All authorized parents have equal read/write access to all data for that baby.
 - Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. On code collision (uniqueness violation), retry with a new random code up to **5 times**. A cron job periodically deletes ALL invite codes older than 24 hours (both used and unused) across all babies, keeping active code count low and collision risk negligible. The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic "invalid or expired code" error for all failure cases.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
-- **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted.
+- **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted. The endpoint always returns **204 No Content** regardless of whether the baby was also deleted. The frontend detects baby deletion by attempting to fetch baby data and receiving 404, then navigates to the baby list/creation screen.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
 
 ### 2.3 Multi-Baby Support
@@ -45,7 +45,7 @@ A personal-use web application for parents to track daily health metrics of an i
 | Duration (min) | number | For breastfeeding sessions |
 | Notes | text | Free-form (e.g., "tolerated well", "vomited after") |
 
-**Caloric intake calculation:** All feed types (including `solid` and `other`) can optionally specify `cal_density` and `volume_ml`. When both are provided, calories are calculated using the standard formula: `kcal = volume_ml × (cal_density / 29.5735)` (where `1 oz = 29.5735 mL`). **Cal density auto-apply:** When `volume_ml` is provided but `cal_density` is omitted, the backend auto-applies a default of **~20 kcal/oz** for `breast_milk` and `formula` feed types. This is a type-based default — `used_default_cal` is NOT set for these entries. If neither `cal_density` nor the type-based default applies, and volume is missing, caloric intake is left null for that entry. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`. Only breast-direct feeds with no volume use `default_cal_per_feed` and have `used_default_cal=true`.
+**Caloric intake calculation:** All feed types (including `solid` and `other`) can optionally specify `cal_density` and `volume_ml`. When both are provided, calories are calculated using the standard formula: `kcal = volume_ml × (cal_density / 29.5735)` (where `1 oz = 29.5735 mL`). **Cal density auto-apply:** When `volume_ml` is provided but `cal_density` is omitted, the backend auto-applies a default of **~20 kcal/oz** for `breast_milk` and `formula` feed types. This is a type-based default — `used_default_cal` is NOT set for these entries. The type-based 20 kcal/oz value is baked into the `calories` column at insert time; if a parent needs to correct it, they edit the individual entry's `cal_density` field. No extra flag or batch-recalculation mechanism exists for type-based defaults. If neither `cal_density` nor the type-based default applies, and volume is missing, caloric intake is left null for that entry. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`. Only breast-direct feeds with no volume use `default_cal_per_feed` and have `used_default_cal=true`.
 
 **Denormalized `calories` column:** The computed caloric value is stored as a `calories REAL` column on the `feedings` table. This value is computed and stored on insert/update using the formula above (or the baby's `default_cal_per_feed` for breast-direct feeds without volume). A `used_default_cal BOOLEAN DEFAULT false` column tracks whether the feeding's calories were computed using the baby's `default_cal_per_feed`. When `default_cal_per_feed` is changed on the baby via `PUT /api/babies/:id`, the parent can trigger recalculation of all affected entries by including `recalculate_calories=true` as a query parameter (or body field). When set, the server recalculates all feeding entries where `used_default_cal = true` using the new default value, within the same request. The response includes `{ "recalculated_count": N }` with the number of updated entries.
 
@@ -150,13 +150,13 @@ New or worsening bruising can indicate vitamin K deficiency / coagulopathy.
 
 ### 3.10 Lab Results (per clinic visit, entered manually)
 
-Stored as individual test entries using an EAV-style table (`test_name`, `value`, `unit`, `normal_range`, `notes`). Each row is one test result. Entries on the same date are implicitly grouped (no explicit visit_id). The schema is generic to support any lab test.
+Stored as individual test entries using an EAV-style table (`test_name`, `value`, `unit`, `normal_range`, `notes`). Each row is one test result. Lab entries from the same visit share the exact same timestamp for implicit grouping (no explicit visit_id). The schema is generic to support any lab test.
 
 The **UI** suggests common Kasai-relevant tests as quick-pick options: `total_bilirubin`, `direct_bilirubin`, `ALT`, `AST`, `GGT`, `albumin`, `INR`, `platelets`. Selecting a quick-pick pre-fills the `test_name` and `unit` fields. Parents can also enter arbitrary test names.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| Date | date | |
+| Timestamp | datetime | Full datetime like all other metric types |
 | Test name | text | Free-form; UI suggests common Kasai tests as quick-picks |
 | Value | text | The result value |
 | Unit | text | e.g., "mg/dL", "U/L", "×10³/µL" |
@@ -255,7 +255,7 @@ GET    /api/babies/:id             → Get baby details
 PUT    /api/babies/:id             → Update baby info (name, DOB, sex, diagnosis date, kasai date). Supports `?recalculate_calories=true` — see §3.1.
 POST   /api/babies/:id/invite      → Generate invite code (any linked parent). Returns { "code": "483921", "expires_at": "2026-03-17T14:30:00Z" }. Fixed 24-hour expiration.
 POST   /api/babies/join             → Join baby profile via invite code
-DELETE /api/babies/:id/parents/me   → Unlink self from baby (last parent triggers baby + data deletion)
+DELETE /api/babies/:id/parents/me   → Unlink self from baby (last parent triggers baby + data deletion). Always returns 204.
 ```
 
 ### 5.3 Metric Entries (pattern repeats for each metric type)
@@ -276,7 +276,7 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 
 **Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Med-log entries support full `PUT` (edit) and `DELETE` (hard delete) — parents can correct mistakes freely, and adherence is calculated from current data only. Keep it simple.
 
-**Date parameters:** `from` and `to` query parameters are **YYYY-MM-DD calendar date strings**. They filter against the entry's user-editable `timestamp` field. They are interpreted using the user's timezone (from `X-Timezone` header). Both bounds are inclusive — the range spans from 00:00:00 to 23:59:59 in the user's timezone. Note: date filtering uses the editable `timestamp`, while pagination order uses ULID (`WHERE id < cursor ORDER BY id DESC`). This means backdated entries may appear in a date range but at a different position than their chronological order would suggest. This minor inconsistency is accepted.
+**Date parameters:** `from` and `to` query parameters are **YYYY-MM-DD calendar date strings**. They filter against the entry's user-editable `timestamp` field. They are interpreted using the user's timezone (from `X-Timezone` header). Both bounds are inclusive — the range spans from 00:00:00 to 23:59:59 in the user's timezone. Note: date filtering uses the editable `timestamp`, while pagination order uses ULID (`WHERE id < cursor ORDER BY id DESC`). This means backdated entries may appear in a date range but at a different position than their chronological order would suggest. Additionally, backdated entries may split same-timestamp entries across page boundaries since the ULID cursor is creation-order, not timestamp-order. Both quirks are acceptable for a personal-use app — the ULID-based cursor is kept as-is.
 
 **Timezone:** Every API request must include an `X-Timezone` header with the user's IANA timezone (e.g., `America/New_York`). The backend persists this on the user record (`timezone` column), updating it on every API call so it stays current. The user's timezone is used for interpreting date parameters (`from`/`to`). Medication scheduled times are interpreted per the medication's own stored timezone (set at creation from the creator's `X-Timezone` header) — see §3.9 and §6.2. No timezone is stored on the baby profile.
 
@@ -300,7 +300,7 @@ Photos are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) o
 
 ### 5.5 Medications & Reminders
 
-The medication resource includes both the drug definition and its schedule (no separate `/med-schedules` endpoint). Deactivate a medication by setting `active=false` via `PUT /api/babies/:id/medications/:id`.
+The medication resource includes both the drug definition and its schedule (no separate `/med-schedules` endpoint). Deactivate a medication by setting `active=false` via `PUT /api/babies/:id/medications/:id`. When a medication is deactivated, the scheduler skips it on its next tick — no further notifications are sent for that medication. Deactivated medications are also excluded from the `upcoming_meds` section of the dashboard response.
 
 ```
 POST   /api/babies/:id/medications           → Create medication (name, dose, frequency, schedule times)
@@ -331,8 +331,8 @@ GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON
     "last_weight": null
   },
   "stool_color_trend": [],         // always last 7 days, regardless of from/to
-  "upcoming_meds": [],             // next due medications with countdown
-  "active_alerts": [],             // entry IDs that trigger alerts (based on most recent entries of each alert type)
+  "upcoming_meds": [],             // next due ACTIVE medications with countdown (deactivated medications excluded)
+  "active_alerts": [],             // entry IDs that trigger alerts — always computed from the globally most recent entry of each alert type across ALL time, ignoring the from/to date range parameters (alerts are global state)
   "chart_data_series": {           // aggregated for the requested date range
     "feeding_daily": [],
     "diaper_daily": [],
@@ -359,7 +359,7 @@ GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PD
 
 ### 6.2 Reminder Logic
 - The Go backend runs a **scheduler** (e.g., a goroutine with a ticker or a lightweight cron library).
-- Every minute, the scheduler computes "today" **relative to each medication's own timezone** (the `timezone` column on the medication record, set at creation time from the creator's `X-Timezone` header). It looks **forward** (next minute) for initial notifications and **backward** (up to 30 minutes) for follow-ups. This means at 23:50 UTC, a medication in UTC+2 checks against the next calendar day's schedule in that timezone. Scheduled times are stored as local time strings and interpreted per the medication's timezone. All parents are notified based on this single timezone, preventing dose drift and double-dosing when parents are in different timezones.
+- Every minute, the scheduler queries only **active** medications (`active=true`). It computes "today" **relative to each medication's own timezone** (the `timezone` column on the medication record, set at creation time from the creator's `X-Timezone` header). It looks **forward** (next minute) for initial notifications and **backward** (up to 30 minutes) for follow-ups. This means at 23:50 UTC, a medication in UTC+2 checks against the next calendar day's schedule in that timezone. Scheduled times are stored as local time strings and interpreted per the medication's timezone. All parents are notified based on this single timezone, preventing dose drift and double-dosing when parents are in different timezones.
 - Sends a push notification to all subscribed devices for that baby's parents.
 - Notification includes: medication name, dose, and a "Log as given" action button (deep-links to the logging screen).
 
@@ -374,7 +374,7 @@ Action: Opens app to medication logging screen with pre-filled medication.
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
 - **Suppression check:** Before sending any notification (initial, +15 min follow-up, or +30 min follow-up), the server checks for any `med_log` for that `medication_id` (given OR skipped) within **±30 minutes of the original scheduled time** — not ±30 min of the follow-up firing time. The check is identical regardless of which notification tier is being evaluated. The check uses `given_at` for given doses and `created_at` for skipped doses. This is a simple per-medication check — it does not need to match a specific `scheduled_time` field on the `med_log`. If found, the notification is suppressed.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
-- **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up re-runs the suppression check before sending.
+- **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up re-runs the suppression check before sending. **Suppression is a one-time decision per notification tier:** once an initial notification, +15 min follow-up, or +30 min follow-up is suppressed (because a qualifying `med_log` existed at the time of the check), that tier stays suppressed even if the `med_log` is later edited or deleted. The scheduler does not revisit past suppression decisions.
 - **Missed notifications:** If the server was down and a scheduled time + 15 min or + 30 min has already passed, the follow-up is simply skipped. No backfill of missed notifications.
 - Max **2 follow-ups** per dose.
 
@@ -389,7 +389,7 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
-- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type**, regardless of age — there is no lookback window or auto-expiry. **Temperature alerts:** Only one temperature alert exists at a time, based on the **single most recent temperature entry** regardless of method. If that entry exceeds the threshold for its method, the alert fires. If the most recent entry is sub-threshold for its own method, there is no alert — regardless of prior readings by other methods. Since only the most recent entry matters, "recovery" simply means the newest temperature entry is sub-threshold for its own method. The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
+- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type across all time**, regardless of age — there is no lookback window or auto-expiry. `active_alerts` is always computed globally, ignoring any `from`/`to` date range on the dashboard request. **Temperature alerts:** Only one temperature alert exists at a time, based on the **single most recent temperature entry** regardless of method. If that entry exceeds the threshold for its method, the alert fires. If the most recent entry is sub-threshold for its own method, there is no alert — regardless of prior readings by other methods. Since only the most recent entry matters, "recovery" simply means the newest temperature entry is sub-threshold for its own method. The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
 Uses the same `GET /api/babies/:id/dashboard?from=&to=` endpoint with the desired date range. Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
@@ -775,7 +775,7 @@ primary_region = "iad"      # Choose closest region
 
 - **HTTPS only** — enforced by fly.io.
 - **Session cookies** — HttpOnly, Secure, SameSite=Lax. Sessions last **30 days** with a **sliding window** — `expires_at` is reset on each API call. Expired sessions return **HTTP 401**. Frontend redirects to login on 401.
-- **CSRF protection** — `GET /api/csrf-token` returns a per-session token. Client includes it as an `X-CSRF-Token` header on all state-changing requests. Server validates per-session.
+- **CSRF protection** — `GET /api/csrf-token` returns a per-session CSRF token **derived deterministically from the session token via HMAC-SHA256** with a server secret. No extra storage column needed on the sessions table — the token is computed on the fly and is stable for the session lifetime. Client includes it as an `X-CSRF-Token` header on all state-changing requests. Server validates by re-deriving the expected CSRF token from the current session token and comparing.
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
 - **Rate limiting** — basic rate limiting on API endpoints (personal use, but good hygiene).
