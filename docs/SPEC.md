@@ -45,9 +45,9 @@ A personal-use web application for parents to track daily health metrics of an i
 | Duration (min) | number | For breastfeeding sessions |
 | Notes | text | Free-form (e.g., "tolerated well", "vomited after") |
 
-**Caloric intake calculation:** All feed types (including `solid` and `other`) can optionally specify `cal_density` and `volume_ml`. When both are provided, calories are calculated using the standard formula: `kcal = volume_ml × (cal_density / 29.5735)` (where `1 oz = 29.5735 mL`). If either field is missing, caloric intake is left null for that entry. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`.
+**Caloric intake calculation:** All feed types (including `solid` and `other`) can optionally specify `cal_density` and `volume_ml`. When both are provided, calories are calculated using the standard formula: `kcal = volume_ml × (cal_density / 29.5735)` (where `1 oz = 29.5735 mL`). **Cal density auto-apply:** When `volume_ml` is provided but `cal_density` is omitted, the backend auto-applies a default of **~20 kcal/oz** for `breast_milk` and `formula` feed types. This is a type-based default — `used_default_cal` is NOT set for these entries. If neither `cal_density` nor the type-based default applies, and volume is missing, caloric intake is left null for that entry. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`. Only breast-direct feeds with no volume use `default_cal_per_feed` and have `used_default_cal=true`.
 
-**Denormalized `calories` column:** The computed caloric value is stored as a `calories REAL` column on the `feedings` table. This value is computed and stored on insert/update using the formula above (or the baby's `default_cal_per_feed` for breast-direct feeds without volume). A `used_default_cal BOOLEAN DEFAULT false` column tracks whether the feeding's calories were computed using the baby's `default_cal_per_feed`. When `default_cal_per_feed` is changed on the baby via `PUT /api/babies/:id`, the response includes a count of affected entries. The parent can then choose to recalculate all existing feeding entries where `used_default_cal = true` — this is a parent-triggered action, not automatic.
+**Denormalized `calories` column:** The computed caloric value is stored as a `calories REAL` column on the `feedings` table. This value is computed and stored on insert/update using the formula above (or the baby's `default_cal_per_feed` for breast-direct feeds without volume). A `used_default_cal BOOLEAN DEFAULT false` column tracks whether the feeding's calories were computed using the baby's `default_cal_per_feed`. When `default_cal_per_feed` is changed on the baby via `PUT /api/babies/:id`, the parent can trigger recalculation of all affected entries by including `recalculate_calories=true` as a query parameter (or body field). When set, the server recalculates all feeding entries where `used_default_cal = true` using the new default value, within the same request. The response includes `{ "recalculated_count": N }` with the number of updated entries.
 
 ### 3.2 Urine Output (multiple entries per day)
 
@@ -252,7 +252,7 @@ GET    /api/csrf-token             → Get per-session CSRF token (include as X-
 POST   /api/babies                 → Create baby profile
 GET    /api/babies                 → List my babies
 GET    /api/babies/:id             → Get baby details
-PUT    /api/babies/:id             → Update baby info (name, DOB, sex, diagnosis date, kasai date)
+PUT    /api/babies/:id             → Update baby info (name, DOB, sex, diagnosis date, kasai date). Supports `?recalculate_calories=true` — see §3.1.
 POST   /api/babies/:id/invite      → Generate invite code (any linked parent). Returns { "code": "483921", "expires_at": "2026-03-17T14:30:00Z" }. Fixed 24-hour expiration.
 POST   /api/babies/join             → Join baby profile via invite code
 DELETE /api/babies/:id/parents/me   → Unlink self from baby (last parent triggers baby + data deletion)
@@ -272,7 +272,7 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 
 **Edit authorization:** Any linked parent can edit or delete any entry for that baby, regardless of who originally logged it (equal access). The `logged_by` field is immutable — it always reflects the original author. An `updated_by` field (nullable `TEXT REFERENCES users(id)`) is set to the editing user's ID on any update.
 
-**Pagination:** All metric list endpoints use **cursor-based pagination**, sorted newest-first. Default **50 items per page**. All entity IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers), which encode creation time and are naturally sortable newest-first. This means `WHERE id < cursor` with `ORDER BY id DESC` gives correct newest-first pagination without a separate timestamp sort. The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results).
+**Pagination & sort order:** All metric list endpoints use **cursor-based pagination**. Default **50 items per page**. Within a date-filtered result set, entries are sorted by the user-editable `timestamp` (newest first), with **ULID as tiebreaker** for entries sharing the same timestamp. Cursor pagination still uses ULID internally (`WHERE id < cursor`), but the display order within each page is `ORDER BY timestamp DESC, id DESC`. The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results). All entity IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers).
 
 **Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Med-log entries support full `PUT` (edit) and `DELETE` (hard delete) — parents can correct mistakes freely, and adherence is calculated from current data only. Keep it simple.
 
@@ -285,8 +285,10 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 POST   /api/babies/:id/upload      → Upload photo (baby-level auth check) → returns R2 key
 ```
 
+**Photo upload constraints:** Max file size: **5 MB**. Accepted MIME types: **JPEG, PNG, HEIC**. The server generates a thumbnail (~300px wide) stored alongside the original in R2 with a `thumb_` prefix (e.g., original key `photos/abc123.jpg` → thumbnail key `photos/thumb_abc123.jpg`). Thumbnails are used in dashboard display and PDF report embedding. The `photo_uploads` table includes a `thumbnail_key TEXT` column to store the thumbnail's R2 key.
+
 **Photo upload flow:**
-1. Client uploads the photo via `POST /api/babies/:id/upload`. The server stores the file in R2, creates a `photo_uploads` row, and returns the **R2 key** in the response.
+1. Client uploads the photo via `POST /api/babies/:id/upload`. The server validates size/type, stores the original and generated thumbnail in R2, creates a `photo_uploads` row (with both `r2_key` and `thumbnail_key`), and returns the **R2 key** in the response.
 2. Client includes the R2 key(s) in the metric entry creation or update request body, in the `photo_keys` JSON array field.
 3. Server validates that each R2 key in `photo_keys` exists in the `photo_uploads` table with a matching `baby_id`. If valid, the server sets `linked_at` on the corresponding `photo_uploads` rows.
 
@@ -294,7 +296,7 @@ POST   /api/babies/:id/upload      → Upload photo (baby-level auth check) → 
 
 **Signed URLs on read:** When metric entries containing `photo_keys` are returned by the API (list or detail), the server replaces each R2 key with a **signed URL** (TTL: 1 hour). No separate photo URL endpoint is needed — clients always receive ready-to-use URLs.
 
-Photos are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) on the relevant metric entry — no join table. **Photo unlink on edit:** When a metric entry is updated and a photo key is removed from `photo_keys`, the server sets `linked_at = NULL` on the corresponding `photo_uploads` row. No synchronous R2 deletion occurs during PUT requests — the orphan cleanup cron handles eventual deletion. **Orphan cleanup:** A cron job deletes `photo_uploads` rows where `linked_at` is null and `uploaded_at` is older than 24 hours, and garbage-collects the corresponding R2 objects.
+Photos are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) on the relevant metric entry — no join table. **Photo unlink on edit:** When a metric entry is updated and a photo key is removed from `photo_keys`, the server sets `linked_at = NULL` on the corresponding `photo_uploads` row. No synchronous R2 deletion occurs during PUT requests — the cleanup cron handles eventual deletion. **Photo cleanup (single cron job):** One combined cron job handles both orphan and cascade cleanup. It deletes `photo_uploads` rows (and their R2 objects) matching: `(linked_at IS NULL AND uploaded_at < NOW() - 24h) OR (baby_id IS NULL)`. The first condition catches unlinked/abandoned uploads; the second catches rows orphaned by baby deletion (`ON DELETE SET NULL`). One job, one schedule.
 
 ### 5.5 Medications & Reminders
 
@@ -314,7 +316,35 @@ DELETE /api/push/subscribe                    → Unregister
 
 ### 5.6 Reports
 ```
-GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON for charts). When `from`/`to` are omitted, defaults to today. Trends view uses the same endpoint with different date ranges (e.g., `?from=2026-03-09&to=2026-03-16` for 7-day view). All aggregation is server-side. Response includes an `active_alerts` array containing entry IDs that trigger alerts (based on the most recent entries of each alert type). Frontend compares this with the local dismissed set and removes dismissed IDs for alerts that now have recovery entries.
+GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON for charts). When `from`/`to` are omitted, defaults to today. Trends view uses the same endpoint with different date ranges (e.g., `?from=2026-03-09&to=2026-03-16` for 7-day view). All aggregation is server-side. The response always returns the same structure regardless of date range — the frontend picks what to display based on context (today view vs trends view).
+
+**Dashboard response schema:**
+```json
+{
+  "summary_cards": {
+    "total_feeds": 0,
+    "total_calories": 0,
+    "total_wet_diapers": 0,
+    "total_stools": 0,
+    "worst_stool_color": null,
+    "last_temperature": null,
+    "last_weight": null
+  },
+  "stool_color_trend": [],         // always last 7 days, regardless of from/to
+  "upcoming_meds": [],             // next due medications with countdown
+  "active_alerts": [],             // entry IDs that trigger alerts (based on most recent entries of each alert type)
+  "chart_data_series": {           // aggregated for the requested date range
+    "feeding_daily": [],
+    "diaper_daily": [],
+    "temperature": [],
+    "weight": [],
+    "abdomen_girth": [],
+    "stool_color": [],
+    "lab_trends": {}
+  }
+}
+```
+Frontend compares `active_alerts` with the local dismissed set and removes dismissed IDs for alerts that now have recovery entries.
 GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PDF (always includes all photos within date range)
 ```
 
@@ -329,7 +359,7 @@ GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PD
 
 ### 6.2 Reminder Logic
 - The Go backend runs a **scheduler** (e.g., a goroutine with a ticker or a lightweight cron library).
-- Every minute, it checks for medication schedules due within the next minute. Scheduled times are stored as local time strings and interpreted per the **medication's stored timezone** (the `timezone` column on the medication record, set at creation time from the creator's `X-Timezone` header). All parents are notified based on this single timezone, preventing dose drift and double-dosing when parents are in different timezones.
+- Every minute, the scheduler computes "today" **relative to each medication's own timezone** (the `timezone` column on the medication record, set at creation time from the creator's `X-Timezone` header). It looks **forward** (next minute) for initial notifications and **backward** (up to 30 minutes) for follow-ups. This means at 23:50 UTC, a medication in UTC+2 checks against the next calendar day's schedule in that timezone. Scheduled times are stored as local time strings and interpreted per the medication's timezone. All parents are notified based on this single timezone, preventing dose drift and double-dosing when parents are in different timezones.
 - Sends a push notification to all subscribed devices for that baby's parents.
 - Notification includes: medication name, dose, and a "Log as given" action button (deep-links to the logging screen).
 
@@ -603,9 +633,8 @@ CREATE TABLE general_notes (
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- photo_uploads.baby_id uses ON DELETE SET NULL (not CASCADE). A cleanup job
--- finds photo_uploads rows with NULL baby_id, deletes the corresponding R2
--- objects, then deletes the rows.
+-- photo_uploads.baby_id uses ON DELETE SET NULL (not CASCADE). A single cleanup
+-- cron job handles both orphan and cascade cleanup — see §5.4.
 
 -- Medications (definitions / schedules)
 CREATE TABLE medications (
@@ -640,11 +669,12 @@ CREATE TABLE med_logs (
 
 -- Photo upload staging (for orphan cleanup)
 CREATE TABLE photo_uploads (
-    id          TEXT PRIMARY KEY,
-    baby_id     TEXT REFERENCES babies(id) ON DELETE SET NULL,
-    r2_key      TEXT NOT NULL,
-    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    linked_at   DATETIME           -- set when a metric entry references this photo
+    id              TEXT PRIMARY KEY,
+    baby_id         TEXT REFERENCES babies(id) ON DELETE SET NULL,
+    r2_key          TEXT NOT NULL,
+    thumbnail_key   TEXT,              -- R2 key for ~300px wide thumbnail (e.g., "photos/thumb_abc123.jpg")
+    uploaded_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    linked_at       DATETIME           -- set when a metric entry references this photo
 );
 
 -- Sessions (server-side, survives restarts)
@@ -655,7 +685,8 @@ CREATE TABLE sessions (
     expires_at  DATETIME NOT NULL,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
--- A cleanup cron deletes expired sessions periodically.
+-- Sessions last 30 days with a sliding window: expires_at is reset on each API call.
+-- Expired sessions return HTTP 401. A cleanup cron deletes expired sessions periodically.
 
 -- Push subscriptions (per device)
 CREATE TABLE push_subscriptions (
@@ -743,7 +774,7 @@ primary_region = "iad"      # Choose closest region
 ## 12. Security Considerations
 
 - **HTTPS only** — enforced by fly.io.
-- **Session cookies** — HttpOnly, Secure, SameSite=Lax.
+- **Session cookies** — HttpOnly, Secure, SameSite=Lax. Sessions last **30 days** with a **sliding window** — `expires_at` is reset on each API call. Expired sessions return **HTTP 401**. Frontend redirects to login on 401.
 - **CSRF protection** — `GET /api/csrf-token` returns a per-session token. Client includes it as an `X-CSRF-Token` header on all state-changing requests. Server validates per-session.
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
