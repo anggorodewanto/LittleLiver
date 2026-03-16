@@ -480,7 +480,7 @@ CREATE TABLE babies (
 -- Parent ↔ Baby link
 CREATE TABLE baby_parents (
     baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE,
-    user_id     TEXT REFERENCES users(id),
+    user_id     TEXT REFERENCES users(id) ON DELETE CASCADE,
     role        TEXT DEFAULT 'parent',
     joined_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (baby_id, user_id)
@@ -493,7 +493,7 @@ CREATE TABLE baby_parents (
 CREATE TABLE invites (
     code        TEXT PRIMARY KEY,  -- 6-digit numeric string
     baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE,
-    created_by  TEXT REFERENCES users(id),
+    created_by  TEXT REFERENCES users(id),  -- no ON DELETE CASCADE; app explicitly deletes invites in account deletion step 3
     used_by     TEXT REFERENCES users(id),
     used_at     DATETIME,              -- set when code is redeemed
     expires_at  DATETIME NOT NULL,
@@ -594,7 +594,7 @@ CREATE TABLE skin_observations (
     logged_by       TEXT REFERENCES users(id) NOT NULL,
     updated_by      TEXT REFERENCES users(id),
     timestamp       DATETIME NOT NULL,
-    jaundice_level  TEXT,            -- none, mild, moderate, severe
+    jaundice_level  TEXT,            -- none, mild_face, moderate_trunk, severe_limbs_and_trunk
     scleral_icterus BOOLEAN DEFAULT FALSE,
     rashes          TEXT,
     bruising        TEXT,
@@ -710,7 +710,7 @@ CREATE TABLE sessions (
 -- Push subscriptions (per device)
 CREATE TABLE push_subscriptions (
     id          TEXT PRIMARY KEY,
-    user_id     TEXT REFERENCES users(id) NOT NULL,
+    user_id     TEXT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
     endpoint    TEXT NOT NULL,
     p256dh      TEXT NOT NULL,
     auth        TEXT NOT NULL,
