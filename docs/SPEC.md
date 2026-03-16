@@ -20,7 +20,7 @@ A personal-use web application for parents to track daily health metrics of an i
 ### 2.2 Authorization
 - A baby profile has **unlimited authorized parents** (Google account IDs). No maximum.
 - All authorized parents have equal read/write access to all data for that baby.
-- Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. A cron job periodically deletes expired unused invite codes across all babies.
+- Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. A cron job periodically deletes ALL invite codes older than 24 hours (both used and unused) across all babies. The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic "invalid or expired code" error for all failure cases.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
 - **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
@@ -47,7 +47,7 @@ A personal-use web application for parents to track daily health metrics of an i
 
 **Caloric intake calculation:** All feed types (including `solid` and `other`) can optionally specify `cal_density` and `volume_ml`. When both are provided, calories are calculated using the standard formula: `kcal = volume_ml × (cal_density / 29.5735)` (where `1 oz = 29.5735 mL`). If either field is missing, caloric intake is left null for that entry. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`.
 
-**Denormalized `calories` column:** The computed caloric value is stored as a `calories REAL` column on the `feedings` table. This value is computed and stored on insert/update using the formula above (or the baby's `default_cal_per_feed` for breast-direct feeds without volume). If the baby's `default_cal_per_feed` is changed, all breast-direct feeding entries (those using the default) must be recalculated.
+**Denormalized `calories` column:** The computed caloric value is stored as a `calories REAL` column on the `feedings` table. This value is computed and stored on insert/update using the formula above (or the baby's `default_cal_per_feed` for breast-direct feeds without volume). A `used_default_cal BOOLEAN DEFAULT false` column tracks whether the feeding's calories were computed using the baby's `default_cal_per_feed`. When `default_cal_per_feed` is changed on the baby via `PUT /api/babies/:id`, the response includes a count of affected entries. The parent can then choose to recalculate all existing feeding entries where `used_default_cal = true` — this is a parent-triggered action, not automatic.
 
 ### 3.2 Urine Output (multiple entries per day)
 
@@ -274,7 +274,7 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 
 **Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Med-log entries support full `PUT` (edit) and `DELETE` (hard delete) — parents can correct mistakes freely, and adherence is calculated from current data only. Keep it simple.
 
-**Date parameters:** `from` and `to` query parameters are **YYYY-MM-DD calendar date strings**. They are interpreted using the user's timezone (from `X-Timezone` header). Both bounds are inclusive — the range spans from 00:00:00 to 23:59:59 in the user's timezone.
+**Date parameters:** `from` and `to` query parameters are **YYYY-MM-DD calendar date strings**. They filter against the entry's user-editable `timestamp` field. They are interpreted using the user's timezone (from `X-Timezone` header). Both bounds are inclusive — the range spans from 00:00:00 to 23:59:59 in the user's timezone. Note: date filtering uses the editable `timestamp`, while pagination order uses ULID (`WHERE id < cursor ORDER BY id DESC`). This means backdated entries may appear in a date range but at a different position than their chronological order would suggest. This minor inconsistency is accepted.
 
 **Timezone:** Every API request must include an `X-Timezone` header with the user's IANA timezone (e.g., `America/New_York`). The backend persists this on the user record (`timezone` column), updating it on every API call so it stays current. The user's timezone is used for interpreting date parameters (`from`/`to`). Medication scheduled times are interpreted per the medication's own stored timezone (set at creation from the creator's `X-Timezone` header) — see §3.9 and §6.2. No timezone is stored on the baby profile.
 
@@ -288,7 +288,7 @@ POST   /api/babies/:id/upload      → Upload photo (baby-level auth check) → 
 2. Client includes the R2 key(s) in the metric entry creation or update request body, in the `photo_keys` JSON array field.
 3. Server validates that each R2 key in `photo_keys` exists in the `photo_uploads` table with a matching `baby_id`. If valid, the server sets `linked_at` on the corresponding `photo_uploads` rows.
 
-Photos are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) on the relevant metric entry — no join table. **Orphan cleanup:** A cron job deletes `photo_uploads` rows where `linked_at` is null and `uploaded_at` is older than 24 hours, and garbage-collects the corresponding R2 objects.
+Photos are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) on the relevant metric entry — no join table. **Photo unlink on edit:** When a metric entry is updated and a photo key is removed from `photo_keys`, the server sets `linked_at = NULL` on the corresponding `photo_uploads` row. No synchronous R2 deletion occurs during PUT requests — the orphan cleanup cron handles eventual deletion. **Orphan cleanup:** A cron job deletes `photo_uploads` rows where `linked_at` is null and `uploaded_at` is older than 24 hours, and garbage-collects the corresponding R2 objects.
 
 ### 5.5 Medications & Reminders
 
@@ -336,7 +336,7 @@ Action: Opens app to medication logging screen with pre-filled medication.
 
 ### 6.4 Suppression & Follow-ups
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
-- **Suppression check:** Before sending any notification (initial or follow-up), the server checks for any `med_log` for that `medication_id` with `given_at` within **±30 minutes** of the scheduled time being checked. This is a simple per-medication check — it does not need to match a specific `scheduled_time` field on the `med_log`. If found, the notification is suppressed.
+- **Suppression check:** Before sending any notification (initial or follow-up), the server checks for any `med_log` for that `medication_id` (given OR skipped) within **±30 minutes** of the scheduled time being checked. The check uses `given_at` for given doses and `created_at` for skipped doses. This is a simple per-medication check — it does not need to match a specific `scheduled_time` field on the `med_log`. If found, the notification is suppressed.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
 - **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up re-runs the suppression check before sending.
 - **Missed notifications:** If the server was down and a scheduled time + 15 min or + 30 min has already passed, the follow-up is simply skipped. No backfill of missed notifications.
@@ -353,7 +353,7 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
-- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type**, regardless of age — there is no lookback window or auto-expiry. **Temperature alerts** use a single alert channel: only the most recent temperature entry (regardless of method) determines whether a fever alert is active. Only one temperature alert can be active at a time. Recovery must match that specific entry's measurement method (e.g., if the most recent entry is a rectal 38.5°C, recovery requires a rectal sub-38.0°C reading; if the next entry is axillary 37.0°C, the alert is re-evaluated against the axillary threshold). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
+- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type**, regardless of age — there is no lookback window or auto-expiry. **Temperature alerts** track which measurement method triggered the alert. Only a same-method sub-threshold reading clears it. If a different method is logged below that method's threshold, the fever alert persists (e.g., if a rectal 38.5°C triggers an alert, only a rectal sub-38.0°C reading clears it; an axillary 37.0°C does not clear it). The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another rectal reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
 Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
@@ -435,7 +435,7 @@ CREATE TABLE baby_parents (
 );
 
 -- Invite codes (one active code per baby; generating a new code hard-deletes ALL prior codes for that baby)
--- A cron job periodically deletes expired unused codes.
+-- A cron job periodically deletes ALL codes older than 24 hours (both used and unused).
 -- Codes are 6-digit numeric strings (e.g., "483921")
 -- All failure cases (expired, used, invalidated, nonexistent, race condition) return a generic "invalid or expired code" error
 CREATE TABLE invites (
@@ -459,6 +459,7 @@ CREATE TABLE feedings (
     volume_ml   REAL,
     cal_density REAL,
     calories    REAL,              -- denormalized: computed on insert/update from cal_density × volume_ml / 29.5735, or default_cal_per_feed for breast-direct
+    used_default_cal BOOLEAN DEFAULT FALSE,  -- true when calories computed using baby's default_cal_per_feed
     duration_min INTEGER,
     notes       TEXT,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -604,13 +605,16 @@ CREATE TABLE general_notes (
 CREATE TABLE medications (
     id          TEXT PRIMARY KEY,
     baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),  -- set on edit, null initially
     name        TEXT NOT NULL,
     dose        TEXT NOT NULL,
     frequency   TEXT NOT NULL,
     schedule    TEXT,              -- JSON array of times, e.g., ["08:00","20:00"]
-    timezone    TEXT,              -- IANA timezone, set at creation from creator's X-Timezone header; used for all notification scheduling
+    timezone    TEXT,              -- IANA timezone, set at creation from creator's X-Timezone header; mutable via PUT (e.g., if family moves); used for all notification scheduling
     active      BOOLEAN DEFAULT TRUE,
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Medication administration log
@@ -636,6 +640,16 @@ CREATE TABLE photo_uploads (
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     linked_at   DATETIME           -- set when a metric entry references this photo
 );
+
+-- Sessions (server-side, survives restarts)
+CREATE TABLE sessions (
+    id          TEXT PRIMARY KEY,  -- ULID
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token       TEXT NOT NULL UNIQUE,
+    expires_at  DATETIME NOT NULL,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+-- A cleanup cron deletes expired sessions periodically.
 
 -- Push subscriptions (per device)
 CREATE TABLE push_subscriptions (
@@ -728,7 +742,7 @@ primary_region = "iad"      # Choose closest region
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
 - **Rate limiting** — basic rate limiting on API endpoints (personal use, but good hygiene).
-- **Invite codes** — 6-digit numeric strings (e.g., `"483921"`). Single-use, fixed **24-hour expiration**. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). The `POST /api/babies/:id/invite` response includes both the `code` and the `expires_at` timestamp. A cron job periodically deletes expired unused codes. All failure cases (expired, used, invalidated, nonexistent, race condition) return a generic `"invalid or expired code"` error.
+- **Invite codes** — 6-digit numeric strings (e.g., `"483921"`). Single-use, fixed **24-hour expiration**. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). The `POST /api/babies/:id/invite` response includes both the `code` and the `expires_at` timestamp. A cron job periodically deletes ALL codes older than 24 hours (both used and unused). The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic `"invalid or expired code"` error for all failure cases (expired, used, invalidated, nonexistent, race condition).
 
 ---
 
