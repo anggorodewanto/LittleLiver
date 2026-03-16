@@ -20,8 +20,9 @@ A personal-use web application for parents to track daily health metrics of an i
 ### 2.2 Authorization
 - A baby profile has **unlimited authorized parents** (Google account IDs). No maximum.
 - All authorized parents have equal read/write access to all data for that baby.
-- Invite flow: Parent A creates baby → generates a single-use invite code → Parent B enters code on first login → linked. Generating a new invite code **invalidates any existing unused code** for that baby — only one active invite code per baby at a time.
+- Any linked parent can generate invite codes. Generating a new invite code **invalidates any existing unused code** for that baby — only one active invite code per baby at a time.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
+- **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
 
 ### 2.3 Multi-Baby Support
@@ -101,7 +102,7 @@ Increasing abdominal girth can indicate ascites or organomegaly — trend matter
 | Method | enum | `rectal`, `axillary`, `ear`, `forehead` |
 | Notes | text | |
 
-**Alert logic:** If temperature ≥ 38.0°C (rectal) or ≥ 37.5°C (axillary), display a **cholangitis warning** banner: *"Fever detected. Contact your hepatology team immediately. Fever after Kasai can indicate cholangitis."*
+**Alert logic:** If temperature ≥ 38.0°C (rectal), ≥ 37.5°C (axillary), ≥ 38.0°C (ear), or ≥ 37.5°C (forehead), display a **cholangitis warning** banner: *"Fever detected. Contact your hepatology team immediately. Fever after Kasai can indicate cholangitis."*
 
 ### 3.7 Skin / Jaundice Observations (1–2x/day)
 
@@ -231,14 +232,15 @@ POST   /api/babies                 → Create baby profile
 GET    /api/babies                 → List my babies
 GET    /api/babies/:id             → Get baby details
 PUT    /api/babies/:id             → Update baby info (name, DOB, sex, diagnosis date, kasai date)
-POST   /api/babies/:id/invite      → Generate invite code
+POST   /api/babies/:id/invite      → Generate invite code (any linked parent)
 POST   /api/babies/join             → Join baby profile via invite code
+DELETE /api/babies/:id/parents/me   → Unlink self from baby (last parent triggers baby + data deletion)
 ```
 
 ### 5.3 Metric Entries (pattern repeats for each metric type)
 ```
 POST   /api/babies/:id/feedings              → Log feeding
-GET    /api/babies/:id/feedings?from=&to=&cursor=  → List feedings in range
+GET    /api/babies/:id/feedings?from=&to=&cursor=  → List feedings in range (from/to are YYYY-MM-DD calendar dates)
 PUT    /api/babies/:id/feedings/:entryId     → Edit entry
 DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 ```
@@ -247,7 +249,9 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 
 **Pagination:** All metric list endpoints use **cursor-based pagination**, sorted newest-first. Default **50 items per page**. The client passes `?cursor=<value>` for subsequent pages. The response includes a `next_cursor` field (`null` if no more results).
 
-**Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medication adherence percentages are calculated from remaining data only. Keep it simple.
+**Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Medication adherence percentages are calculated from remaining data only. Keep it simple.
+
+**Date parameters:** `from` and `to` query parameters are **YYYY-MM-DD calendar date strings**. They are interpreted using the user's timezone (from `X-Timezone` header). Both bounds are inclusive — the range spans from 00:00:00 to 23:59:59 in the user's timezone.
 
 **Timezone:** Every API request must include an `X-Timezone` header with the user's IANA timezone (e.g., `America/New_York`). The backend persists this on the user record (`timezone` column), updating it on every API call so it stays current. Medication scheduled times are stored as local time strings and interpreted per each user's stored timezone for notifications. No timezone is stored on the baby profile.
 
@@ -255,7 +259,7 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 ```
 POST   /api/babies/:id/upload      → Upload photo (baby-level auth check) → returns R2 URL
 ```
-Photos are uploaded separately and their R2 keys are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) on the relevant metric entry — no join table. **Orphan cleanup:** A cron job garbage-collects uploaded photos that are not linked to any metric entry within **24 hours** of upload.
+Photos are uploaded separately and their R2 keys are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) on the relevant metric entry — no join table. Uploads are staged in a `photo_uploads` table (see §10). When a metric entry is created or updated with photo keys, the server sets `linked_at` on the corresponding `photo_uploads` rows. **Orphan cleanup:** A cron job deletes `photo_uploads` rows where `linked_at` is null and `uploaded_at` is older than 24 hours, and garbage-collects the corresponding R2 objects.
 
 ### 5.5 Medications & Reminders
 
@@ -264,9 +268,8 @@ The medication resource includes both the drug definition and its schedule (no s
 ```
 POST   /api/babies/:id/medications           → Create medication (name, dose, frequency, schedule times)
 GET    /api/babies/:id/medications            → List medications (active and inactive)
-PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate)
-DELETE /api/babies/:id/medications/:id        → Hard-delete medication
-POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). Client passes `scheduled_time` from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
+PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
+POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
 POST   /api/push/subscribe                    → Register push subscription (per device)
 DELETE /api/push/subscribe                    → Unregister
 ```
@@ -274,7 +277,7 @@ DELETE /api/push/subscribe                    → Unregister
 ### 5.6 Reports
 ```
 GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON for charts)
-GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PDF
+GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PDF (always includes all photos within date range)
 ```
 
 ---
@@ -300,10 +303,11 @@ Action: Opens app to medication logging screen with pre-filled medication.
 ```
 
 ### 6.4 Suppression & Follow-ups
-- A `med_log` entry with `given_at` within **±30 minutes** of `scheduled_time` suppresses follow-up reminders for that dose.
+- `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the user's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
+- **Initial notification:** Before sending the initial reminder, the server checks for an existing `med_log` with `given_at` within **±30 minutes** of `scheduled_time`. If found, the initial notification is suppressed.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
-- If no matching `med_log` exists within 15 minutes of scheduled time, send a follow-up reminder.
-- Max 2 follow-ups per dose.
+- **Follow-ups:** Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Once a follow-up is queued, it sends **without re-checking** the suppression window. Only the initial notification checks for an existing `med_log`.
+- Max **2 follow-ups** per dose.
 
 ---
 
@@ -316,7 +320,7 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
-- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts **auto-clear** when a recovery entry is logged (temperature < 38°C rectal, stool color rating 4+). If mixed readings occur on the same day, the alert persists as long as there is no recovery entry. **Dismissal is per-user, stored in client-side local storage** (not persisted in the database). Other parents still see alerts independently. New alarming entries create new alerts regardless of prior dismissals. No additional DB table needed.
+- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts **auto-clear** when a recovery entry is logged (stool color rating 4+; for temperature, recovery reading must use the **same measurement method** as the alerting reading — e.g., a rectal fever can only be cleared by a rectal sub-38.0°C reading, an axillary fever by an axillary sub-37.5°C reading, etc.). If mixed readings occur on the same day, the alert persists as long as there is no recovery entry using the same method. **Dismissal is per-user, stored in client-side local storage** (not persisted in the database). Other parents still see alerts independently. New alarming entries create new alerts regardless of prior dismissals. No additional DB table needed.
 
 ### 7.2 Trends View
 Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
@@ -345,7 +349,7 @@ Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
 6. **Feeding summary** — average daily volume/calories
 7. **Medication adherence** — % of scheduled doses logged as given
 8. **Notable observations** — any flagged notes, bruising entries, photos (thumbnails)
-9. **Photo appendix** — selected stool/skin photos in chronological order (optional, parent-selectable before export)
+9. **Photo appendix** — all stool/skin photos within the report date range in chronological order
 
 ---
 
@@ -470,12 +474,21 @@ CREATE TABLE med_logs (
     medication_id   TEXT REFERENCES medications(id) NOT NULL,
     baby_id         TEXT REFERENCES babies(id) NOT NULL,
     logged_by       TEXT REFERENCES users(id) NOT NULL,
-    scheduled_time  DATETIME,          -- passed by client; nullable for ad-hoc doses
+    scheduled_time  DATETIME,          -- full UTC datetime, computed by server from local schedule + user timezone; nullable for ad-hoc doses
     given_at        DATETIME,
     skipped         BOOLEAN DEFAULT FALSE,
     skip_reason     TEXT,
     notes           TEXT,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Photo upload staging (for orphan cleanup)
+CREATE TABLE photo_uploads (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) NOT NULL,
+    r2_key      TEXT NOT NULL,
+    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    linked_at   DATETIME           -- set when a metric entry references this photo
 );
 
 -- Push subscriptions (per device)
@@ -617,7 +630,7 @@ The stool logging screen should show these colors as large tappable swatches wit
 
 ### Phase 4 — Reports + Polish (Weeks 7–8)
 - PDF report generation (Go server-side)
-- Report customization (date range, include/exclude photos)
+- Report customization (date range selection)
 - UI polish, loading states, offline resilience
 - SQLite backup automation
 - Deploy to fly.io production
