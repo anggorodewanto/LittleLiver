@@ -20,7 +20,7 @@ A personal-use web application for parents to track daily health metrics of an i
 ### 2.2 Authorization
 - A baby profile has **unlimited authorized parents** (Google account IDs). No maximum.
 - All authorized parents have equal read/write access to all data for that baby.
-- Any linked parent can generate invite codes. Generating a new invite code **hard-deletes any existing unused code** for that baby — only one active invite code per baby at a time.
+- Any linked parent can generate invite codes. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. A cron job periodically deletes expired unused invite codes across all babies.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
 - **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
@@ -133,7 +133,8 @@ New or worsening bruising can indicate vitamin K deficiency / coagulopathy.
 | Medication name | text | Pre-populated suggestions: `UDCA (ursodiol)`, `Sulfamethoxazole-Trimethoprim (Bactrim)`, `Vitamin A`, `Vitamin D`, `Vitamin E (TPGS)`, `Vitamin K`, `Iron`, `Other` |
 | Dose | text | e.g., "50mg", "0.5mL" |
 | Frequency | enum | `once_daily`, `twice_daily`, `three_times_daily`, `as_needed`, `custom` |
-| Scheduled times | time[] | e.g., [08:00, 20:00] for twice daily. Stored as **local time strings** (not UTC). Interpreted per the user's stored timezone (see §5.3, §6.2). |
+| Scheduled times | time[] | e.g., [08:00, 20:00] for twice daily. Stored as **local time strings** (not UTC). Interpreted per the medication's stored timezone (see §6.2). |
+| Timezone | text | IANA timezone (e.g., `America/New_York`), set at creation time from the creator's `X-Timezone` header. All notification scheduling uses this timezone, not the individual user's timezone. This prevents dose drift and double-dosing across timezone boundaries. |
 | Given at | datetime | Logged when parent taps "given" |
 | Skipped | boolean | With required reason text |
 | Notes | text | e.g., "spit up half the dose" |
@@ -248,13 +249,13 @@ DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 
 Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/medications`, `/med-logs`, `/labs`, `/notes`
 
-**Pagination:** All metric list endpoints use **cursor-based pagination**, sorted newest-first. Default **50 items per page**. The cursor value is the last entry's ID (UUIDs are unique); the query uses `WHERE id < cursor` with consistent ordering. The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results).
+**Pagination:** All metric list endpoints use **cursor-based pagination**, sorted newest-first. Default **50 items per page**. All entity IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers), which encode creation time and are naturally sortable newest-first. This means `WHERE id < cursor` with `ORDER BY id DESC` gives correct newest-first pagination without a separate timestamp sort. The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results).
 
 **Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Med-log entries support full `PUT` (edit) and `DELETE` (hard delete) — parents can correct mistakes freely, and adherence is calculated from current data only. Keep it simple.
 
 **Date parameters:** `from` and `to` query parameters are **YYYY-MM-DD calendar date strings**. They are interpreted using the user's timezone (from `X-Timezone` header). Both bounds are inclusive — the range spans from 00:00:00 to 23:59:59 in the user's timezone.
 
-**Timezone:** Every API request must include an `X-Timezone` header with the user's IANA timezone (e.g., `America/New_York`). The backend persists this on the user record (`timezone` column), updating it on every API call so it stays current. Medication scheduled times are stored as local time strings and interpreted per each user's stored timezone for notifications. No timezone is stored on the baby profile.
+**Timezone:** Every API request must include an `X-Timezone` header with the user's IANA timezone (e.g., `America/New_York`). The backend persists this on the user record (`timezone` column), updating it on every API call so it stays current. The user's timezone is used for interpreting date parameters (`from`/`to`). Medication scheduled times are interpreted per the medication's own stored timezone (set at creation from the creator's `X-Timezone` header) — see §3.9 and §6.2. No timezone is stored on the baby profile.
 
 ### 5.4 Photos
 ```
@@ -271,6 +272,7 @@ POST   /api/babies/:id/medications           → Create medication (name, dose, 
 GET    /api/babies/:id/medications            → List medications (active and inactive)
 PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
 POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
+GET    /api/babies/:id/med-logs?medication_id=&from=&to=&cursor=  → List med-logs, filterable by medication and date range
 PUT    /api/babies/:id/med-logs/:entryId     → Edit a med-log entry
 DELETE /api/babies/:id/med-logs/:entryId     → Hard-delete a med-log entry
 POST   /api/push/subscribe                    → Register push subscription (per device)
@@ -294,7 +296,7 @@ GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PD
 
 ### 6.2 Reminder Logic
 - The Go backend runs a **scheduler** (e.g., a goroutine with a ticker or a lightweight cron library).
-- Every minute, it checks for medication schedules due within the next minute. Scheduled times are stored as local time strings and interpreted per each subscribed user's stored timezone (the `timezone` column on the user record, updated on every API call via the `X-Timezone` header).
+- Every minute, it checks for medication schedules due within the next minute. Scheduled times are stored as local time strings and interpreted per the **medication's stored timezone** (the `timezone` column on the medication record, set at creation time from the creator's `X-Timezone` header). All parents are notified based on this single timezone, preventing dose drift and double-dosing when parents are in different timezones.
 - Sends a push notification to all subscribed devices for that baby's parents.
 - Notification includes: medication name, dose, and a "Log as given" action button (deep-links to the logging screen).
 
@@ -306,7 +308,7 @@ Action: Opens app to medication logging screen with pre-filled medication.
 ```
 
 ### 6.4 Suppression & Follow-ups
-- `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the user's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
+- `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
 - **Initial notification:** Before sending the initial reminder, the server checks for an existing `med_log` with `given_at` within **±30 minutes** of `scheduled_time`. If found, the initial notification is suppressed.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
 - **Follow-ups:** Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up **re-checks** for an existing `med_log` with `given_at` within ±30 min of `scheduled_time` before sending. If a dose was logged since the initial notification, the follow-up is suppressed.
@@ -323,7 +325,7 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
-- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts **auto-clear** when a recovery entry is logged (stool color rating 4+; for temperature, recovery reading must use the **same measurement method** as the alerting reading — e.g., a rectal fever can only be cleared by a rectal sub-38.0°C reading, an axillary fever by an axillary sub-37.5°C reading, etc.). If mixed readings occur on the same day, the alert persists as long as there is no recovery entry using the same method. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged (same method, sub-threshold), all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
+- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type**, regardless of age — there is no lookback window or auto-expiry. Alerts persist until a **recovery entry** is logged (same method, sub-threshold — e.g., a rectal fever can only be cleared by a rectal sub-38.0°C reading, an axillary fever by an axillary sub-37.5°C reading; stool color rating 4+ clears acholic alerts) or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged (same method, sub-threshold), all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
 Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
@@ -350,7 +352,7 @@ Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
 4. **Lab trends** — chart + table of values
 5. **Temperature log** — flagging any fever episodes
 6. **Feeding summary** — average daily volume/calories
-7. **Medication adherence** — % of scheduled doses logged as given
+7. **Medication adherence** — adherence = (given logs / total logs including skipped) for all medication types. No inferred expected doses — just the ratio of logged-as-given vs total logged entries
 8. **Notable observations** — any flagged notes, bruising entries, photos (thumbnails)
 9. **Photo appendix** — all stool/skin photos within the report date range in chronological order
 
@@ -374,7 +376,7 @@ Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
 ```sql
 -- Parents
 CREATE TABLE users (
-    id          TEXT PRIMARY KEY,  -- UUID
+    id          TEXT PRIMARY KEY,  -- ULID
     google_id   TEXT UNIQUE NOT NULL,
     email       TEXT NOT NULL,
     name        TEXT NOT NULL,
@@ -404,7 +406,8 @@ CREATE TABLE baby_parents (
     PRIMARY KEY (baby_id, user_id)
 );
 
--- Invite codes (one active code per baby; generating a new code hard-deletes prior unused codes)
+-- Invite codes (one active code per baby; generating a new code hard-deletes ALL prior codes for that baby)
+-- A cron job periodically deletes expired unused codes.
 -- Non-redeemable codes (expired, used, or nonexistent) return a generic "invalid or expired code" error
 CREATE TABLE invites (
     code        TEXT PRIMARY KEY,
@@ -461,8 +464,9 @@ CREATE TABLE urine (
 -- Similar tables: weights, abdomen, temperatures, skin_observations,
 -- bruising, lab_results, general_notes
 -- All have ON DELETE CASCADE on babies(id) foreign keys.
--- R2 photo objects for deleted babies are cleaned up asynchronously by a
--- cleanup job that queries photo_uploads for the deleted baby_id.
+-- photo_uploads.baby_id uses ON DELETE SET NULL (not CASCADE). A cleanup job
+-- finds photo_uploads rows with NULL baby_id, deletes the corresponding R2
+-- objects, then deletes the rows.
 
 -- Medications (definitions / schedules)
 CREATE TABLE medications (
@@ -472,6 +476,7 @@ CREATE TABLE medications (
     dose        TEXT NOT NULL,
     frequency   TEXT NOT NULL,
     schedule    TEXT,              -- JSON array of times, e.g., ["08:00","20:00"]
+    timezone    TEXT,              -- IANA timezone, set at creation from creator's X-Timezone header; used for all notification scheduling
     active      BOOLEAN DEFAULT TRUE,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -479,7 +484,7 @@ CREATE TABLE medications (
 -- Medication administration log
 CREATE TABLE med_logs (
     id              TEXT PRIMARY KEY,
-    medication_id   TEXT REFERENCES medications(id) NOT NULL,
+    medication_id   TEXT REFERENCES medications(id) ON DELETE CASCADE NOT NULL,
     baby_id         TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     logged_by       TEXT REFERENCES users(id) NOT NULL,
     scheduled_time  DATETIME,          -- full UTC datetime, computed by server from local schedule + user timezone; nullable for ad-hoc doses
@@ -493,7 +498,7 @@ CREATE TABLE med_logs (
 -- Photo upload staging (for orphan cleanup)
 CREATE TABLE photo_uploads (
     id          TEXT PRIMARY KEY,
-    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE SET NULL,
     r2_key      TEXT NOT NULL,
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     linked_at   DATETIME           -- set when a metric entry references this photo
@@ -590,7 +595,7 @@ primary_region = "iad"      # Choose closest region
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
 - **Rate limiting** — basic rate limiting on API endpoints (personal use, but good hygiene).
-- **Invite codes** — single-use, expire after 24 hours. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes the previous unused code. Any non-redeemable code (expired, used, or nonexistent) returns a generic "invalid or expired code" error.
+- **Invite codes** — single-use, expire after 24 hours. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). A cron job periodically deletes expired unused codes. Any non-redeemable code (expired, used, or nonexistent) returns a generic "invalid or expired code" error.
 
 ---
 
