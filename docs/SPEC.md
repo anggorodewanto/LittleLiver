@@ -20,7 +20,7 @@ A personal-use web application for parents to track daily health metrics of an i
 ### 2.2 Authorization
 - A baby profile has **unlimited authorized parents** (Google account IDs). No maximum.
 - All authorized parents have equal read/write access to all data for that baby.
-- Any linked parent can generate invite codes. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. A cron job periodically deletes expired unused invite codes across all babies.
+- Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. A cron job periodically deletes expired unused invite codes across all babies.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
 - **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
@@ -46,6 +46,8 @@ A personal-use web application for parents to track daily health metrics of an i
 | Notes | text | Free-form (e.g., "tolerated well", "vomited after") |
 
 **Caloric intake calculation:** All feed types (including `solid` and `other`) can optionally specify `cal_density` and `volume_ml`. When both are provided, calories are calculated using the standard formula: `kcal = volume_ml × (cal_density / 29.5735)` (where `1 oz = 29.5735 mL`). If either field is missing, caloric intake is left null for that entry. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`.
+
+**Denormalized `calories` column:** The computed caloric value is stored as a `calories REAL` column on the `feedings` table. This value is computed and stored on insert/update using the formula above (or the baby's `default_cal_per_feed` for breast-direct feeds without volume). If the baby's `default_cal_per_feed` is changed, all breast-direct feeding entries (those using the default) must be recalculated.
 
 ### 3.2 Urine Output (multiple entries per day)
 
@@ -80,18 +82,20 @@ Each row represents a single wet diaper event (logged with a timestamp). Urine a
 | Measurement source | enum | `home_scale`, `clinic` |
 | Notes | text | |
 
-Weight is plotted against **WHO Child Growth Standards** (weight-for-age percentiles, sex-specific).
+Weight is plotted against **WHO Child Growth Standards** (weight-for-age percentiles, sex-specific). **Percentile is NOT stored** — it is computed on-the-fly from WHO growth data based on the baby's age at the time of the weight entry.
 
-### 3.5 Abdomen Circumference (1–2x/day)
+### 3.5 Abdomen Observations (1–2x/day)
 
 | Field | Type | Notes |
 |-------|------|-------|
 | Timestamp | datetime | |
-| Circumference (cm) | number | To 1 decimal place |
+| Firmness | enum | `soft`, `firm`, `distended` — required |
+| Tenderness | boolean | Default false |
+| Girth (cm) | number | To 1 decimal place. Optional |
 | Photo | image | Optional — for visual distension tracking |
 | Notes | text | |
 
-Increasing abdominal girth can indicate ascites or organomegaly — trend matters more than absolute number.
+Increasing abdominal girth can indicate ascites or organomegaly — trend matters more than absolute number. Firmness and tenderness provide qualitative context alongside the measurement.
 
 ### 3.6 Temperature (multiple per day)
 
@@ -120,7 +124,9 @@ Increasing abdominal girth can indicate ascites or organomegaly — trend matter
 |-------|------|-------|
 | Timestamp | datetime | |
 | Location on body | text | e.g., "left arm", "torso" |
-| Size estimate | enum | `small_<1cm`, `medium_1-3cm`, `large_>3cm` |
+| Size estimate | enum | `small_<1cm`, `medium_1-3cm`, `large_>3cm` — required |
+| Size (cm) | number | Optional precise measurement |
+| Color | text | e.g., "red", "purple", "yellow-green" |
 | Photo | image | |
 | Notes | text | |
 
@@ -144,18 +150,30 @@ New or worsening bruising can indicate vitamin K deficiency / coagulopathy.
 
 ### 3.10 Lab Results (per clinic visit, entered manually)
 
+Stored as individual test entries using an EAV-style table (`test_name`, `value`, `unit`, `normal_range`, `notes`). Each row is one test result. Entries on the same date are implicitly grouped (no explicit visit_id). The schema is generic to support any lab test.
+
+The **UI** suggests common Kasai-relevant tests as quick-pick options: `total_bilirubin`, `direct_bilirubin`, `ALT`, `AST`, `GGT`, `albumin`, `INR`, `platelets`. Selecting a quick-pick pre-fills the `test_name` and `unit` fields. Parents can also enter arbitrary test names.
+
 | Field | Type | Notes |
 |-------|------|-------|
 | Date | date | |
-| Total bilirubin (mg/dL) | number | The key prognostic marker — goal is < 2.0 by 3 months post-Kasai |
-| Direct bilirubin (mg/dL) | number | |
-| ALT (U/L) | number | |
-| AST (U/L) | number | |
-| GGT (U/L) | number | |
-| Albumin (g/dL) | number | |
-| INR | number | Coagulation — elevated = concern |
-| Platelets (×10³/µL) | number | Low = possible portal hypertension |
+| Test name | text | Free-form; UI suggests common Kasai tests as quick-picks |
+| Value | text | The result value |
+| Unit | text | e.g., "mg/dL", "U/L", "×10³/µL" |
+| Normal range | text | Optional, e.g., "0.1–1.2" |
 | Notes | text | |
+
+**Quick-pick reference (UI only, not a schema constraint):**
+| Test | Typical Unit | Clinical Relevance |
+|------|-------------|-------------------|
+| total_bilirubin | mg/dL | Key prognostic marker — goal is < 2.0 by 3 months post-Kasai |
+| direct_bilirubin | mg/dL | |
+| ALT | U/L | |
+| AST | U/L | |
+| GGT | U/L | |
+| albumin | g/dL | |
+| INR | — | Coagulation — elevated = concern |
+| platelets | ×10³/µL | Low = possible portal hypertension |
 
 ### 3.11 General Notes / Observations (as needed)
 
@@ -235,7 +253,7 @@ POST   /api/babies                 → Create baby profile
 GET    /api/babies                 → List my babies
 GET    /api/babies/:id             → Get baby details
 PUT    /api/babies/:id             → Update baby info (name, DOB, sex, diagnosis date, kasai date)
-POST   /api/babies/:id/invite      → Generate invite code (any linked parent)
+POST   /api/babies/:id/invite      → Generate invite code (any linked parent). Returns { "code": "483921", "expires_at": "2026-03-17T14:30:00Z" }. Fixed 24-hour expiration.
 POST   /api/babies/join             → Join baby profile via invite code
 DELETE /api/babies/:id/parents/me   → Unlink self from baby (last parent triggers baby + data deletion)
 ```
@@ -318,9 +336,9 @@ Action: Opens app to medication logging screen with pre-filled medication.
 
 ### 6.4 Suppression & Follow-ups
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
-- **Initial notification:** Before sending the initial reminder, the server checks for an existing `med_log` with `given_at` within **±30 minutes** of `scheduled_time`. If found, the initial notification is suppressed.
+- **Suppression check:** Before sending any notification (initial or follow-up), the server checks for any `med_log` for that `medication_id` with `given_at` within **±30 minutes** of the scheduled time being checked. This is a simple per-medication check — it does not need to match a specific `scheduled_time` field on the `med_log`. If found, the notification is suppressed.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
-- **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up **re-checks** for an existing `med_log` with `given_at` within ±30 min of `scheduled_time` before sending. If a dose was logged since the initial notification, the follow-up is suppressed.
+- **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up re-runs the suppression check before sending.
 - **Missed notifications:** If the server was down and a scheduled time + 15 min or + 30 min has already passed, the follow-up is simply skipped. No backfill of missed notifications.
 - Max **2 follow-ups** per dose.
 
@@ -335,14 +353,14 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
-- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type**, regardless of age — there is no lookback window or auto-expiry. Alerts persist until a **recovery entry** is logged (same method, sub-threshold — e.g., a rectal fever can only be cleared by a rectal sub-38.0°C reading, an axillary fever by an axillary sub-37.5°C reading; stool color rating 4+ clears acholic alerts) or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged (same method, sub-threshold), all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
+- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type**, regardless of age — there is no lookback window or auto-expiry. **Temperature alerts** use a single alert channel: only the most recent temperature entry (regardless of method) determines whether a fever alert is active. Only one temperature alert can be active at a time. Recovery must match that specific entry's measurement method (e.g., if the most recent entry is a rectal 38.5°C, recovery requires a rectal sub-38.0°C reading; if the next entry is axillary 37.0°C, the alert is re-evaluated against the axillary threshold). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
 Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
 - **Stool color over time** — scatter plot, color-coded by stool color rating
 - **Weight curve** — with WHO percentile bands (3rd, 15th, 50th, 85th, 97th) overlaid
 - **Temperature** — line chart with fever threshold line
-- **Abdomen circumference** — line chart
+- **Abdomen girth** — line chart
 - **Feeding volume / caloric intake** — daily aggregated bar chart (kcal computed per §3.1 formula; breast-direct feeds use configurable default estimate)
 - **Diaper counts** — daily wet + stool counts
 - **Lab trends** — multi-line chart (bilirubin, ALT, AST, GGT) with normal range shading
@@ -440,6 +458,7 @@ CREATE TABLE feedings (
     feed_type   TEXT NOT NULL,
     volume_ml   REAL,
     cal_density REAL,
+    calories    REAL,              -- denormalized: computed on insert/update from cal_density × volume_ml / 29.5735, or default_cal_per_feed for breast-direct
     duration_min INTEGER,
     notes       TEXT,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -482,7 +501,7 @@ CREATE TABLE weights (
     updated_by  TEXT REFERENCES users(id),
     timestamp   DATETIME NOT NULL,
     weight_kg   REAL NOT NULL,
-    percentile  TEXT,               -- auto-calculated note from WHO growth standards
+    measurement_source TEXT,        -- home_scale, clinic
     notes       TEXT,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -539,7 +558,8 @@ CREATE TABLE bruising (
     updated_by  TEXT REFERENCES users(id),
     timestamp   DATETIME NOT NULL,
     location    TEXT NOT NULL,
-    size_cm     REAL,
+    size_estimate TEXT NOT NULL,     -- small_<1cm, medium_1-3cm, large_>3cm
+    size_cm     REAL,               -- optional precise measurement
     color       TEXT,
     photo_keys  TEXT,               -- JSON array of R2 object keys
     notes       TEXT,
@@ -708,7 +728,7 @@ primary_region = "iad"      # Choose closest region
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
 - **Rate limiting** — basic rate limiting on API endpoints (personal use, but good hygiene).
-- **Invite codes** — 6-digit numeric strings (e.g., `"483921"`). Single-use, expire after 24 hours. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). A cron job periodically deletes expired unused codes. All failure cases (expired, used, invalidated, nonexistent, race condition) return a generic `"invalid or expired code"` error.
+- **Invite codes** — 6-digit numeric strings (e.g., `"483921"`). Single-use, fixed **24-hour expiration**. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). The `POST /api/babies/:id/invite` response includes both the `code` and the `expires_at` timestamp. A cron job periodically deletes expired unused codes. All failure cases (expired, used, invalidated, nonexistent, race condition) return a generic `"invalid or expired code"` error.
 
 ---
 
