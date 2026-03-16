@@ -23,6 +23,7 @@ A personal-use web application for parents to track daily health metrics of an i
 - Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. On code collision (uniqueness violation), retry with a new random code up to **5 times**. A cron job periodically deletes ALL invite codes older than 24 hours (both used and unused) across all babies, keeping active code count low and collision risk negligible. The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic "invalid or expired code" error for all failure cases.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
 - **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted. The endpoint always returns **204 No Content** regardless of whether the baby was also deleted. The frontend detects baby deletion by attempting to fetch baby data and receiving 404, then navigates to the baby list/creation screen.
+- **Account deletion:** `DELETE /api/users/me` deletes the requesting user's account. On deletion: (1) all `logged_by` and `updated_by` references across all metric tables are set to the sentinel value `'deleted_user'` (anonymization, not CASCADE); (2) the user is unlinked from all babies — if the user was the last parent on any baby, that baby and all its data are deleted (same as self-unlink cascade); (3) the user record is removed; (4) all sessions for the user are deleted. Returns **204 No Content**.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
 
 ### 2.3 Multi-Baby Support
@@ -40,12 +41,12 @@ A personal-use web application for parents to track daily health metrics of an i
 |-------|------|-------|
 | Timestamp | datetime | Auto-filled, editable |
 | Feed type | enum | `breast_milk`, `formula`, `fortified_breast_milk`, `solid`, `other` |
-| Volume (mL) | number | Optional for breast-direct feeds |
+| Volume (mL) | number | NULL for breast-direct feeds (see caloric calculation below). If a parent forgot to enter volume for pumped milk, they can edit the entry later to add it. |
 | Caloric density (kcal/oz) | number | Optional. When omitted, standard defaults apply: ~20 kcal/oz for formula and breast milk. User can override per entry by providing an explicit value. Relevant for fortified feeds (e.g., 24 or 30 cal/oz). |
 | Duration (min) | number | For breastfeeding sessions |
 | Notes | text | Free-form (e.g., "tolerated well", "vomited after") |
 
-**Caloric intake calculation:** All feed types (including `solid` and `other`) can optionally specify `cal_density` and `volume_ml`. When both are provided, calories are calculated using the standard formula: `kcal = volume_ml × (cal_density / 29.5735)` (where `1 oz = 29.5735 mL`). **Cal density auto-apply:** When `volume_ml` is provided but `cal_density` is omitted, the backend auto-applies a default of **~20 kcal/oz** for `breast_milk` and `formula` feed types. This is a type-based default — `used_default_cal` is NOT set for these entries. The type-based 20 kcal/oz value is baked into the `calories` column at insert time; if a parent needs to correct it, they edit the individual entry's `cal_density` field. No extra flag or batch-recalculation mechanism exists for type-based defaults. If neither `cal_density` nor the type-based default applies, and volume is missing, caloric intake is left null for that entry. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`. Only breast-direct feeds with no volume use `default_cal_per_feed` and have `used_default_cal=true`.
+**Caloric intake calculation:** All feed types (including `solid` and `other`) can optionally specify `cal_density` and `volume_ml`. When both are provided, calories are calculated using the standard formula: `kcal = volume_ml × (cal_density / 29.5735)` (where `1 oz = 29.5735 mL`). **Cal density auto-apply:** When `volume_ml` is provided but `cal_density` is omitted, the backend auto-applies a default of **~20 kcal/oz** for `breast_milk` and `formula` feed types. This is a type-based default — `used_default_cal` is NOT set for these entries. The type-based 20 kcal/oz value is baked into the `calories` column at insert time; if a parent needs to correct it, they edit the individual entry's `cal_density` field. No extra flag or batch-recalculation mechanism exists for type-based defaults. If neither `cal_density` nor the type-based default applies, and volume is missing, caloric intake is left null for that entry. **Breast-direct feed detection:** A feeding is considered "breast-direct" when `feed_type = 'breast_milk' AND volume_ml IS NULL`. No additional field is needed. For breast-direct feeds, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`. Only breast-direct feeds with no volume use `default_cal_per_feed` and have `used_default_cal=true`.
 
 **Denormalized `calories` column:** The computed caloric value is stored as a `calories REAL` column on the `feedings` table. This value is computed and stored on insert/update using the formula above (or the baby's `default_cal_per_feed` for breast-direct feeds without volume). A `used_default_cal BOOLEAN DEFAULT false` column tracks whether the feeding's calories were computed using the baby's `default_cal_per_feed`. When `default_cal_per_feed` is changed on the baby via `PUT /api/babies/:id`, the parent can trigger recalculation of all affected entries by including `recalculate_calories=true` as a query parameter (or body field). When set, the server recalculates all feeding entries where `used_default_cal = true` using the new default value, within the same request. The response includes `{ "recalculated_count": N }` with the number of updated entries.
 
@@ -180,8 +181,8 @@ The **UI** suggests common Kasai-relevant tests as quick-pick options: `total_bi
 | Field | Type | Notes |
 |-------|------|-------|
 | Timestamp | datetime | |
+| Content | text | Free-form text (required) |
 | Category | enum | `behavior`, `sleep`, `vomiting`, `irritability`, `skin`, `other` |
-| Text | text | |
 | Photos | image[] | Up to 4 per entry |
 
 ---
@@ -245,6 +246,7 @@ GET    /auth/google/callback       → Handle OAuth callback, set session
 POST   /auth/logout                → Clear session
 GET    /api/me                     → Current user info + linked babies
 GET    /api/csrf-token             → Get per-session CSRF token (include as X-CSRF-Token header on state-changing requests)
+DELETE /api/users/me               → Delete own account (see §2.2 for cascade behavior)
 ```
 
 ### 5.2 Baby Profiles
@@ -272,7 +274,7 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 
 **Edit authorization:** Any linked parent can edit or delete any entry for that baby, regardless of who originally logged it (equal access). The `logged_by` field is immutable — it always reflects the original author. An `updated_by` field (nullable `TEXT REFERENCES users(id)`) is set to the editing user's ID on any update.
 
-**Pagination & sort order:** All metric list endpoints use **cursor-based pagination**. Default **50 items per page**. Within a date-filtered result set, entries are sorted by the user-editable `timestamp` (newest first), with **ULID as tiebreaker** for entries sharing the same timestamp. Cursor pagination still uses ULID internally (`WHERE id < cursor`), but the display order within each page is `ORDER BY timestamp DESC, id DESC`. The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results). All entity IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers).
+**Pagination & sort order:** All metric list endpoints use **cursor-based pagination**. Default **50 items per page**. The API returns entries in **ULID order** per cursor (`WHERE id < cursor ORDER BY id DESC`). The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results). All entity IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers). **Frontend sort responsibility:** The frontend re-sorts each page by `timestamp DESC` for display. Cross-page gaps for backdated entries are acceptable — a backdated entry may not appear in its chronological position relative to entries on other pages.
 
 **Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Med-log entries support full `PUT` (edit) and `DELETE` (hard delete) — parents can correct mistakes freely, and adherence is calculated from current data only. Keep it simple.
 
@@ -332,15 +334,15 @@ GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON
   },
   "stool_color_trend": [],         // always last 7 days, regardless of from/to
   "upcoming_meds": [],             // next due ACTIVE medications with countdown (deactivated medications excluded)
-  "active_alerts": [],             // entry IDs that trigger alerts — always computed from the globally most recent entry of each alert type across ALL time, ignoring the from/to date range parameters (alerts are global state)
-  "chart_data_series": {           // aggregated for the requested date range
-    "feeding_daily": [],
-    "diaper_daily": [],
-    "temperature": [],
-    "weight": [],
-    "abdomen_girth": [],
-    "stool_color": [],
-    "lab_trends": {}
+  "active_alerts": [],             // array of alert objects: { entry_id, alert_type, method?, value, timestamp } — always computed from the globally most recent entry of each alert type across ALL time, ignoring the from/to date range parameters (alerts are global state). See §7.1 for alert types and trigger conditions.
+  "chart_data_series": {           // for the requested date range
+    "feeding_daily": [],           // [{ date, total_volume_ml, total_calories, feed_count, by_type: { breast_milk, formula, solid, other } }] — daily aggregates
+    "diaper_daily": [],            // [{ date, wet_count, stool_count }] — daily aggregates
+    "temperature": [],             // [{ timestamp, value, method }] — individual readings, not aggregated
+    "weight": [],                  // [{ timestamp, weight_kg, measurement_source }] — individual readings
+    "abdomen_girth": [],           // [{ timestamp, girth_cm }] — individual readings
+    "stool_color": [],             // [{ timestamp, color_score }] — individual readings for trend line
+    "lab_trends": {}               // { [test_name]: [{ timestamp, test_name, value, unit }] } — individual results, grouped by test_name on frontend
   }
 }
 ```
@@ -374,7 +376,7 @@ Action: Opens app to medication logging screen with pre-filled medication.
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
 - **Suppression check:** Before sending any notification (initial, +15 min follow-up, or +30 min follow-up), the server checks for any `med_log` for that `medication_id` (given OR skipped) within **±30 minutes of the original scheduled time** — not ±30 min of the follow-up firing time. The check is identical regardless of which notification tier is being evaluated. The check uses `given_at` for given doses and `created_at` for skipped doses. This is a simple per-medication check — it does not need to match a specific `scheduled_time` field on the `med_log`. If found, the notification is suppressed.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
-- **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up re-runs the suppression check before sending. **Suppression is a one-time decision per notification tier:** once an initial notification, +15 min follow-up, or +30 min follow-up is suppressed (because a qualifying `med_log` existed at the time of the check), that tier stays suppressed even if the `med_log` is later edited or deleted. The scheduler does not revisit past suppression decisions.
+- **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up re-runs the suppression check before sending. **Suppression is re-evaluated each minute** — the scheduler is fully stateless with no tracking table. On each tick, it checks whether a qualifying `med_log` exists now; if so, the notification is suppressed. If a `med_log` is deleted after a notification was previously suppressed, a late follow-up may fire on the next tick. This edge case is acceptable — simplicity over perfect suppression tracking.
 - **Missed notifications:** If the server was down and a scheduled time + 15 min or + 30 min has already passed, the follow-up is simply skipped. No backfill of missed notifications.
 - Max **2 follow-ups** per dose.
 
@@ -389,7 +391,12 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
-- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts are based on the **most recent entry of that type across all time**, regardless of age — there is no lookback window or auto-expiry. `active_alerts` is always computed globally, ignoring any `from`/`to` date range on the dashboard request. **Temperature alerts:** Only one temperature alert exists at a time, based on the **single most recent temperature entry** regardless of method. If that entry exceeds the threshold for its method, the alert fires. If the most recent entry is sub-threshold for its own method, there is no alert — regardless of prior readings by other methods. Since only the most recent entry matters, "recovery" simply means the newest temperature entry is sub-threshold for its own method. The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
+- **Alert banners** — each alert is an object: `{ entry_id, alert_type, method?, value, timestamp }`. Alert types and trigger conditions:
+  - `acholic_stool` — stool entry with `color_rating <= 3`. Cleared when most recent stool has `color_rating >= 4`.
+  - `fever` — temperature entry exceeding threshold for its method (see §3.6). Cleared when most recent temperature is sub-threshold.
+  - `jaundice_worsening` — skin observation with `jaundice_level = 'severe_limbs_and_trunk'` OR `scleral_icterus = true`. Cleared when most recent skin observation has neither condition.
+  - `missed_medication` — a scheduled dose has no `med_log` (given or skipped) within **+30 minutes** after the `scheduled_time`. One alert per missed dose. Cleared when a `med_log` is logged for that scheduled time.
+  Alerts are based on the **most recent entry of that type across all time**, regardless of age — there is no lookback window or auto-expiry. `active_alerts` is always computed globally, ignoring any `from`/`to` date range on the dashboard request. **Temperature alerts:** Only one temperature alert exists at a time, based on the **single most recent temperature entry** regardless of method. If that entry exceeds the threshold for its method, the alert fires. If the most recent entry is sub-threshold for its own method, there is no alert — regardless of prior readings by other methods. Since only the most recent entry matters, "recovery" simply means the newest temperature entry is sub-threshold for its own method. The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
 Uses the same `GET /api/babies/:id/dashboard?from=&to=` endpoint with the desired date range. Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
@@ -628,7 +635,6 @@ CREATE TABLE general_notes (
     content     TEXT NOT NULL,
     photo_keys  TEXT,               -- JSON array of R2 object keys
     category    TEXT,               -- behavior, sleep, vomiting, irritability, skin, other
-    notes       TEXT,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -679,9 +685,9 @@ CREATE TABLE photo_uploads (
 
 -- Sessions (server-side, survives restarts)
 CREATE TABLE sessions (
-    id          TEXT PRIMARY KEY,  -- ULID
+    id          TEXT PRIMARY KEY,  -- ULID; this is the session cookie value
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token       TEXT NOT NULL UNIQUE,
+    token       TEXT NOT NULL UNIQUE,  -- random secret used only for CSRF token derivation via HMAC-SHA256; NOT the cookie value
     expires_at  DATETIME NOT NULL,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -698,6 +704,8 @@ CREATE TABLE push_subscriptions (
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
+
+**Account deletion & foreign keys:** The `logged_by` and `updated_by` columns across all metric tables do NOT use `ON DELETE CASCADE`. Instead, the `DELETE /api/users/me` handler explicitly sets these to `'deleted_user'` before removing the user record. The `baby_parents` and `sessions` tables use `ON DELETE CASCADE` on `user_id` so they are cleaned up automatically.
 
 Indexes on `(baby_id, timestamp)` for all metric tables.
 
@@ -774,8 +782,8 @@ primary_region = "iad"      # Choose closest region
 ## 12. Security Considerations
 
 - **HTTPS only** — enforced by fly.io.
-- **Session cookies** — HttpOnly, Secure, SameSite=Lax. Sessions last **30 days** with a **sliding window** — `expires_at` is reset on each API call. Expired sessions return **HTTP 401**. Frontend redirects to login on 401.
-- **CSRF protection** — `GET /api/csrf-token` returns a per-session CSRF token **derived deterministically from the session token via HMAC-SHA256** with a server secret. No extra storage column needed on the sessions table — the token is computed on the fly and is stable for the session lifetime. Client includes it as an `X-CSRF-Token` header on all state-changing requests. Server validates by re-deriving the expected CSRF token from the current session token and comparing.
+- **Session cookies** — HttpOnly, Secure, SameSite=Lax. The cookie value is the `sessions.id` (ULID). The server looks up the session by this ID. Sessions last **30 days** with a **sliding window** — `expires_at` is reset on each API call. Expired sessions return **HTTP 401**. Frontend redirects to login on 401.
+- **CSRF protection** — `GET /api/csrf-token` returns a per-session CSRF token **derived deterministically from the session's `token` column via HMAC-SHA256** with a server secret. The `token` column is a separate random secret used only for CSRF derivation — it is not the session cookie value. No extra storage column needed beyond what exists — the CSRF token is computed on the fly and is stable for the session lifetime. Client includes it as an `X-CSRF-Token` header on all state-changing requests. Server validates by re-deriving the expected CSRF token from the current session's `token` value and comparing.
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
 - **Rate limiting** — basic rate limiting on API endpoints (personal use, but good hygiene).
