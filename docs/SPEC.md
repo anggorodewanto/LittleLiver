@@ -20,7 +20,7 @@ A personal-use web application for parents to track daily health metrics of an i
 ### 2.2 Authorization
 - A baby profile has **unlimited authorized parents** (Google account IDs). No maximum.
 - All authorized parents have equal read/write access to all data for that baby.
-- Any linked parent can generate invite codes. Generating a new invite code **invalidates any existing unused code** for that baby — only one active invite code per baby at a time.
+- Any linked parent can generate invite codes. Generating a new invite code **hard-deletes any existing unused code** for that baby — only one active invite code per baby at a time.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
 - **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
@@ -45,7 +45,7 @@ A personal-use web application for parents to track daily health metrics of an i
 | Duration (min) | number | For breastfeeding sessions |
 | Notes | text | Free-form (e.g., "tolerated well", "vomited after") |
 
-**Caloric intake calculation:** The backend auto-converts kcal/oz to mL using `1 oz = 29.5735 mL`. Formula: `kcal = volume_ml × (cal_density / 29.5735)`. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is a server-side config value that parents can adjust.
+**Caloric intake calculation:** The backend auto-converts kcal/oz to mL using `1 oz = 29.5735 mL`. Formula: `kcal = volume_ml × (cal_density / 29.5735)`. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is stored as `default_cal_per_feed` on the baby profile and can be adjusted via `PUT /api/babies/:id`.
 
 ### 3.2 Urine Output (multiple entries per day)
 
@@ -224,6 +224,7 @@ GET    /auth/google/login          → Redirect to Google OAuth
 GET    /auth/google/callback       → Handle OAuth callback, set session
 POST   /auth/logout                → Clear session
 GET    /api/me                     → Current user info + linked babies
+GET    /api/csrf-token             → Get per-session CSRF token (include as X-CSRF-Token header on state-changing requests)
 ```
 
 ### 5.2 Baby Profiles
@@ -247,9 +248,9 @@ DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 
 Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/medications`, `/med-logs`, `/labs`, `/notes`
 
-**Pagination:** All metric list endpoints use **cursor-based pagination**, sorted newest-first. Default **50 items per page**. The client passes `?cursor=<value>` for subsequent pages. The response includes a `next_cursor` field (`null` if no more results).
+**Pagination:** All metric list endpoints use **cursor-based pagination**, sorted newest-first. Default **50 items per page**. The cursor value is the last entry's ID (UUIDs are unique); the query uses `WHERE id < cursor` with consistent ordering. The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results).
 
-**Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Medication adherence percentages are calculated from remaining data only. Keep it simple.
+**Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Med-log entries support full `PUT` (edit) and `DELETE` (hard delete) — parents can correct mistakes freely, and adherence is calculated from current data only. Keep it simple.
 
 **Date parameters:** `from` and `to` query parameters are **YYYY-MM-DD calendar date strings**. They are interpreted using the user's timezone (from `X-Timezone` header). Both bounds are inclusive — the range spans from 00:00:00 to 23:59:59 in the user's timezone.
 
@@ -270,6 +271,8 @@ POST   /api/babies/:id/medications           → Create medication (name, dose, 
 GET    /api/babies/:id/medications            → List medications (active and inactive)
 PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
 POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
+PUT    /api/babies/:id/med-logs/:entryId     → Edit a med-log entry
+DELETE /api/babies/:id/med-logs/:entryId     → Hard-delete a med-log entry
 POST   /api/push/subscribe                    → Register push subscription (per device)
 DELETE /api/push/subscribe                    → Unregister
 ```
@@ -306,7 +309,7 @@ Action: Opens app to medication logging screen with pre-filled medication.
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the user's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
 - **Initial notification:** Before sending the initial reminder, the server checks for an existing `med_log` with `given_at` within **±30 minutes** of `scheduled_time`. If found, the initial notification is suppressed.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
-- **Follow-ups:** Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Once a follow-up is queued, it sends **without re-checking** the suppression window. Only the initial notification checks for an existing `med_log`.
+- **Follow-ups:** Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up **re-checks** for an existing `med_log` with `given_at` within ±30 min of `scheduled_time` before sending. If a dose was logged since the initial notification, the follow-up is suppressed.
 - Max **2 follow-ups** per dose.
 
 ---
@@ -320,7 +323,7 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
-- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts **auto-clear** when a recovery entry is logged (stool color rating 4+; for temperature, recovery reading must use the **same measurement method** as the alerting reading — e.g., a rectal fever can only be cleared by a rectal sub-38.0°C reading, an axillary fever by an axillary sub-37.5°C reading, etc.). If mixed readings occur on the same day, the alert persists as long as there is no recovery entry using the same method. **Dismissal is per-user, stored in client-side local storage** (not persisted in the database). Other parents still see alerts independently. New alarming entries create new alerts regardless of prior dismissals. No additional DB table needed.
+- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts **auto-clear** when a recovery entry is logged (stool color rating 4+; for temperature, recovery reading must use the **same measurement method** as the alerting reading — e.g., a rectal fever can only be cleared by a rectal sub-38.0°C reading, an axillary fever by an axillary sub-37.5°C reading, etc.). If mixed readings occur on the same day, the alert persists as long as there is no recovery entry using the same method. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged (same method, sub-threshold), all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
 Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
@@ -387,23 +390,25 @@ CREATE TABLE babies (
     date_of_birth   DATE NOT NULL,
     diagnosis_date  DATE,
     kasai_date      DATE,
+    default_cal_per_feed REAL DEFAULT 67,  -- default kcal estimate for breast-direct feeds without volume
     notes           TEXT,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Parent ↔ Baby link
 CREATE TABLE baby_parents (
-    baby_id     TEXT REFERENCES babies(id),
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE,
     user_id     TEXT REFERENCES users(id),
     role        TEXT DEFAULT 'parent',
     joined_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (baby_id, user_id)
 );
 
--- Invite codes (one active code per baby; generating a new code invalidates prior unused codes)
+-- Invite codes (one active code per baby; generating a new code hard-deletes prior unused codes)
+-- Non-redeemable codes (expired, used, or nonexistent) return a generic "invalid or expired code" error
 CREATE TABLE invites (
     code        TEXT PRIMARY KEY,
-    baby_id     TEXT REFERENCES babies(id),
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE,
     created_by  TEXT REFERENCES users(id),
     used_by     TEXT REFERENCES users(id),
     used_at     DATETIME,              -- set when code is redeemed
@@ -414,7 +419,7 @@ CREATE TABLE invites (
 -- Generic pattern for metric tables (feedings shown as example)
 CREATE TABLE feedings (
     id          TEXT PRIMARY KEY,
-    baby_id     TEXT REFERENCES babies(id) NOT NULL,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     logged_by   TEXT REFERENCES users(id) NOT NULL,
     timestamp   DATETIME NOT NULL,
     feed_type   TEXT NOT NULL,
@@ -428,7 +433,7 @@ CREATE TABLE feedings (
 
 CREATE TABLE stools (
     id              TEXT PRIMARY KEY,
-    baby_id         TEXT REFERENCES babies(id) NOT NULL,
+    baby_id         TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     logged_by       TEXT REFERENCES users(id) NOT NULL,
     timestamp       DATETIME NOT NULL,
     color_rating    INTEGER NOT NULL CHECK (color_rating BETWEEN 1 AND 7),
@@ -444,7 +449,7 @@ CREATE TABLE stools (
 -- Urine (each row = one wet diaper event)
 CREATE TABLE urine (
     id          TEXT PRIMARY KEY,
-    baby_id     TEXT REFERENCES babies(id) NOT NULL,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     logged_by   TEXT REFERENCES users(id) NOT NULL,
     timestamp   DATETIME NOT NULL,
     color       TEXT,               -- clear, pale_yellow, dark_yellow, amber, brown
@@ -455,11 +460,14 @@ CREATE TABLE urine (
 
 -- Similar tables: weights, abdomen, temperatures, skin_observations,
 -- bruising, lab_results, general_notes
+-- All have ON DELETE CASCADE on babies(id) foreign keys.
+-- R2 photo objects for deleted babies are cleaned up asynchronously by a
+-- cleanup job that queries photo_uploads for the deleted baby_id.
 
 -- Medications (definitions / schedules)
 CREATE TABLE medications (
     id          TEXT PRIMARY KEY,
-    baby_id     TEXT REFERENCES babies(id) NOT NULL,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     name        TEXT NOT NULL,
     dose        TEXT NOT NULL,
     frequency   TEXT NOT NULL,
@@ -472,7 +480,7 @@ CREATE TABLE medications (
 CREATE TABLE med_logs (
     id              TEXT PRIMARY KEY,
     medication_id   TEXT REFERENCES medications(id) NOT NULL,
-    baby_id         TEXT REFERENCES babies(id) NOT NULL,
+    baby_id         TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     logged_by       TEXT REFERENCES users(id) NOT NULL,
     scheduled_time  DATETIME,          -- full UTC datetime, computed by server from local schedule + user timezone; nullable for ad-hoc doses
     given_at        DATETIME,
@@ -485,7 +493,7 @@ CREATE TABLE med_logs (
 -- Photo upload staging (for orphan cleanup)
 CREATE TABLE photo_uploads (
     id          TEXT PRIMARY KEY,
-    baby_id     TEXT REFERENCES babies(id) NOT NULL,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
     r2_key      TEXT NOT NULL,
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     linked_at   DATETIME           -- set when a metric entry references this photo
@@ -578,11 +586,11 @@ primary_region = "iad"      # Choose closest region
 
 - **HTTPS only** — enforced by fly.io.
 - **Session cookies** — HttpOnly, Secure, SameSite=Lax.
-- **CSRF protection** — token-based for state-changing requests.
+- **CSRF protection** — `GET /api/csrf-token` returns a per-session token. Client includes it as an `X-CSRF-Token` header on all state-changing requests. Server validates per-session.
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
 - **Rate limiting** — basic rate limiting on API endpoints (personal use, but good hygiene).
-- **Invite codes** — single-use, expire after 24 hours. Only one active (unused, unexpired) code per baby at a time; generating a new code invalidates the previous one.
+- **Invite codes** — single-use, expire after 24 hours. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes the previous unused code. Any non-redeemable code (expired, used, or nonexistent) returns a generic "invalid or expired code" error.
 
 ---
 
