@@ -18,9 +18,11 @@ A personal-use web application for parents to track daily health metrics of an i
 - On first login, a parent either **creates a new baby profile** or is **invited to an existing one** by the other parent via a share/invite code.
 
 ### 2.2 Authorization
-- A baby profile has one or more **authorized parents** (Google account IDs).
+- A baby profile has **unlimited authorized parents** (Google account IDs). No maximum.
 - All authorized parents have equal read/write access to all data for that baby.
 - Invite flow: Parent A creates baby → receives a single-use invite code → Parent B enters code on first login → linked.
+- If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
+- **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
 
 ### 2.3 Multi-Baby Support
 - Data model supports multiple children per parent from day one.
@@ -42,12 +44,15 @@ A personal-use web application for parents to track daily health metrics of an i
 | Duration (min) | number | For breastfeeding sessions |
 | Notes | text | Free-form (e.g., "tolerated well", "vomited after") |
 
+**Caloric intake calculation:** The backend auto-converts kcal/oz to mL using `1 oz = 29.5735 mL`. Formula: `kcal = volume_ml × (cal_density / 29.5735)`. For breast-direct feeds with no volume, a configurable default estimate is used: **~67 kcal per session** (based on an average ~100 mL intake at 20 kcal/oz: `100 × 20 / 29.5735 ≈ 67.6 kcal`). This default is a server-side config value that parents can adjust.
+
 ### 3.2 Urine Output (multiple entries per day)
+
+Each row represents a single wet diaper event (logged with a timestamp). Urine and stool are separate entries — for a combined diaper, the parent logs two entries (one urine, one stool).
 
 | Field | Type | Notes |
 |-------|------|-------|
 | Timestamp | datetime | Auto-filled, editable |
-| Wet diaper | boolean | Simple yes/count tracker |
 | Color | enum | `clear`, `pale_yellow`, `dark_yellow`, `amber`, `brown` |
 | Notes | text | |
 
@@ -127,7 +132,7 @@ New or worsening bruising can indicate vitamin K deficiency / coagulopathy.
 | Medication name | text | Pre-populated suggestions: `UDCA (ursodiol)`, `Sulfamethoxazole-Trimethoprim (Bactrim)`, `Vitamin A`, `Vitamin D`, `Vitamin E (TPGS)`, `Vitamin K`, `Iron`, `Other` |
 | Dose | text | e.g., "50mg", "0.5mL" |
 | Frequency | enum | `once_daily`, `twice_daily`, `three_times_daily`, `as_needed`, `custom` |
-| Scheduled times | time[] | e.g., [08:00, 20:00] for twice daily |
+| Scheduled times | time[] | e.g., [08:00, 20:00] for twice daily. Interpreted in the user's device timezone, sent via `X-Timezone` request header. |
 | Given at | datetime | Logged when parent taps "given" |
 | Skipped | boolean | With required reason text |
 | Notes | text | e.g., "spit up half the dose" |
@@ -240,17 +245,23 @@ DELETE /api/babies/:id/feedings/:entryId     → Delete entry
 
 Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/medications`, `/med-logs`, `/labs`, `/notes`
 
+**Timezone:** All requests that involve scheduled times (medication reminders, etc.) must include an `X-Timezone` header with the user's IANA timezone (e.g., `America/New_York`). No timezone is stored on the baby profile.
+
 ### 5.4 Photos
 ```
-POST   /api/upload                 → Upload photo → returns R2 URL
+POST   /api/babies/:id/upload      → Upload photo (baby-level auth check) → returns R2 URL
 ```
-Photos are uploaded separately and their R2 key is stored in the relevant metric entry.
+Photos are uploaded separately and their R2 key is stored in the relevant metric entry. **Orphan cleanup:** A cron job garbage-collects uploaded photos that are not linked to any metric entry within 1 hour of upload.
 
-### 5.5 Medication Reminders
+### 5.5 Medications & Reminders
+
+The medication resource includes both the drug definition and its schedule (no separate `/med-schedules` endpoint). Deactivate a medication by setting `active=false` via `PUT /api/babies/:id/medications/:id`.
+
 ```
-GET    /api/babies/:id/med-schedules         → List medication schedules
-POST   /api/babies/:id/med-schedules         → Create/update schedule
-DELETE /api/babies/:id/med-schedules/:sid     → Remove schedule
+POST   /api/babies/:id/medications           → Create medication (name, dose, frequency, schedule times)
+GET    /api/babies/:id/medications            → List medications (active and inactive)
+PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate)
+DELETE /api/babies/:id/medications/:id        → Delete medication
 POST   /api/push/subscribe                    → Register push subscription (per device)
 DELETE /api/push/subscribe                    → Unregister
 ```
@@ -272,7 +283,7 @@ GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PD
 
 ### 6.2 Reminder Logic
 - The Go backend runs a **scheduler** (e.g., a goroutine with a ticker or a lightweight cron library).
-- Every minute, it checks for medication schedules due within the next minute.
+- Every minute, it checks for medication schedules due within the next minute. Scheduled times are interpreted using the requesting user's timezone (sent via `X-Timezone` header during subscription or medication creation).
 - Sends a push notification to all subscribed devices for that baby's parents.
 - Notification includes: medication name, dose, and a "Log as given" action button (deep-links to the logging screen).
 
@@ -283,8 +294,10 @@ Body:  "50mg for [Baby Name]. Tap to log."
 Action: Opens app to medication logging screen with pre-filled medication.
 ```
 
-### 6.4 Snooze / Acknowledgment
-- If not logged within 15 minutes of scheduled time, send a follow-up reminder.
+### 6.4 Suppression & Follow-ups
+- A `med_log` entry with `given_at` within **±30 minutes** of `scheduled_time` suppresses follow-up reminders for that dose.
+- No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped).
+- If no matching `med_log` exists within 15 minutes of scheduled time, send a follow-up reminder.
 - Max 2 follow-ups per dose.
 
 ---
@@ -298,7 +311,7 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
-- **Alert banners** — cholangitis warning (fever), acholic stool warning
+- **Alert banners** — cholangitis warning (fever), acholic stool warning. Alerts can be **manually dismissed** by the parent or **auto-clear** when a recovery entry is logged (temperature < 38°C rectal, stool color rating 4+). If mixed readings occur on the same day, the alert persists as long as there is no manual dismiss and no recovery entry.
 
 ### 7.2 Trends View
 Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
@@ -306,7 +319,7 @@ Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
 - **Weight curve** — with WHO percentile bands (3rd, 15th, 50th, 85th, 97th) overlaid
 - **Temperature** — line chart with fever threshold line
 - **Abdomen circumference** — line chart
-- **Feeding volume / caloric intake** — daily aggregated bar chart
+- **Feeding volume / caloric intake** — daily aggregated bar chart (kcal computed per §3.1 formula; breast-direct feeds use configurable default estimate)
 - **Diaper counts** — daily wet + stool counts
 - **Lab trends** — multi-line chart (bilirubin, ALT, AST, GGT) with normal range shading
 
@@ -417,7 +430,19 @@ CREATE TABLE stools (
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Similar tables: urine, weights, abdomen, temperatures, skin_observations,
+-- Urine (each row = one wet diaper event)
+CREATE TABLE urine (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    timestamp   DATETIME NOT NULL,
+    color       TEXT,               -- clear, pale_yellow, dark_yellow, amber, brown
+    notes       TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Similar tables: weights, abdomen, temperatures, skin_observations,
 -- bruising, lab_results, general_notes
 
 -- Medications (definitions / schedules)
