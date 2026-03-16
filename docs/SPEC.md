@@ -23,7 +23,7 @@ A personal-use web application for parents to track daily health metrics of an i
 - Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. On code collision (uniqueness violation), retry with a new random code up to **5 times**. A cron job periodically deletes ALL invite codes older than 24 hours (both used and unused) across all babies, keeping active code count low and collision risk negligible. The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic "invalid or expired code" error for all failure cases.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
 - **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted. The endpoint always returns **204 No Content** regardless of whether the baby was also deleted. The frontend detects baby deletion by attempting to fetch baby data and receiving 404, then navigates to the baby list/creation screen.
-- **Account deletion:** `DELETE /api/users/me` deletes the requesting user's account. On deletion: (1) all `logged_by` and `updated_by` references across all metric tables are set to the sentinel value `'deleted_user'` (anonymization, not CASCADE); (2) the user is unlinked from all babies — if the user was the last parent on any baby, that baby and all its data are deleted (same as self-unlink cascade); (3) the user record is removed; (4) all sessions for the user are deleted. Returns **204 No Content**.
+- **Account deletion:** `DELETE /api/users/me` deletes the requesting user's account. Deletion order: (1) identify babies where the user is the last remaining parent; (2) delete those babies (triggering `ON DELETE CASCADE` for all associated data); (3) anonymize `logged_by`/`updated_by` to `'deleted_user'` across all metric tables (anonymization, not CASCADE); (4) delete the user record (`ON DELETE CASCADE` cleans up remaining `baby_parents` and `sessions`). Returns **204 No Content**.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
 
 ### 2.3 Multi-Baby Support
@@ -274,7 +274,7 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 
 **Edit authorization:** Any linked parent can edit or delete any entry for that baby, regardless of who originally logged it (equal access). The `logged_by` field is immutable — it always reflects the original author. An `updated_by` field (nullable `TEXT REFERENCES users(id)`) is set to the editing user's ID on any update.
 
-**Pagination & sort order:** All metric list endpoints use **cursor-based pagination**. Default **50 items per page**. The API returns entries in **ULID order** per cursor (`WHERE id < cursor ORDER BY id DESC`). The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results). All entity IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers). **Frontend sort responsibility:** The frontend re-sorts each page by `timestamp DESC` for display. Cross-page gaps for backdated entries are acceptable — a backdated entry may not appear in its chronological position relative to entries on other pages.
+**Pagination & sort order:** All metric list endpoints use **cursor-based pagination**. Default **50 items per page**. The API returns entries in **ULID order** per cursor (`WHERE id < cursor ORDER BY id DESC`). The client passes `?cursor=<entryId>` for subsequent pages and treats the cursor as an opaque entry ID string. The response includes a `next_cursor` field (`null` if no more results). All entity IDs are **ULIDs** (Universally Unique Lexicographically Sortable Identifiers). **Frontend sort responsibility:** The frontend re-sorts each page by `timestamp DESC` for display. Cross-page gaps for backdated entries are acceptable — a backdated entry may not appear in its chronological position relative to entries on other pages. **Combined date + cursor:** When both `from`/`to` and `cursor` are provided, both conditions apply as an AND: `WHERE timestamp BETWEEN from AND to AND id < cursor ORDER BY id DESC LIMIT 50`. The date range narrows the result set; the cursor paginates within it.
 
 **Deletes:** All metric entries are **hard-deleted** (no soft deletes). Medications are the exception — they can only be deactivated (`active=false`), never deleted, to preserve adherence history. Med-log entries support full `PUT` (edit) and `DELETE` (hard delete) — parents can correct mistakes freely, and adherence is calculated from current data only. Keep it simple.
 
@@ -332,7 +332,7 @@ GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON
     "last_temperature": null,
     "last_weight": null
   },
-  "stool_color_trend": [],         // always last 7 days, regardless of from/to
+  "stool_color_trend": [],         // always last 7 days, regardless of from/to — frontend uses this for the Today View mini-chart
   "upcoming_meds": [],             // next due ACTIVE medications with countdown (deactivated medications excluded)
   "active_alerts": [],             // array of alert objects: { entry_id, alert_type, method?, value, timestamp } — always computed from the globally most recent entry of each alert type across ALL time, ignoring the from/to date range parameters (alerts are global state). See §7.1 for alert types and trigger conditions.
   "chart_data_series": {           // for the requested date range
@@ -341,7 +341,7 @@ GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON
     "temperature": [],             // [{ timestamp, value, method }] — individual readings, not aggregated
     "weight": [],                  // [{ timestamp, weight_kg, measurement_source }] — individual readings
     "abdomen_girth": [],           // [{ timestamp, girth_cm }] — individual readings
-    "stool_color": [],             // [{ timestamp, color_score }] — individual readings for trend line
+    "stool_color": [],             // [{ timestamp, color_score }] — individual readings for requested date range; frontend uses this (not stool_color_trend) for the Trends View
     "lab_trends": {}               // { [test_name]: [{ timestamp, test_name, value, unit }] } — individual results, grouped by test_name on frontend
   }
 }
@@ -374,7 +374,7 @@ Action: Opens app to medication logging screen with pre-filled medication.
 
 ### 6.4 Suppression & Follow-ups
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
-- **Suppression check:** Before sending any notification (initial, +15 min follow-up, or +30 min follow-up), the server checks for any `med_log` for that `medication_id` (given OR skipped) within **±30 minutes of the original scheduled time** — not ±30 min of the follow-up firing time. The check is identical regardless of which notification tier is being evaluated. The check uses `given_at` for given doses and `created_at` for skipped doses. This is a simple per-medication check — it does not need to match a specific `scheduled_time` field on the `med_log`. If found, the notification is suppressed.
+- **Suppression check:** Before sending any notification (initial, +15 min follow-up, or +30 min follow-up), the server checks for any `med_log` for that `medication_id` (given OR skipped) within **±30 minutes of the original scheduled time** — not ±30 min of the follow-up firing time. The check is identical regardless of which notification tier is being evaluated. The check uses `given_at` for given doses and `created_at` for skipped doses. This is a simple per-medication check — it does not need to match a specific `scheduled_time` field on the `med_log`. If found, the notification is suppressed. **Edge case — edited `given_at`:** If a `med_log` entry is edited such that `given_at` moves outside the ±30 min suppression window, a late follow-up may fire. This is an acceptable edge case — the server uses the current state of `med_log` entries as-is with no special handling.
 - No pre-created `med_log` rows — rows are only created when the parent logs a dose (given or skipped). The client passes `scheduled_time` (from the notification payload or from the medication's schedule). `scheduled_time` is nullable for ad-hoc doses not tied to a schedule.
 - **Follow-ups:** Follow-up notifications are re-derived each minute by the scheduler (no separate notification queue table). Follow-up #1 fires at **+15 min** after the scheduled time; follow-up #2 fires at **+30 min** after the scheduled time. Each follow-up re-runs the suppression check before sending. **Suppression is re-evaluated each minute** — the scheduler is fully stateless with no tracking table. On each tick, it checks whether a qualifying `med_log` exists now; if so, the notification is suppressed. If a `med_log` is deleted after a notification was previously suppressed, a late follow-up may fire on the next tick. This edge case is acceptable — simplicity over perfect suppression tracking.
 - **Missed notifications:** If the server was down and a scheduled time + 15 min or + 30 min has already passed, the follow-up is simply skipped. No backfill of missed notifications.
@@ -395,7 +395,7 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
   - `acholic_stool` — stool entry with `color_rating <= 3`. Cleared when most recent stool has `color_rating >= 4`.
   - `fever` — temperature entry exceeding threshold for its method (see §3.6). Cleared when most recent temperature is sub-threshold.
   - `jaundice_worsening` — skin observation with `jaundice_level = 'severe_limbs_and_trunk'` OR `scleral_icterus = true`. Cleared when most recent skin observation has neither condition.
-  - `missed_medication` — a scheduled dose has no `med_log` (given or skipped) within **+30 minutes** after the `scheduled_time`. One alert per missed dose. Cleared when a `med_log` is logged for that scheduled time.
+  - `missed_medication` — checks all scheduled doses in the **last 24 hours** (expanding each active medication's `schedule` array into concrete UTC datetimes using the medication's stored timezone) that are **>30 min past due** with no corresponding `med_log` (given or skipped) within ±30 min of the scheduled time. One alert per missed dose. Cleared when a `med_log` is logged for that scheduled time.
   Alerts are based on the **most recent entry of that type across all time**, regardless of age — there is no lookback window or auto-expiry. `active_alerts` is always computed globally, ignoring any `from`/`to` date range on the dashboard request. **Temperature alerts:** Only one temperature alert exists at a time, based on the **single most recent temperature entry** regardless of method. If that entry exceeds the threshold for its method, the alert fires. If the most recent entry is sub-threshold for its own method, there is no alert — regardless of prior readings by other methods. Since only the most recent entry matters, "recovery" simply means the newest temperature entry is sub-threshold for its own method. The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
@@ -454,6 +454,11 @@ CREATE TABLE users (
     timezone    TEXT,                  -- IANA timezone (e.g., "America/New_York"), updated on every API call via X-Timezone header
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Sentinel user for FK integrity after account deletion.
+-- Pre-seeded at database initialization. logged_by/updated_by are set to this value
+-- when a user account is deleted (see §2.2 account deletion ordering).
+INSERT INTO users (id, google_id, email, name) VALUES ('deleted_user', '__sentinel__', '', 'Deleted User');
 
 -- Babies
 CREATE TABLE babies (
@@ -659,6 +664,9 @@ CREATE TABLE medications (
 );
 
 -- Medication administration log
+-- baby_id is intentionally denormalized (also available via medications.baby_id) for query
+-- convenience. The server validates that med_logs.baby_id matches medications.baby_id on
+-- insert and update.
 CREATE TABLE med_logs (
     id              TEXT PRIMARY KEY,
     medication_id   TEXT REFERENCES medications(id) ON DELETE CASCADE NOT NULL,
@@ -692,6 +700,7 @@ CREATE TABLE sessions (
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 -- Sessions last 30 days with a sliding window: expires_at is reset on each API call.
+-- No absolute maximum session lifetime — the 30-day sliding window is the sole expiry policy.
 -- Expired sessions return HTTP 401. A cleanup cron deletes expired sessions periodically.
 
 -- Push subscriptions (per device)
@@ -782,7 +791,7 @@ primary_region = "iad"      # Choose closest region
 ## 12. Security Considerations
 
 - **HTTPS only** — enforced by fly.io.
-- **Session cookies** — HttpOnly, Secure, SameSite=Lax. The cookie value is the `sessions.id` (ULID). The server looks up the session by this ID. Sessions last **30 days** with a **sliding window** — `expires_at` is reset on each API call. Expired sessions return **HTTP 401**. Frontend redirects to login on 401.
+- **Session cookies** — HttpOnly, Secure, SameSite=Lax. The cookie value is the `sessions.id` (ULID). The server looks up the session by this ID. Sessions last **30 days** with a **sliding window** — `expires_at` is reset on each API call. No absolute maximum session lifetime; the sliding window is the sole expiry policy. Expired sessions return **HTTP 401**. Frontend redirects to login on 401.
 - **CSRF protection** — `GET /api/csrf-token` returns a per-session CSRF token **derived deterministically from the session's `token` column via HMAC-SHA256** with a server secret. The `token` column is a separate random secret used only for CSRF derivation — it is not the session cookie value. No extra storage column needed beyond what exists — the CSRF token is computed on the fly and is stable for the session lifetime. Client includes it as an `X-CSRF-Token` header on all state-changing requests. Server validates by re-deriving the expected CSRF token from the current session's `token` value and comparing.
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
