@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -73,77 +72,7 @@ func ListAbdomen(db *sql.DB, babyID string, from, to, cursor *string, limit int)
 
 // ListAbdomenWithTZ returns a paginated list of abdomen observations with timezone-aware date filtering.
 func ListAbdomenWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit int, loc *time.Location) (*model.MetricPage[model.AbdomenObservation], error) {
-	var conditions []string
-	var args []any
-
-	conditions = append(conditions, "baby_id = ?")
-	args = append(args, babyID)
-
-	if from != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse from date: %w", err)
-		}
-		utcFrom := t.UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp >= ?")
-		args = append(args, utcFrom)
-	}
-
-	if to != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse to date: %w", err)
-		}
-		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp < ?")
-		args = append(args, utcTo)
-	}
-
-	if cursor != nil {
-		conditions = append(conditions, "id < ?")
-		args = append(args, *cursor)
-	}
-
-	query := fmt.Sprintf(
-		"SELECT %s FROM abdomen_observations WHERE %s ORDER BY id DESC LIMIT ?",
-		abdomenColumns,
-		strings.Join(conditions, " AND "),
-	)
-	args = append(args, limit+1)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list abdomen: %w", err)
-	}
-	defer rows.Close()
-
-	var observations []model.AbdomenObservation
-	for rows.Next() {
-		a, err := scanAbdomen(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan abdomen: %w", err)
-		}
-		observations = append(observations, *a)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration: %w", err)
-	}
-
-	page := &model.MetricPage[model.AbdomenObservation]{}
-
-	if len(observations) > limit {
-		page.Data = observations[:limit]
-		nextCursor := observations[limit-1].ID
-		page.NextCursor = &nextCursor
-	} else {
-		page.Data = observations
-	}
-
-	if page.Data == nil {
-		page.Data = make([]model.AbdomenObservation, 0)
-	}
-
-	return page, nil
+	return listMetricWithTZ(db, "abdomen_observations", abdomenColumns, babyID, from, to, cursor, limit, loc, scanAbdomen, func(a *model.AbdomenObservation) string { return a.ID })
 }
 
 // UpdateAbdomen updates an abdomen observation.

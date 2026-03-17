@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -70,77 +69,7 @@ func ListWeights(db *sql.DB, babyID string, from, to, cursor *string, limit int)
 
 // ListWeightsWithTZ returns a paginated list of weights with timezone-aware date filtering.
 func ListWeightsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit int, loc *time.Location) (*model.MetricPage[model.Weight], error) {
-	var conditions []string
-	var args []any
-
-	conditions = append(conditions, "baby_id = ?")
-	args = append(args, babyID)
-
-	if from != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse from date: %w", err)
-		}
-		utcFrom := t.UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp >= ?")
-		args = append(args, utcFrom)
-	}
-
-	if to != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse to date: %w", err)
-		}
-		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp < ?")
-		args = append(args, utcTo)
-	}
-
-	if cursor != nil {
-		conditions = append(conditions, "id < ?")
-		args = append(args, *cursor)
-	}
-
-	query := fmt.Sprintf(
-		"SELECT %s FROM weights WHERE %s ORDER BY id DESC LIMIT ?",
-		weightColumns,
-		strings.Join(conditions, " AND "),
-	)
-	args = append(args, limit+1)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list weights: %w", err)
-	}
-	defer rows.Close()
-
-	var weights []model.Weight
-	for rows.Next() {
-		w, err := scanWeight(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan weight: %w", err)
-		}
-		weights = append(weights, *w)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration: %w", err)
-	}
-
-	page := &model.MetricPage[model.Weight]{}
-
-	if len(weights) > limit {
-		page.Data = weights[:limit]
-		nextCursor := weights[limit-1].ID
-		page.NextCursor = &nextCursor
-	} else {
-		page.Data = weights
-	}
-
-	if page.Data == nil {
-		page.Data = make([]model.Weight, 0)
-	}
-
-	return page, nil
+	return listMetricWithTZ(db, "weights", weightColumns, babyID, from, to, cursor, limit, loc, scanWeight, func(w *model.Weight) string { return w.ID })
 }
 
 // UpdateWeight updates a weight entry.

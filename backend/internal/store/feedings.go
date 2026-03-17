@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -84,79 +83,7 @@ func ListFeedings(db *sql.DB, babyID string, from, to, cursor *string, limit int
 
 // ListFeedingsWithTZ returns a paginated list of feedings with timezone-aware date filtering.
 func ListFeedingsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit int, loc *time.Location) (*model.MetricPage[model.Feeding], error) {
-	var conditions []string
-	var args []any
-
-	conditions = append(conditions, "baby_id = ?")
-	args = append(args, babyID)
-
-	if from != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse from date: %w", err)
-		}
-		utcFrom := t.UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp >= ?")
-		args = append(args, utcFrom)
-	}
-
-	if to != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse to date: %w", err)
-		}
-		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp < ?")
-		args = append(args, utcTo)
-	}
-
-	if cursor != nil {
-		conditions = append(conditions, "id < ?")
-		args = append(args, *cursor)
-	}
-
-	query := fmt.Sprintf(
-		"SELECT %s FROM feedings WHERE %s ORDER BY id DESC LIMIT ?",
-		feedingColumns,
-		strings.Join(conditions, " AND "),
-	)
-	// Fetch limit+1 to determine if there's a next page
-	args = append(args, limit+1)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list feedings: %w", err)
-	}
-	defer rows.Close()
-
-	var feedings []model.Feeding
-	for rows.Next() {
-		f, err := scanFeeding(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan feeding: %w", err)
-		}
-		feedings = append(feedings, *f)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration: %w", err)
-	}
-
-	page := &model.MetricPage[model.Feeding]{}
-
-	if len(feedings) > limit {
-		page.Data = feedings[:limit]
-		nextCursor := feedings[limit-1].ID
-		page.NextCursor = &nextCursor
-	} else {
-		page.Data = feedings
-	}
-
-	// Ensure Data is never nil
-	if page.Data == nil {
-		page.Data = make([]model.Feeding, 0)
-	}
-
-	return page, nil
+	return listMetricWithTZ(db, "feedings", feedingColumns, babyID, from, to, cursor, limit, loc, scanFeeding, func(f *model.Feeding) string { return f.ID })
 }
 
 // UpdateFeeding updates a feeding entry with calorie recalculation.

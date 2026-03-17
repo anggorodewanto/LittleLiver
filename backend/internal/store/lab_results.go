@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -72,77 +71,7 @@ func ListLabResults(db *sql.DB, babyID string, from, to, cursor *string, limit i
 
 // ListLabResultsWithTZ returns a paginated list of lab results with timezone-aware date filtering.
 func ListLabResultsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit int, loc *time.Location) (*model.MetricPage[model.LabResult], error) {
-	var conditions []string
-	var args []any
-
-	conditions = append(conditions, "baby_id = ?")
-	args = append(args, babyID)
-
-	if from != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse from date: %w", err)
-		}
-		utcFrom := t.UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp >= ?")
-		args = append(args, utcFrom)
-	}
-
-	if to != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse to date: %w", err)
-		}
-		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp < ?")
-		args = append(args, utcTo)
-	}
-
-	if cursor != nil {
-		conditions = append(conditions, "id < ?")
-		args = append(args, *cursor)
-	}
-
-	query := fmt.Sprintf(
-		"SELECT %s FROM lab_results WHERE %s ORDER BY id DESC LIMIT ?",
-		labResultColumns,
-		strings.Join(conditions, " AND "),
-	)
-	args = append(args, limit+1)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list lab results: %w", err)
-	}
-	defer rows.Close()
-
-	var results []model.LabResult
-	for rows.Next() {
-		l, err := scanLabResult(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan lab result: %w", err)
-		}
-		results = append(results, *l)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration: %w", err)
-	}
-
-	page := &model.MetricPage[model.LabResult]{}
-
-	if len(results) > limit {
-		page.Data = results[:limit]
-		nextCursor := results[limit-1].ID
-		page.NextCursor = &nextCursor
-	} else {
-		page.Data = results
-	}
-
-	if page.Data == nil {
-		page.Data = make([]model.LabResult, 0)
-	}
-
-	return page, nil
+	return listMetricWithTZ(db, "lab_results", labResultColumns, babyID, from, to, cursor, limit, loc, scanLabResult, func(l *model.LabResult) string { return l.ID })
 }
 
 // UpdateLabResult updates a lab result.

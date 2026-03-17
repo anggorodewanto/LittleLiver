@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -69,77 +68,7 @@ func ListTemperatures(db *sql.DB, babyID string, from, to, cursor *string, limit
 
 // ListTemperaturesWithTZ returns a paginated list of temperatures with timezone-aware date filtering.
 func ListTemperaturesWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit int, loc *time.Location) (*model.MetricPage[model.Temperature], error) {
-	var conditions []string
-	var args []any
-
-	conditions = append(conditions, "baby_id = ?")
-	args = append(args, babyID)
-
-	if from != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse from date: %w", err)
-		}
-		utcFrom := t.UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp >= ?")
-		args = append(args, utcFrom)
-	}
-
-	if to != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse to date: %w", err)
-		}
-		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp < ?")
-		args = append(args, utcTo)
-	}
-
-	if cursor != nil {
-		conditions = append(conditions, "id < ?")
-		args = append(args, *cursor)
-	}
-
-	query := fmt.Sprintf(
-		"SELECT %s FROM temperatures WHERE %s ORDER BY id DESC LIMIT ?",
-		temperatureColumns,
-		strings.Join(conditions, " AND "),
-	)
-	args = append(args, limit+1)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list temperatures: %w", err)
-	}
-	defer rows.Close()
-
-	var temps []model.Temperature
-	for rows.Next() {
-		t, err := scanTemperature(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan temperature: %w", err)
-		}
-		temps = append(temps, *t)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration: %w", err)
-	}
-
-	page := &model.MetricPage[model.Temperature]{}
-
-	if len(temps) > limit {
-		page.Data = temps[:limit]
-		nextCursor := temps[limit-1].ID
-		page.NextCursor = &nextCursor
-	} else {
-		page.Data = temps
-	}
-
-	if page.Data == nil {
-		page.Data = make([]model.Temperature, 0)
-	}
-
-	return page, nil
+	return listMetricWithTZ(db, "temperatures", temperatureColumns, babyID, from, to, cursor, limit, loc, scanTemperature, func(t *model.Temperature) string { return t.ID })
 }
 
 // UpdateTemperature updates a temperature entry.

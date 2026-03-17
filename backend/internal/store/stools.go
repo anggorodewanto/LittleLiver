@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -75,77 +74,7 @@ func ListStools(db *sql.DB, babyID string, from, to, cursor *string, limit int) 
 
 // ListStoolsWithTZ returns a paginated list of stools with timezone-aware date filtering.
 func ListStoolsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit int, loc *time.Location) (*model.MetricPage[model.Stool], error) {
-	var conditions []string
-	var args []any
-
-	conditions = append(conditions, "baby_id = ?")
-	args = append(args, babyID)
-
-	if from != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse from date: %w", err)
-		}
-		utcFrom := t.UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp >= ?")
-		args = append(args, utcFrom)
-	}
-
-	if to != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse to date: %w", err)
-		}
-		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp < ?")
-		args = append(args, utcTo)
-	}
-
-	if cursor != nil {
-		conditions = append(conditions, "id < ?")
-		args = append(args, *cursor)
-	}
-
-	query := fmt.Sprintf(
-		"SELECT %s FROM stools WHERE %s ORDER BY id DESC LIMIT ?",
-		stoolColumns,
-		strings.Join(conditions, " AND "),
-	)
-	args = append(args, limit+1)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list stools: %w", err)
-	}
-	defer rows.Close()
-
-	var stools []model.Stool
-	for rows.Next() {
-		s, err := scanStool(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan stool: %w", err)
-		}
-		stools = append(stools, *s)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration: %w", err)
-	}
-
-	page := &model.MetricPage[model.Stool]{}
-
-	if len(stools) > limit {
-		page.Data = stools[:limit]
-		nextCursor := stools[limit-1].ID
-		page.NextCursor = &nextCursor
-	} else {
-		page.Data = stools
-	}
-
-	if page.Data == nil {
-		page.Data = make([]model.Stool, 0)
-	}
-
-	return page, nil
+	return listMetricWithTZ(db, "stools", stoolColumns, babyID, from, to, cursor, limit, loc, scanStool, func(s *model.Stool) string { return s.ID })
 }
 
 // UpdateStool updates a stool entry.

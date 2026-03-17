@@ -27,7 +27,7 @@ func (req *generalNoteRequest) validate() (string, bool) {
 		return "content is required", false
 	}
 	if req.Category != nil && !model.ValidNoteCategory(*req.Category) {
-		return "invalid category: must be one of behavior, sleep, vomiting, irritability, skin, other", false
+		return "invalid category", false
 	}
 	return "", true
 }

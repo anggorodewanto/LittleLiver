@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -70,77 +69,7 @@ func ListUrine(db *sql.DB, babyID string, from, to, cursor *string, limit int) (
 
 // ListUrineWithTZ returns a paginated list of urine entries with timezone-aware date filtering.
 func ListUrineWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit int, loc *time.Location) (*model.MetricPage[model.Urine], error) {
-	var conditions []string
-	var args []any
-
-	conditions = append(conditions, "baby_id = ?")
-	args = append(args, babyID)
-
-	if from != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse from date: %w", err)
-		}
-		utcFrom := t.UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp >= ?")
-		args = append(args, utcFrom)
-	}
-
-	if to != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse to date: %w", err)
-		}
-		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp < ?")
-		args = append(args, utcTo)
-	}
-
-	if cursor != nil {
-		conditions = append(conditions, "id < ?")
-		args = append(args, *cursor)
-	}
-
-	query := fmt.Sprintf(
-		"SELECT %s FROM urine WHERE %s ORDER BY id DESC LIMIT ?",
-		urineColumns,
-		strings.Join(conditions, " AND "),
-	)
-	args = append(args, limit+1)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list urine: %w", err)
-	}
-	defer rows.Close()
-
-	var entries []model.Urine
-	for rows.Next() {
-		u, err := scanUrine(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan urine: %w", err)
-		}
-		entries = append(entries, *u)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration: %w", err)
-	}
-
-	page := &model.MetricPage[model.Urine]{}
-
-	if len(entries) > limit {
-		page.Data = entries[:limit]
-		nextCursor := entries[limit-1].ID
-		page.NextCursor = &nextCursor
-	} else {
-		page.Data = entries
-	}
-
-	if page.Data == nil {
-		page.Data = make([]model.Urine, 0)
-	}
-
-	return page, nil
+	return listMetricWithTZ(db, "urine", urineColumns, babyID, from, to, cursor, limit, loc, scanUrine, func(u *model.Urine) string { return u.ID })
 }
 
 // UpdateUrine updates a urine entry.

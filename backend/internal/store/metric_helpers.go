@@ -3,7 +3,10 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 )
 
 // checkRowsAffected verifies that at least one row was affected by the operation.
@@ -54,6 +57,87 @@ func nullInt(ni sql.NullInt64) *int {
 		return &v
 	}
 	return nil
+}
+
+// listMetricWithTZ is a generic helper for paginated, timezone-aware listing of metric rows.
+// It builds the WHERE clause, executes the query, scans rows, and handles cursor pagination.
+func listMetricWithTZ[T any](
+	db *sql.DB, table, columns, babyID string,
+	from, to, cursor *string, limit int, loc *time.Location,
+	scan func(scanner) (*T, error),
+	getID func(*T) string,
+) (*model.MetricPage[T], error) {
+	var conditions []string
+	var args []any
+
+	conditions = append(conditions, "baby_id = ?")
+	args = append(args, babyID)
+
+	if from != nil {
+		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
+		if err != nil {
+			return nil, fmt.Errorf("parse from date: %w", err)
+		}
+		utcFrom := t.UTC().Format(model.DateTimeFormat)
+		conditions = append(conditions, "timestamp >= ?")
+		args = append(args, utcFrom)
+	}
+
+	if to != nil {
+		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
+		if err != nil {
+			return nil, fmt.Errorf("parse to date: %w", err)
+		}
+		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
+		conditions = append(conditions, "timestamp < ?")
+		args = append(args, utcTo)
+	}
+
+	if cursor != nil {
+		conditions = append(conditions, "id < ?")
+		args = append(args, *cursor)
+	}
+
+	query := fmt.Sprintf(
+		"SELECT %s FROM %s WHERE %s ORDER BY id DESC LIMIT ?",
+		columns, table,
+		strings.Join(conditions, " AND "),
+	)
+	args = append(args, limit+1)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	var items []T
+	for rows.Next() {
+		item, err := scan(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan %s: %w", table, err)
+		}
+		items = append(items, *item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration: %w", err)
+	}
+
+	page := &model.MetricPage[T]{}
+
+	if len(items) > limit {
+		page.Data = items[:limit]
+		nc := getID(&items[limit-1])
+		page.NextCursor = &nc
+	} else {
+		page.Data = items
+	}
+
+	if page.Data == nil {
+		page.Data = make([]T, 0)
+	}
+
+	return page, nil
 }
 
 // parseMetricTimes parses the three standard time strings (timestamp, created_at, updated_at).

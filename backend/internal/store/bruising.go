@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -74,77 +73,7 @@ func ListBruising(db *sql.DB, babyID string, from, to, cursor *string, limit int
 
 // ListBruisingWithTZ returns a paginated list of bruising observations with timezone-aware date filtering.
 func ListBruisingWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit int, loc *time.Location) (*model.MetricPage[model.BruisingObservation], error) {
-	var conditions []string
-	var args []any
-
-	conditions = append(conditions, "baby_id = ?")
-	args = append(args, babyID)
-
-	if from != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse from date: %w", err)
-		}
-		utcFrom := t.UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp >= ?")
-		args = append(args, utcFrom)
-	}
-
-	if to != nil {
-		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
-		if err != nil {
-			return nil, fmt.Errorf("parse to date: %w", err)
-		}
-		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp < ?")
-		args = append(args, utcTo)
-	}
-
-	if cursor != nil {
-		conditions = append(conditions, "id < ?")
-		args = append(args, *cursor)
-	}
-
-	query := fmt.Sprintf(
-		"SELECT %s FROM bruising WHERE %s ORDER BY id DESC LIMIT ?",
-		bruisingColumns,
-		strings.Join(conditions, " AND "),
-	)
-	args = append(args, limit+1)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("list bruising: %w", err)
-	}
-	defer rows.Close()
-
-	var observations []model.BruisingObservation
-	for rows.Next() {
-		b, err := scanBruising(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scan bruising: %w", err)
-		}
-		observations = append(observations, *b)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration: %w", err)
-	}
-
-	page := &model.MetricPage[model.BruisingObservation]{}
-
-	if len(observations) > limit {
-		page.Data = observations[:limit]
-		nextCursor := observations[limit-1].ID
-		page.NextCursor = &nextCursor
-	} else {
-		page.Data = observations
-	}
-
-	if page.Data == nil {
-		page.Data = make([]model.BruisingObservation, 0)
-	}
-
-	return page, nil
+	return listMetricWithTZ(db, "bruising", bruisingColumns, babyID, from, to, cursor, limit, loc, scanBruising, func(b *model.BruisingObservation) string { return b.ID })
 }
 
 // UpdateBruising updates a bruising observation.
