@@ -31,6 +31,8 @@ type Config struct {
 	TokenURL string
 	// UserInfoURL is the URL to fetch user info (overridable for testing).
 	UserInfoURL string
+	// SessionSecret is the HMAC secret for CSRF token derivation (passed through for router setup).
+	SessionSecret string
 }
 
 // Handlers holds dependencies for auth HTTP handlers.

@@ -79,7 +79,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Integration Test — Auth
 
-- [ ] **Phase 9: Integration test — Auth flow**
+- [x] **Phase 9: Integration test — Auth flow**
   **Depends on:** Phase 8
   **What to build:** End-to-end test covering: Google OAuth login (mocked provider) → session cookie set → fetch CSRF token → make authorized state-changing request with CSRF → verify success → logout → verify 401. Test sliding window extension. Test expired session rejection.
   **TDD approach:** This IS the test phase. Write integration tests using `httptest.Server` with the full router stack. Verify the complete auth lifecycle.

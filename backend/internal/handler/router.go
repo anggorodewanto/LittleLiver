@@ -22,21 +22,29 @@ func NewMux(opts ...Option) *http.ServeMux {
 
 	// Register auth routes if DB and OAuth config are provided
 	if cfg.db != nil {
-		clientID := os.Getenv("GOOGLE_CLIENT_ID")
-		clientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
-		baseURL := os.Getenv("BASE_URL")
-		if baseURL == "" {
-			baseURL = "http://localhost:8080"
-		}
+		var authCfg auth.Config
+		var sessionSecret string
 
-		sessionSecret := os.Getenv("SESSION_SECRET")
-
-		if clientID != "" && clientSecret != "" {
-			h := auth.NewHandlers(cfg.db, auth.Config{
+		if cfg.authConfig != nil {
+			authCfg = *cfg.authConfig
+			sessionSecret = cfg.authConfig.SessionSecret
+		} else {
+			clientID := os.Getenv("GOOGLE_CLIENT_ID")
+			clientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+			baseURL := os.Getenv("BASE_URL")
+			if baseURL == "" {
+				baseURL = "http://localhost:8080"
+			}
+			sessionSecret = os.Getenv("SESSION_SECRET")
+			authCfg = auth.Config{
 				ClientID:     clientID,
 				ClientSecret: clientSecret,
 				RedirectURL:  baseURL + "/auth/google/callback",
-			})
+			}
+		}
+
+		if authCfg.ClientID != "" && authCfg.ClientSecret != "" {
+			h := auth.NewHandlers(cfg.db, authCfg)
 			auth.RegisterRoutes(mux, h)
 
 			// Register API routes with auth middleware
@@ -73,12 +81,20 @@ func NewMux(opts ...Option) *http.ServeMux {
 type Option func(*options)
 
 type options struct {
-	db *sql.DB
+	db         *sql.DB
+	authConfig *auth.Config
 }
 
 // WithDB provides a database connection for routes that need it.
 func WithDB(db *sql.DB) Option {
 	return func(o *options) {
 		o.db = db
+	}
+}
+
+// WithAuthConfig overrides the Google OAuth configuration (useful for testing).
+func WithAuthConfig(cfg auth.Config) Option {
+	return func(o *options) {
+		o.authConfig = &cfg
 	}
 }
