@@ -25,7 +25,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Infrastructure & Foundation
 
-- [ ] **Phase 1: Go backend scaffolding and project structure**
+- [x] **Phase 1: Go backend scaffolding and project structure**
   **Depends on:** Nothing
   **What to build:** Initialize Go module at `backend/` with `cmd/server/main.go` entrypoint, `internal/` package structure (`auth/`, `handler/`, `model/`, `store/`, `storage/`, `notify/`, `report/`, `who/`), `migrations/` directory. Set up a basic HTTP server that listens on `:8080` and returns a health-check JSON response. Add `Makefile` or build script. Wire up `go vet` in CI-ready form.
   **TDD approach:** Write a test that starts the server, hits `GET /health`, and asserts a 200 JSON response. Then write the minimal `main.go` and router to make it pass.
