@@ -40,11 +40,11 @@ func CreateInvite(db *sql.DB, babyID, createdBy string) (*model.Invite, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create invite: begin tx: %w", err)
 	}
+	defer tx.Rollback()
 
 	// Hard-delete all prior codes for this baby
 	_, err = tx.Exec("DELETE FROM invites WHERE baby_id = ?", babyID)
 	if err != nil {
-		tx.Rollback()
 		return nil, fmt.Errorf("create invite: delete prior: %w", err)
 	}
 
@@ -56,7 +56,6 @@ func CreateInvite(db *sql.DB, babyID, createdBy string) (*model.Invite, error) {
 	for i := 0; i < maxRetries; i++ {
 		code, err = generateCode()
 		if err != nil {
-			tx.Rollback()
 			return nil, err
 		}
 
@@ -69,7 +68,6 @@ func CreateInvite(db *sql.DB, babyID, createdBy string) (*model.Invite, error) {
 		}
 	}
 	if lastErr != nil {
-		tx.Rollback()
 		return nil, fmt.Errorf("create invite: max retries exceeded: %w", lastErr)
 	}
 
@@ -95,6 +93,7 @@ func RedeemInvite(db *sql.DB, code, userID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("redeem invite: begin tx: %w", err)
 	}
+	defer tx.Rollback()
 
 	var babyID string
 	var usedAt sql.NullString
@@ -103,7 +102,6 @@ func RedeemInvite(db *sql.DB, code, userID string) (string, error) {
 		"SELECT baby_id, used_at, expires_at FROM invites WHERE code = ?", code,
 	).Scan(&babyID, &usedAt, &expiresStr)
 	if err != nil {
-		tx.Rollback()
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrInvalidInvite
 		}
@@ -112,18 +110,15 @@ func RedeemInvite(db *sql.DB, code, userID string) (string, error) {
 
 	// Check if already used
 	if usedAt.Valid {
-		tx.Rollback()
 		return "", ErrInvalidInvite
 	}
 
 	// Check if expired
 	expiresAtTime, err := parseTime(expiresStr)
 	if err != nil {
-		tx.Rollback()
 		return "", fmt.Errorf("redeem invite: parse expires_at: %w", err)
 	}
 	if time.Now().UTC().After(expiresAtTime) {
-		tx.Rollback()
 		return "", ErrInvalidInvite
 	}
 
@@ -134,12 +129,10 @@ func RedeemInvite(db *sql.DB, code, userID string) (string, error) {
 		babyID, userID,
 	).Scan(&linkCount)
 	if err != nil {
-		tx.Rollback()
 		return "", fmt.Errorf("redeem invite: check link: %w", err)
 	}
 	if linkCount > 0 {
 		// Already linked — return baby ID with ErrAlreadyLinked, do not mark code as used
-		tx.Rollback()
 		return babyID, ErrAlreadyLinked
 	}
 
@@ -149,7 +142,6 @@ func RedeemInvite(db *sql.DB, code, userID string) (string, error) {
 		userID, time.Now().UTC().Format(time.DateTime), code,
 	)
 	if err != nil {
-		tx.Rollback()
 		return "", fmt.Errorf("redeem invite: mark used: %w", err)
 	}
 
@@ -159,7 +151,6 @@ func RedeemInvite(db *sql.DB, code, userID string) (string, error) {
 		babyID, userID,
 	)
 	if err != nil {
-		tx.Rollback()
 		return "", fmt.Errorf("redeem invite: link parent: %w", err)
 	}
 

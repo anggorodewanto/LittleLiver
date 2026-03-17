@@ -5,6 +5,12 @@ import "time"
 // DefaultCalPerFeed is the default kcal estimate for breast-direct feeds without volume.
 const DefaultCalPerFeed = 67.0
 
+const (
+	DateFormat          = "2006-01-02"
+	DateTimeFormat      = "2006-01-02T15:04:05Z"
+	DeletedUserSentinel = "deleted_user"
+)
+
 // User represents a parent user authenticated via Google OAuth.
 type User struct {
 	ID        string    `json:"id"`

@@ -107,22 +107,22 @@ func ListFeedingsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, lim
 	args = append(args, babyID)
 
 	if from != nil {
-		t, err := time.ParseInLocation("2006-01-02", *from, loc)
+		t, err := time.ParseInLocation(model.DateFormat, *from, loc)
 		if err != nil {
 			return nil, fmt.Errorf("parse from date: %w", err)
 		}
-		utcFrom := t.UTC().Format("2006-01-02T15:04:05Z")
+		utcFrom := t.UTC().Format(model.DateTimeFormat)
 		conditions = append(conditions, "timestamp >= ?")
 		args = append(args, utcFrom)
 	}
 
 	if to != nil {
-		t, err := time.ParseInLocation("2006-01-02", *to, loc)
+		t, err := time.ParseInLocation(model.DateFormat, *to, loc)
 		if err != nil {
 			return nil, fmt.Errorf("parse to date: %w", err)
 		}
 		// End of day: 23:59:59
-		utcTo := t.Add(24*time.Hour - time.Second).UTC().Format("2006-01-02T15:04:05Z")
+		utcTo := t.Add(24*time.Hour - time.Second).UTC().Format(model.DateTimeFormat)
 		conditions = append(conditions, "timestamp <= ?")
 		args = append(args, utcTo)
 	}

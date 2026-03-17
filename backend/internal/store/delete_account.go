@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"fmt"
+
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 )
 
 // DeleteAccount deletes a user account with full cascade behavior per spec §2.2.
@@ -24,6 +26,7 @@ func DeleteAccount(db *sql.DB, userID string, anonymizeTables []string) error {
 	if err != nil {
 		return fmt.Errorf("delete account: begin tx: %w", err)
 	}
+	defer tx.Rollback()
 
 	// Step 1: Identify babies where this user is the last remaining parent.
 	rows, err := tx.Query(
@@ -33,7 +36,6 @@ func DeleteAccount(db *sql.DB, userID string, anonymizeTables []string) error {
 		userID,
 	)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("delete account: find last-parent babies: %w", err)
 	}
 	var lastParentBabyIDs []string
@@ -41,14 +43,12 @@ func DeleteAccount(db *sql.DB, userID string, anonymizeTables []string) error {
 		var babyID string
 		if err := rows.Scan(&babyID); err != nil {
 			rows.Close()
-			tx.Rollback()
 			return fmt.Errorf("delete account: scan baby_id: %w", err)
 		}
 		lastParentBabyIDs = append(lastParentBabyIDs, babyID)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		tx.Rollback()
 		return fmt.Errorf("delete account: iterate last-parent babies: %w", err)
 	}
 
@@ -56,7 +56,6 @@ func DeleteAccount(db *sql.DB, userID string, anonymizeTables []string) error {
 	for _, babyID := range lastParentBabyIDs {
 		_, err = tx.Exec("DELETE FROM babies WHERE id = ?", babyID)
 		if err != nil {
-			tx.Rollback()
 			return fmt.Errorf("delete account: delete baby %s: %w", babyID, err)
 		}
 	}
@@ -64,41 +63,36 @@ func DeleteAccount(db *sql.DB, userID string, anonymizeTables []string) error {
 	// Step 3: Delete all invites created by the user.
 	_, err = tx.Exec("DELETE FROM invites WHERE created_by = ?", userID)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("delete account: delete invites: %w", err)
 	}
 
 	// Step 4: Anonymize logged_by/updated_by across configured tables.
 	for _, table := range anonymizeTables {
 		_, err = tx.Exec(
-			fmt.Sprintf("UPDATE %s SET logged_by = 'deleted_user' WHERE logged_by = ?", table),
-			userID,
+			fmt.Sprintf("UPDATE %s SET logged_by = ? WHERE logged_by = ?", table),
+			model.DeletedUserSentinel, userID,
 		)
 		if err != nil {
-			tx.Rollback()
 			return fmt.Errorf("delete account: anonymize %s.logged_by: %w", table, err)
 		}
 		_, err = tx.Exec(
-			fmt.Sprintf("UPDATE %s SET updated_by = 'deleted_user' WHERE updated_by = ?", table),
-			userID,
+			fmt.Sprintf("UPDATE %s SET updated_by = ? WHERE updated_by = ?", table),
+			model.DeletedUserSentinel, userID,
 		)
 		if err != nil {
-			tx.Rollback()
 			return fmt.Errorf("delete account: anonymize %s.updated_by: %w", table, err)
 		}
 	}
 
-	// Anonymize invites.used_by to 'deleted_user'.
-	_, err = tx.Exec("UPDATE invites SET used_by = 'deleted_user' WHERE used_by = ?", userID)
+	// Anonymize invites.used_by.
+	_, err = tx.Exec("UPDATE invites SET used_by = ? WHERE used_by = ?", model.DeletedUserSentinel, userID)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("delete account: anonymize invites.used_by: %w", err)
 	}
 
 	// Step 5: Delete the user record (CASCADE cleans sessions, baby_parents, push_subscriptions).
 	_, err = tx.Exec("DELETE FROM users WHERE id = ?", userID)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("delete account: delete user: %w", err)
 	}
 

@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
@@ -49,14 +50,10 @@ func CreateInviteHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(inviteResponse{
+		writeJSON(w, http.StatusCreated, inviteResponse{
 			Code:      invite.Code,
-			ExpiresAt: invite.ExpiresAt.Format(dateTimeFormat),
-		}); err != nil {
-			log.Printf("create invite: encode response: %v", err)
-		}
+			ExpiresAt: invite.ExpiresAt.Format(model.DateTimeFormat),
+		})
 	}
 }
 
@@ -82,13 +79,10 @@ func JoinBabyHandler(db *sql.DB) http.HandlerFunc {
 
 		babyID, err := store.RedeemInvite(db, req.Code, user.ID)
 		if errors.Is(err, store.ErrAlreadyLinked) {
-			w.Header().Set("Content-Type", "application/json")
-			if encErr := json.NewEncoder(w).Encode(joinResponse{
+			writeJSON(w, http.StatusOK, joinResponse{
 				BabyID:  babyID,
 				Message: "already linked to this baby",
-			}); encErr != nil {
-				log.Printf("join baby: encode response: %v", encErr)
-			}
+			})
 			return
 		}
 		if errors.Is(err, store.ErrInvalidInvite) {
@@ -101,12 +95,9 @@ func JoinBabyHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(joinResponse{
+		writeJSON(w, http.StatusOK, joinResponse{
 			BabyID:  babyID,
 			Message: "successfully joined",
-		}); err != nil {
-			log.Printf("join baby: encode response: %v", err)
-		}
+		})
 	}
 }

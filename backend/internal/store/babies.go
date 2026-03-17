@@ -64,6 +64,7 @@ func CreateBaby(db *sql.DB, creatorID, name, sex, dob string, diagnosisDate, kas
 	if err != nil {
 		return nil, fmt.Errorf("create baby: begin tx: %w", err)
 	}
+	defer tx.Rollback()
 
 	_, err = tx.Exec(
 		`INSERT INTO babies (id, name, sex, date_of_birth, diagnosis_date, kasai_date, default_cal_per_feed, notes)
@@ -71,7 +72,6 @@ func CreateBaby(db *sql.DB, creatorID, name, sex, dob string, diagnosisDate, kas
 		id, name, sex, dob, diagnosisDate, kasaiDate, defaultCalPerFeed, model.DefaultCalPerFeed, notes,
 	)
 	if err != nil {
-		tx.Rollback()
 		return nil, fmt.Errorf("create baby: insert: %w", err)
 	}
 
@@ -80,7 +80,6 @@ func CreateBaby(db *sql.DB, creatorID, name, sex, dob string, diagnosisDate, kas
 		id, creatorID,
 	)
 	if err != nil {
-		tx.Rollback()
 		return nil, fmt.Errorf("create baby: link parent: %w", err)
 	}
 
@@ -149,13 +148,13 @@ func UnlinkParent(db *sql.DB, babyID, userID string) error {
 	if err != nil {
 		return fmt.Errorf("unlink parent: begin tx: %w", err)
 	}
+	defer tx.Rollback()
 
 	_, err = tx.Exec(
 		"DELETE FROM baby_parents WHERE baby_id = ? AND user_id = ?",
 		babyID, userID,
 	)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("unlink parent: delete link: %w", err)
 	}
 
@@ -164,14 +163,12 @@ func UnlinkParent(db *sql.DB, babyID, userID string) error {
 		"SELECT COUNT(*) FROM baby_parents WHERE baby_id = ?", babyID,
 	).Scan(&remaining)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("unlink parent: count remaining: %w", err)
 	}
 
 	if remaining == 0 {
 		_, err = tx.Exec("DELETE FROM babies WHERE id = ?", babyID)
 		if err != nil {
-			tx.Rollback()
 			return fmt.Errorf("unlink parent: delete baby: %w", err)
 		}
 	}

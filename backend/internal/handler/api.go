@@ -2,8 +2,6 @@ package handler
 
 import (
 	"database/sql"
-	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/ablankz/LittleLiver/backend/internal/middleware"
@@ -22,10 +20,7 @@ func CSRFTokenHandler(secret string) http.HandlerFunc {
 
 		csrfToken := middleware.CSRFToken(sessionToken, secret)
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]string{"csrf_token": csrfToken}); err != nil {
-			log.Printf("csrf-token: failed to write response: %v", err)
-		}
+		writeJSON(w, http.StatusOK, map[string]string{"csrf_token": csrfToken})
 	}
 }
 
@@ -71,9 +66,6 @@ func MeHandler(db *sql.DB) http.HandlerFunc {
 			resp.Babies = append(resp.Babies, toBabyResponse(&babies[i]))
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Printf("me: failed to write response: %v", err)
-		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }

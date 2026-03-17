@@ -13,11 +13,6 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
-const (
-	dateFormat     = "2006-01-02"
-	dateTimeFormat = "2006-01-02T15:04:05Z"
-)
-
 // babyRequest is the JSON request body for creating/updating a baby.
 type babyRequest struct {
 	Name              string   `json:"name"`
@@ -38,16 +33,16 @@ func (req *babyRequest) validate() (string, bool) {
 	if !model.ValidSex(req.Sex) {
 		return "sex must be 'male' or 'female'", false
 	}
-	if _, err := time.Parse(dateFormat, req.DateOfBirth); err != nil {
+	if _, err := time.Parse(model.DateFormat, req.DateOfBirth); err != nil {
 		return "date_of_birth must be in YYYY-MM-DD format", false
 	}
 	if req.DiagnosisDate != nil {
-		if _, err := time.Parse(dateFormat, *req.DiagnosisDate); err != nil {
+		if _, err := time.Parse(model.DateFormat, *req.DiagnosisDate); err != nil {
 			return "diagnosis_date must be in YYYY-MM-DD format", false
 		}
 	}
 	if req.KasaiDate != nil {
-		if _, err := time.Parse(dateFormat, *req.KasaiDate); err != nil {
+		if _, err := time.Parse(model.DateFormat, *req.KasaiDate); err != nil {
 			return "kasai_date must be in YYYY-MM-DD format", false
 		}
 	}
@@ -72,17 +67,17 @@ func toBabyResponse(b *model.Baby) babyResponse {
 		ID:                b.ID,
 		Name:              b.Name,
 		Sex:               b.Sex,
-		DateOfBirth:       b.DateOfBirth.Format(dateFormat),
+		DateOfBirth:       b.DateOfBirth.Format(model.DateFormat),
 		DefaultCalPerFeed: b.DefaultCalPerFeed,
 		Notes:             b.Notes,
-		CreatedAt:         b.CreatedAt.Format(dateTimeFormat),
+		CreatedAt:         b.CreatedAt.Format(model.DateTimeFormat),
 	}
 	if b.DiagnosisDate != nil {
-		s := b.DiagnosisDate.Format(dateFormat)
+		s := b.DiagnosisDate.Format(model.DateFormat)
 		resp.DiagnosisDate = &s
 	}
 	if b.KasaiDate != nil {
-		s := b.KasaiDate.Format(dateFormat)
+		s := b.KasaiDate.Format(model.DateFormat)
 		resp.KasaiDate = &s
 	}
 	return resp
@@ -166,11 +161,7 @@ func CreateBabyHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(toBabyResponse(baby)); err != nil {
-			log.Printf("create baby: encode response: %v", err)
-		}
+		writeJSON(w, http.StatusCreated, toBabyResponse(baby))
 	}
 }
 
@@ -194,10 +185,7 @@ func ListBabiesHandler(db *sql.DB) http.HandlerFunc {
 			resp = append(resp, toBabyResponse(&babies[i]))
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Printf("list babies: encode response: %v", err)
-		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 
@@ -214,10 +202,7 @@ func GetBabyHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(toBabyResponse(baby)); err != nil {
-			log.Printf("get baby: encode response: %v", err)
-		}
+		writeJSON(w, http.StatusOK, toBabyResponse(baby))
 	}
 }
 
@@ -232,13 +217,12 @@ func UnlinkSelfHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		_, ok = requireBabyAccess(w, r, db, user.ID)
+		baby, ok := requireBabyAccess(w, r, db, user.ID)
 		if !ok {
 			return
 		}
 
-		babyID := extractBabyID(r)
-		if err := store.UnlinkParent(db, babyID, user.ID); err != nil {
+		if err := store.UnlinkParent(db, baby.ID, user.ID); err != nil {
 			log.Printf("unlink self: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -280,9 +264,6 @@ func UpdateBabyHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(toBabyResponse(updated)); err != nil {
-			log.Printf("update baby: encode response: %v", err)
-		}
+		writeJSON(w, http.StatusOK, toBabyResponse(updated))
 	}
 }

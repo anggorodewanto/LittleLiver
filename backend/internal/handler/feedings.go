@@ -35,7 +35,7 @@ func (req *feedingRequest) validate() (string, bool) {
 	if !model.ValidFeedType(req.FeedType) {
 		return "invalid feed_type", false
 	}
-	if _, err := time.Parse(dateTimeFormat, req.Timestamp); err != nil {
+	if _, err := time.Parse(model.DateTimeFormat, req.Timestamp); err != nil {
 		return "timestamp must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)", false
 	}
 	return "", true
@@ -65,7 +65,7 @@ func toFeedingResponse(f *model.Feeding) feedingResponse {
 		BabyID:         f.BabyID,
 		LoggedBy:       f.LoggedBy,
 		UpdatedBy:      f.UpdatedBy,
-		Timestamp:      f.Timestamp.Format(dateTimeFormat),
+		Timestamp:      f.Timestamp.Format(model.DateTimeFormat),
 		FeedType:       f.FeedType,
 		VolumeMl:       f.VolumeMl,
 		CalDensity:     f.CalDensity,
@@ -73,15 +73,9 @@ func toFeedingResponse(f *model.Feeding) feedingResponse {
 		UsedDefaultCal: f.UsedDefaultCal,
 		DurationMin:    f.DurationMin,
 		Notes:          f.Notes,
-		CreatedAt:      f.CreatedAt.Format(dateTimeFormat),
-		UpdatedAt:      f.UpdatedAt.Format(dateTimeFormat),
+		CreatedAt:      f.CreatedAt.Format(model.DateTimeFormat),
+		UpdatedAt:      f.UpdatedAt.Format(model.DateTimeFormat),
 	}
-}
-
-// feedingListResponse is the paginated response envelope.
-type feedingListResponse struct {
-	Data       []feedingResponse `json:"data"`
-	NextCursor *string           `json:"next_cursor"`
 }
 
 // CreateFeedingHandler handles POST /api/babies/{id}/feedings.
@@ -92,12 +86,10 @@ func CreateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		_, ok = requireBabyAccess(w, r, db, user.ID)
+		baby, ok := requireBabyAccess(w, r, db, user.ID)
 		if !ok {
 			return
 		}
-
-		babyID := extractBabyID(r)
 
 		var req feedingRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -110,18 +102,14 @@ func CreateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		feeding, err := store.CreateFeeding(db, babyID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes)
+		feeding, err := store.CreateFeeding(db, baby.ID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes)
 		if err != nil {
 			log.Printf("create feeding: %v", err)
 			http.Error(w, "failed to create feeding", http.StatusInternalServerError)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(toFeedingResponse(feeding)); err != nil {
-			log.Printf("create feeding: encode response: %v", err)
-		}
+		writeJSON(w, http.StatusCreated, toFeedingResponse(feeding))
 	}
 }
 
@@ -133,23 +121,14 @@ func ListFeedingsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		_, ok = requireBabyAccess(w, r, db, user.ID)
+		baby, ok := requireBabyAccess(w, r, db, user.ID)
 		if !ok {
 			return
 		}
 
-		babyID := extractBabyID(r)
-
-		var from, to, cursor *string
-		if v := r.URL.Query().Get("from"); v != "" {
-			from = &v
-		}
-		if v := r.URL.Query().Get("to"); v != "" {
-			to = &v
-		}
-		if v := r.URL.Query().Get("cursor"); v != "" {
-			cursor = &v
-		}
+		from := optionalQuery(r, "from")
+		to := optionalQuery(r, "to")
+		cursor := optionalQuery(r, "cursor")
 
 		// Determine user timezone for date filtering
 		loc := time.UTC
@@ -159,14 +138,14 @@ func ListFeedingsHandler(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		page, err := store.ListFeedingsWithTZ(db, babyID, from, to, cursor, defaultPageSize, loc)
+		page, err := store.ListFeedingsWithTZ(db, baby.ID, from, to, cursor, defaultPageSize, loc)
 		if err != nil {
 			log.Printf("list feedings: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		resp := feedingListResponse{
+		resp := model.MetricPage[feedingResponse]{
 			Data:       make([]feedingResponse, 0, len(page.Data)),
 			NextCursor: page.NextCursor,
 		}
@@ -174,10 +153,7 @@ func ListFeedingsHandler(db *sql.DB) http.HandlerFunc {
 			resp.Data = append(resp.Data, toFeedingResponse(&page.Data[i]))
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Printf("list feedings: encode response: %v", err)
-		}
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 
@@ -189,19 +165,17 @@ func GetFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		_, ok = requireBabyAccess(w, r, db, user.ID)
+		baby, ok := requireBabyAccess(w, r, db, user.ID)
 		if !ok {
 			return
 		}
 
-		babyID := extractBabyID(r)
-		entryID := r.PathValue("entryId")
-		if entryID == "" {
-			http.Error(w, "missing entry ID", http.StatusBadRequest)
+		entryID, ok := requireEntryID(w, r)
+		if !ok {
 			return
 		}
 
-		feeding, err := store.GetFeedingByID(db, babyID, entryID)
+		feeding, err := store.GetFeedingByID(db, baby.ID, entryID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				http.Error(w, "feeding not found", http.StatusNotFound)
@@ -212,10 +186,7 @@ func GetFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(toFeedingResponse(feeding)); err != nil {
-			log.Printf("get feeding: encode response: %v", err)
-		}
+		writeJSON(w, http.StatusOK, toFeedingResponse(feeding))
 	}
 }
 
@@ -227,15 +198,13 @@ func UpdateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		_, ok = requireBabyAccess(w, r, db, user.ID)
+		baby, ok := requireBabyAccess(w, r, db, user.ID)
 		if !ok {
 			return
 		}
 
-		babyID := extractBabyID(r)
-		entryID := r.PathValue("entryId")
-		if entryID == "" {
-			http.Error(w, "missing entry ID", http.StatusBadRequest)
+		entryID, ok := requireEntryID(w, r)
+		if !ok {
 			return
 		}
 
@@ -250,7 +219,7 @@ func UpdateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		feeding, err := store.UpdateFeeding(db, babyID, entryID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes)
+		feeding, err := store.UpdateFeeding(db, baby.ID, entryID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				http.Error(w, "feeding not found", http.StatusNotFound)
@@ -261,10 +230,7 @@ func UpdateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(toFeedingResponse(feeding)); err != nil {
-			log.Printf("update feeding: encode response: %v", err)
-		}
+		writeJSON(w, http.StatusOK, toFeedingResponse(feeding))
 	}
 }
 
@@ -276,19 +242,17 @@ func DeleteFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		_, ok = requireBabyAccess(w, r, db, user.ID)
+		baby, ok := requireBabyAccess(w, r, db, user.ID)
 		if !ok {
 			return
 		}
 
-		babyID := extractBabyID(r)
-		entryID := r.PathValue("entryId")
-		if entryID == "" {
-			http.Error(w, "missing entry ID", http.StatusBadRequest)
+		entryID, ok := requireEntryID(w, r)
+		if !ok {
 			return
 		}
 
-		err := store.DeleteFeeding(db, babyID, entryID)
+		err := store.DeleteFeeding(db, baby.ID, entryID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				http.Error(w, "feeding not found", http.StatusNotFound)
