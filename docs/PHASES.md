@@ -146,7 +146,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests for (1) weight creation with valid measurement_source, (2) temperature creation with method validation, (3) abdomen with required firmness validation, (4) CRUD operations including detail endpoints for all three. Write handlers.
   **Proof of progress:** Three metric types fully tested; enum validations working.
 
-- [ ] **Phase 19: Skin observations, bruising, and lab results endpoints**
+- [x] **Phase 19: Skin observations, bruising, and lab results endpoints**
   **Depends on:** Phase 15
   **What to build:** Migrations for `skin_observations`, `bruising`, `lab_results` tables (all with `(baby_id, timestamp)` indexes). Skin: `jaundice_level` enum, `scleral_icterus` boolean, `rashes` text field, `bruising` text field. Bruising: `location` required, `size_estimate` enum required, `size_cm` optional, `color` text field. Labs: EAV-style (`test_name`, `value`, `unit`, `normal_range`). CRUD for all three.
   **TDD approach:** Write tests for (1) skin creation with jaundice_level enum, rashes and bruising text fields, (2) bruising with size_estimate validation and color field, (3) lab result creation with arbitrary test_name, (4) CRUD including detail endpoints for all. Write handlers.

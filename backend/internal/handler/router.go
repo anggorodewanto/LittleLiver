@@ -99,6 +99,15 @@ func NewMux(opts ...Option) *http.ServeMux {
 			registerMetricCRUD(mux, "/api/babies/{id}/abdomen", rateMw, authMw, csrfMw,
 				CreateAbdomenHandler(cfg.db), ListAbdomenHandler(cfg.db),
 				GetAbdomenHandler(cfg.db), UpdateAbdomenHandler(cfg.db), DeleteAbdomenHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/skin", rateMw, authMw, csrfMw,
+				CreateSkinObservationHandler(cfg.db), ListSkinObservationsHandler(cfg.db),
+				GetSkinObservationHandler(cfg.db), UpdateSkinObservationHandler(cfg.db), DeleteSkinObservationHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/bruising", rateMw, authMw, csrfMw,
+				CreateBruisingHandler(cfg.db), ListBruisingHandler(cfg.db),
+				GetBruisingHandler(cfg.db), UpdateBruisingHandler(cfg.db), DeleteBruisingHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/labs", rateMw, authMw, csrfMw,
+				CreateLabResultHandler(cfg.db), ListLabResultsHandler(cfg.db),
+				GetLabResultHandler(cfg.db), UpdateLabResultHandler(cfg.db), DeleteLabResultHandler(cfg.db))
 
 			// Invite endpoints
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))

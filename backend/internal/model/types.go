@@ -149,6 +149,56 @@ type AbdomenObservation struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// SkinObservation represents a single skin observation for a baby.
+type SkinObservation struct {
+	ID             string    `json:"id"`
+	BabyID         string    `json:"baby_id"`
+	LoggedBy       string    `json:"logged_by"`
+	UpdatedBy      *string   `json:"updated_by,omitempty"`
+	Timestamp      time.Time `json:"timestamp"`
+	JaundiceLevel  *string   `json:"jaundice_level,omitempty"`
+	ScleralIcterus bool      `json:"scleral_icterus"`
+	Rashes         *string   `json:"rashes,omitempty"`
+	Bruising       *string   `json:"bruising,omitempty"`
+	PhotoKeys      *string   `json:"photo_keys,omitempty"`
+	Notes          *string   `json:"notes,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// BruisingObservation represents a single bruising observation for a baby.
+type BruisingObservation struct {
+	ID           string    `json:"id"`
+	BabyID       string    `json:"baby_id"`
+	LoggedBy     string    `json:"logged_by"`
+	UpdatedBy    *string   `json:"updated_by,omitempty"`
+	Timestamp    time.Time `json:"timestamp"`
+	Location     string    `json:"location"`
+	SizeEstimate string    `json:"size_estimate"`
+	SizeCm       *float64  `json:"size_cm,omitempty"`
+	Color        *string   `json:"color,omitempty"`
+	PhotoKeys    *string   `json:"photo_keys,omitempty"`
+	Notes        *string   `json:"notes,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// LabResult represents a single lab result entry for a baby (EAV-style).
+type LabResult struct {
+	ID          string    `json:"id"`
+	BabyID      string    `json:"baby_id"`
+	LoggedBy    string    `json:"logged_by"`
+	UpdatedBy   *string   `json:"updated_by,omitempty"`
+	Timestamp   time.Time `json:"timestamp"`
+	TestName    string    `json:"test_name"`
+	Value       string    `json:"value"`
+	Unit        *string   `json:"unit,omitempty"`
+	NormalRange *string   `json:"normal_range,omitempty"`
+	Notes       *string   `json:"notes,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // Invite represents an invite code for linking a parent to a baby.
 type Invite struct {
 	Code      string     `json:"code"`
