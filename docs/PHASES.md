@@ -31,7 +31,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write a test that starts the server, hits `GET /health`, and asserts a 200 JSON response. Then write the minimal `main.go` and router to make it pass.
   **Proof of progress:** `go test ./...` passes; `go build ./cmd/server` produces a binary; `GET /health` returns `{"status":"ok"}`.
 
-- [ ] **Phase 2: Svelte frontend scaffolding**
+- [x] **Phase 2: Svelte frontend scaffolding**
   **Depends on:** Nothing (can run in parallel with Phase 1)
   **What to build:** Initialize Svelte SPA with TypeScript at `frontend/`. Configure `svelte.config.js` for SPA mode (static adapter). Set up ESLint + Prettier. Create a minimal `App.svelte` shell with a placeholder route. Add API client stub in `lib/api.ts`. Add `npm test` script (Vitest).
   **TDD approach:** Write a Vitest test that renders the App component and checks for a placeholder heading. Write the minimal component to pass.
