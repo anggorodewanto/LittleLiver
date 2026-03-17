@@ -1,48 +1,18 @@
 package middleware_test
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ablankz/LittleLiver/backend/internal/middleware"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
+	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
 
 const testCookieName = "session_id"
 const testSecret = "test-hmac-secret-key-for-csrf"
-
-func setupTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	db, err := store.OpenDB(":memory:")
-	if err != nil {
-		t.Fatalf("OpenDB failed: %v", err)
-	}
-	migDir := filepath.Join(findProjectRoot(t), "migrations")
-	if err := store.RunMigrations(db, migDir); err != nil {
-		db.Close()
-		t.Fatalf("RunMigrations failed: %v", err)
-	}
-	return db
-}
-
-func findProjectRoot(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd failed: %v", err)
-	}
-	root := filepath.Join(dir, "..", "..")
-	migDir := filepath.Join(root, "migrations")
-	if _, err := os.Stat(migDir); os.IsNotExist(err) {
-		t.Fatalf("migrations dir not found at %s", migDir)
-	}
-	return root
-}
 
 // okHandler is a simple handler that returns 200 OK.
 func okHandler() http.Handler {
@@ -60,7 +30,7 @@ func okHandler() http.Handler {
 
 func TestAuth_NoCookie_Returns401(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	handler := middleware.Auth(db, testCookieName)(okHandler())
@@ -76,7 +46,7 @@ func TestAuth_NoCookie_Returns401(t *testing.T) {
 
 func TestAuth_InvalidSession_Returns401(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	handler := middleware.Auth(db, testCookieName)(okHandler())
@@ -93,7 +63,7 @@ func TestAuth_InvalidSession_Returns401(t *testing.T) {
 
 func TestAuth_ValidSession_SetsUserInContext(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	// Create user and session
@@ -128,7 +98,7 @@ func TestAuth_ValidSession_SetsUserInContext(t *testing.T) {
 
 func TestAuth_ValidSession_ExtendsExpiry(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -169,7 +139,7 @@ func TestAuth_ValidSession_ExtendsExpiry(t *testing.T) {
 
 func TestAuth_UpdatesTimezoneFromHeader(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -205,7 +175,7 @@ func TestAuth_UpdatesTimezoneFromHeader(t *testing.T) {
 
 func TestAuth_NoTimezoneHeader_DoesNotClearExisting(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name, timezone) VALUES ('u1', 'g1', 'a@b.com', 'Test', 'America/New_York')")
@@ -240,7 +210,7 @@ func TestAuth_NoTimezoneHeader_DoesNotClearExisting(t *testing.T) {
 
 func TestAuth_InvalidTimezone_NotStored(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -276,7 +246,7 @@ func TestAuth_InvalidTimezone_NotStored(t *testing.T) {
 
 func TestAuth_SetsSessionTokenInContext(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -320,7 +290,7 @@ func TestSessionTokenFromContext_NoToken(t *testing.T) {
 
 func TestCSRF_POST_UsesContextToken_WhenAuthMiddlewareRanFirst(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -393,7 +363,7 @@ func TestCSRFToken_DifferentSecretsDifferentTokens(t *testing.T) {
 
 func TestCSRF_GET_NoTokenRequired(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	handler := middleware.CSRF(db, testCookieName, testSecret)(okHandler())
@@ -409,7 +379,7 @@ func TestCSRF_GET_NoTokenRequired(t *testing.T) {
 
 func TestCSRF_HEAD_NoTokenRequired(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	handler := middleware.CSRF(db, testCookieName, testSecret)(okHandler())
@@ -425,7 +395,7 @@ func TestCSRF_HEAD_NoTokenRequired(t *testing.T) {
 
 func TestCSRF_OPTIONS_NoTokenRequired(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	handler := middleware.CSRF(db, testCookieName, testSecret)(okHandler())
@@ -441,7 +411,7 @@ func TestCSRF_OPTIONS_NoTokenRequired(t *testing.T) {
 
 func TestCSRF_POST_NoToken_Returns403(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -467,7 +437,7 @@ func TestCSRF_POST_NoToken_Returns403(t *testing.T) {
 
 func TestCSRF_POST_InvalidToken_Returns403(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -494,7 +464,7 @@ func TestCSRF_POST_InvalidToken_Returns403(t *testing.T) {
 
 func TestCSRF_POST_ValidToken_Passes(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -524,7 +494,7 @@ func TestCSRF_POST_ValidToken_Passes(t *testing.T) {
 
 func TestCSRF_PUT_NoToken_Returns403(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -550,7 +520,7 @@ func TestCSRF_PUT_NoToken_Returns403(t *testing.T) {
 
 func TestCSRF_DELETE_NoToken_Returns403(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -576,7 +546,7 @@ func TestCSRF_DELETE_NoToken_Returns403(t *testing.T) {
 
 func TestCSRF_POST_NoCookie_Returns403(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	handler := middleware.CSRF(db, testCookieName, testSecret)(okHandler())
@@ -592,7 +562,7 @@ func TestCSRF_POST_NoCookie_Returns403(t *testing.T) {
 
 func TestAuth_UserDeletedAfterSession_Returns401(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")

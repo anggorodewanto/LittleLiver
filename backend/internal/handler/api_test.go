@@ -1,45 +1,25 @@
 package handler_test
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
 	"github.com/ablankz/LittleLiver/backend/internal/middleware"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
+	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
 
 const testCookieName = "session_id"
 const testSecret = "test-hmac-secret-key-for-csrf"
 
-func setupTestDBForAPI(t *testing.T) *sql.DB {
-	t.Helper()
-	db, err := store.OpenDB(":memory:")
-	if err != nil {
-		t.Fatalf("OpenDB failed: %v", err)
-	}
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd failed: %v", err)
-	}
-	migDir := filepath.Join(dir, "..", "..", "migrations")
-	if err := store.RunMigrations(db, migDir); err != nil {
-		db.Close()
-		t.Fatalf("RunMigrations failed: %v", err)
-	}
-	return db
-}
-
 // --- CSRF Token Handler Tests ---
 
 func TestCSRFTokenHandler_ReturnsToken(t *testing.T) {
 	t.Parallel()
-	db := setupTestDBForAPI(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -75,7 +55,7 @@ func TestCSRFTokenHandler_ReturnsToken(t *testing.T) {
 
 func TestCSRFTokenHandler_NoCookie_Returns401(t *testing.T) {
 	t.Parallel()
-	db := setupTestDBForAPI(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := handler.CSRFTokenHandler(db, testCookieName, testSecret)
@@ -91,7 +71,7 @@ func TestCSRFTokenHandler_NoCookie_Returns401(t *testing.T) {
 
 func TestCSRFTokenHandler_InvalidSession_Returns401(t *testing.T) {
 	t.Parallel()
-	db := setupTestDBForAPI(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := handler.CSRFTokenHandler(db, testCookieName, testSecret)
@@ -110,7 +90,7 @@ func TestCSRFTokenHandler_InvalidSession_Returns401(t *testing.T) {
 
 func TestMeHandler_ReturnsUserInfo(t *testing.T) {
 	t.Parallel()
-	db := setupTestDBForAPI(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name, timezone) VALUES ('u1', 'g1', 'a@b.com', 'Test Parent', 'America/New_York')")
@@ -184,7 +164,7 @@ func TestMeHandler_ReturnsUserInfo(t *testing.T) {
 
 func TestMeHandler_NoBabies_ReturnsEmptyArray(t *testing.T) {
 	t.Parallel()
-	db := setupTestDBForAPI(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
@@ -225,7 +205,7 @@ func TestMeHandler_NoBabies_ReturnsEmptyArray(t *testing.T) {
 
 func TestMeHandler_NoUserInContext_Returns401(t *testing.T) {
 	t.Parallel()
-	db := setupTestDBForAPI(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := handler.MeHandler(db)

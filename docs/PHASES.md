@@ -71,7 +71,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Test Utilities
 
-- [ ] **Phase 8: Test fixtures and helpers package**
+- [x] **Phase 8: Test fixtures and helpers package**
   **Depends on:** Phase 7
   **What to build:** A `testutil` package (e.g., `internal/testutil/`) providing reusable test helpers: `createTestUser()`, `createTestBaby()`, `authenticatedRequest()`, `setupTestDB()`. These helpers encapsulate common setup logic (in-memory DB with migrations applied, user creation with session, baby creation with parent linkage, building authenticated HTTP requests with valid session cookies and CSRF tokens). This prevents each subsequent phase from reinventing test boilerplate.
   **TDD approach:** Write tests that (1) `setupTestDB()` returns a migrated in-memory DB, (2) `createTestUser()` inserts a user and returns it, (3) `createTestBaby()` creates a baby linked to the given user, (4) `authenticatedRequest()` produces a request with valid session cookie and CSRF token. Write the helpers to pass.

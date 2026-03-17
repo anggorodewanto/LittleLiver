@@ -11,6 +11,7 @@ import (
 
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
+	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
 
 func TestNewMux_HealthRoute(t *testing.T) {
@@ -168,20 +169,8 @@ func TestNewMux_StaticDir_HealthTakesPriority(t *testing.T) {
 }
 
 func TestNewMux_AuthRoutes_RegisteredWhenConfigured(t *testing.T) {
-	db, err := store.OpenDB(":memory:")
-	if err != nil {
-		t.Fatalf("OpenDB failed: %v", err)
-	}
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
-
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd failed: %v", err)
-	}
-	migDir := filepath.Join(dir, "..", "..", "migrations")
-	if err := store.RunMigrations(db, migDir); err != nil {
-		t.Fatalf("RunMigrations failed: %v", err)
-	}
 
 	t.Setenv("GOOGLE_CLIENT_ID", "test-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "test-secret")
@@ -212,20 +201,8 @@ func TestNewMux_AuthRoutes_RegisteredWhenConfigured(t *testing.T) {
 }
 
 func TestNewMux_APIRoutes_CSRFTokenAndMe(t *testing.T) {
-	db, err := store.OpenDB(":memory:")
-	if err != nil {
-		t.Fatalf("OpenDB failed: %v", err)
-	}
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
-
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd failed: %v", err)
-	}
-	migDir := filepath.Join(dir, "..", "..", "migrations")
-	if err := store.RunMigrations(db, migDir); err != nil {
-		t.Fatalf("RunMigrations failed: %v", err)
-	}
 
 	t.Setenv("GOOGLE_CLIENT_ID", "test-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "test-secret")
@@ -233,7 +210,7 @@ func TestNewMux_APIRoutes_CSRFTokenAndMe(t *testing.T) {
 	t.Setenv("BASE_URL", "http://localhost:8080")
 
 	// Create a user and session
-	_, err = db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
 	if err != nil {
 		t.Fatalf("insert user failed: %v", err)
 	}
@@ -300,26 +277,14 @@ func TestNewMux_APIRoutes_CSRFTokenAndMe(t *testing.T) {
 }
 
 func TestNewMux_Logout_ClearsSession_Integration(t *testing.T) {
-	db, err := store.OpenDB(":memory:")
-	if err != nil {
-		t.Fatalf("OpenDB failed: %v", err)
-	}
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
-
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd failed: %v", err)
-	}
-	migDir := filepath.Join(dir, "..", "..", "migrations")
-	if err := store.RunMigrations(db, migDir); err != nil {
-		t.Fatalf("RunMigrations failed: %v", err)
-	}
 
 	t.Setenv("GOOGLE_CLIENT_ID", "test-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "test-secret")
 	t.Setenv("SESSION_SECRET", "test-session-secret")
 
-	_, err = db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
 	if err != nil {
 		t.Fatalf("insert user failed: %v", err)
 	}

@@ -6,49 +6,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 
 	"github.com/ablankz/LittleLiver/backend/internal/auth"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
+	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
-
-// setupTestDB creates an in-memory DB with migrations applied.
-func setupTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	db, err := store.OpenDB(":memory:")
-	if err != nil {
-		t.Fatalf("OpenDB failed: %v", err)
-	}
-
-	migDir := filepath.Join(findProjectRoot(t), "migrations")
-	if err := store.RunMigrations(db, migDir); err != nil {
-		db.Close()
-		t.Fatalf("RunMigrations failed: %v", err)
-	}
-	return db
-}
-
-func findProjectRoot(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd failed: %v", err)
-	}
-	// Navigate up from internal/auth to backend
-	root := filepath.Join(dir, "..", "..")
-	migDir := filepath.Join(root, "migrations")
-	if _, err := os.Stat(migDir); os.IsNotExist(err) {
-		t.Fatalf("migrations dir not found at %s", migDir)
-	}
-	return root
-}
 
 func TestLogin_RedirectsToGoogle(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := auth.NewHandlers(db, auth.Config{
@@ -95,7 +63,7 @@ func TestLogin_RedirectsToGoogle(t *testing.T) {
 
 func TestCallback_ExchangesCodeAndCreatesSession(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	// Mock Google token endpoint
@@ -216,7 +184,7 @@ func TestCallback_ExchangesCodeAndCreatesSession(t *testing.T) {
 
 func TestCallback_InvalidState_Returns400(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := auth.NewHandlers(db, auth.Config{
@@ -235,7 +203,7 @@ func TestCallback_InvalidState_Returns400(t *testing.T) {
 
 func TestCallback_MissingCode_Returns400(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := auth.NewHandlers(db, auth.Config{
@@ -262,7 +230,7 @@ func TestCallback_MissingCode_Returns400(t *testing.T) {
 
 func TestCallback_TokenExchangeFailure_Returns500(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	// Mock a failing token endpoint
@@ -299,7 +267,7 @@ func TestCallback_TokenExchangeFailure_Returns500(t *testing.T) {
 
 func TestLogout_ClearsSession(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	// Create a user and session
@@ -349,7 +317,7 @@ func TestLogout_ClearsSession(t *testing.T) {
 
 func TestCallback_UserInfoFailure_Returns500(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	// Mock token endpoint succeeds
@@ -398,7 +366,7 @@ func TestCallback_UserInfoFailure_Returns500(t *testing.T) {
 
 func TestLogout_NoCookie_Returns204(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := auth.NewHandlers(db, auth.Config{})
@@ -415,7 +383,7 @@ func TestLogout_NoCookie_Returns204(t *testing.T) {
 
 func TestNewHandlers_DefaultURLs(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := auth.NewHandlers(db, auth.Config{
@@ -430,7 +398,7 @@ func TestNewHandlers_DefaultURLs(t *testing.T) {
 
 func TestLogin_SetsStateParam(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := auth.NewHandlers(db, auth.Config{
@@ -467,7 +435,7 @@ func TestLogin_SetsStateParam(t *testing.T) {
 
 func TestRegisterRoutes_RoutesExist(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	mux := http.NewServeMux()
@@ -504,7 +472,7 @@ func TestRegisterRoutes_RoutesExist(t *testing.T) {
 
 func TestLogin_ConcurrentRequests_NoRace(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := auth.NewHandlers(db, auth.Config{
@@ -531,7 +499,7 @@ func TestLogin_ConcurrentRequests_NoRace(t *testing.T) {
 
 func TestCallback_MalformedTokenJSON_Returns500(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	// Token endpoint returns invalid JSON
@@ -567,7 +535,7 @@ func TestCallback_MalformedTokenJSON_Returns500(t *testing.T) {
 
 func TestCallback_MalformedUserInfoJSON_Returns500(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	// Token endpoint succeeds
@@ -615,7 +583,7 @@ func TestCallback_MalformedUserInfoJSON_Returns500(t *testing.T) {
 
 func TestCallback_TokenExchangeNetworkError_Returns500(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	h := auth.NewHandlers(db, auth.Config{
@@ -643,7 +611,7 @@ func TestCallback_TokenExchangeNetworkError_Returns500(t *testing.T) {
 
 func TestCallback_UserInfoNetworkError_Returns500(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -682,7 +650,7 @@ func TestCallback_UserInfoNetworkError_Returns500(t *testing.T) {
 
 func TestCallback_DBClosed_UpsertFails_Returns500(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -733,7 +701,7 @@ func TestCallback_DBClosed_UpsertFails_Returns500(t *testing.T) {
 
 func TestCallback_UpsertExistingUser(t *testing.T) {
 	t.Parallel()
-	db := setupTestDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	// Pre-insert user
