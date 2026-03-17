@@ -8,6 +8,7 @@ import (
 
 	"github.com/ablankz/LittleLiver/backend/internal/auth"
 	"github.com/ablankz/LittleLiver/backend/internal/middleware"
+	"github.com/ablankz/LittleLiver/backend/internal/storage"
 )
 
 // NewMux returns an HTTP mux with all routes registered.
@@ -115,6 +116,11 @@ func NewMux(opts ...Option) *http.ServeMux {
 			// Invite endpoints
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))
 			mux.Handle("POST /api/babies/join", rateMw(authMw(csrfMw(http.HandlerFunc(JoinBabyHandler(cfg.db))))))
+
+			// Photo upload endpoint
+			if cfg.objStore != nil {
+				mux.Handle("POST /api/babies/{id}/upload", rateMw(authMw(csrfMw(http.HandlerFunc(UploadPhotoHandler(cfg.db, cfg.objStore))))))
+			}
 		}
 	}
 
@@ -136,6 +142,7 @@ type Option func(*options)
 type options struct {
 	db         *sql.DB
 	authConfig *auth.Config
+	objStore   storage.ObjectStore
 }
 
 // WithDB provides a database connection for routes that need it.
@@ -149,6 +156,13 @@ func WithDB(db *sql.DB) Option {
 func WithAuthConfig(cfg auth.Config) Option {
 	return func(o *options) {
 		o.authConfig = &cfg
+	}
+}
+
+// WithObjectStore provides an ObjectStore for photo uploads.
+func WithObjectStore(s storage.ObjectStore) Option {
+	return func(o *options) {
+		o.objStore = s
 	}
 }
 

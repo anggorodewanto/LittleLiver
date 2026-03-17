@@ -174,7 +174,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Photo Upload System
 
-- [ ] **Phase 23: R2 storage client and photo upload endpoint**
+- [x] **Phase 23: R2 storage client and photo upload endpoint**
   **Depends on:** Phase 11
   **What to build:** `internal/storage/r2.go` — S3-compatible client for Cloudflare R2 (upload, delete, generate signed URL). `photo_uploads` table migration. `POST /api/babies/:id/upload` — validates file size (5MB max), MIME type (JPEG/PNG/HEIC), converts HEIC to JPEG via ImageMagick if needed, generates thumbnail (~300px wide) using Go stdlib `image` package, stores both in R2, creates `photo_uploads` row, returns R2 key. Use an interface so tests can use an in-memory mock.
   **TDD approach:** Write tests with a mock R2 client that (1) rejects files over 5MB, (2) rejects invalid MIME types, (3) HEIC input is converted to JPEG before storage, (4) stores original + thumbnail, (5) creates `photo_uploads` row with correct keys, (6) returns R2 key. Write storage + handler.

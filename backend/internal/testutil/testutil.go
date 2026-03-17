@@ -103,6 +103,13 @@ func CreateTestBaby(t *testing.T, db *sql.DB, userID string) *model.Baby {
 	return nil
 }
 
+// TestFixture bundles commonly used test objects for convenience.
+type TestFixture struct {
+	DB   *sql.DB
+	User *model.User
+	Baby *model.Baby
+}
+
 // AuthenticatedRequest builds an *http.Request with a valid session cookie
 // and (for state-changing methods like POST, PUT, DELETE) a valid CSRF token header.
 func AuthenticatedRequest(t *testing.T, db *sql.DB, userID, cookieName, csrfSecret, method, target string) *http.Request {

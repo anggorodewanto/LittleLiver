@@ -223,3 +223,13 @@ type Invite struct {
 	ExpiresAt time.Time  `json:"expires_at"`
 	CreatedAt time.Time  `json:"created_at"`
 }
+
+// PhotoUpload represents a photo upload staging row.
+type PhotoUpload struct {
+	ID           string     `json:"id"`
+	BabyID       *string    `json:"baby_id,omitempty"`
+	R2Key        string     `json:"r2_key"`
+	ThumbnailKey *string    `json:"thumbnail_key,omitempty"`
+	UploadedAt   time.Time  `json:"uploaded_at"`
+	LinkedAt     *time.Time `json:"linked_at,omitempty"`
+}
