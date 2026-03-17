@@ -37,7 +37,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write a Vitest test that renders the App component and checks for a placeholder heading. Write the minimal component to pass.
   **Proof of progress:** `npm test` passes; `npm run build` produces static output; `npm run dev` serves the shell app.
 
-- [ ] **Phase 3: SQLite connection, migration runner, and core schema**
+- [x] **Phase 3: SQLite connection, migration runner, and core schema**
   **Depends on:** Phase 1
   **What to build:** SQLite database connection in `internal/store/db.go` with WAL mode enabled. A file-based migration runner that applies `.sql` files from `migrations/` in order. First migration creates: `users` (with sentinel row), `babies`, `baby_parents`, `invites`, `sessions`, and `push_subscriptions` tables per the spec schema. `push_subscriptions` must include a `UNIQUE` constraint on `endpoint` to support upsert on conflict.
   **TDD approach:** Write tests that (1) apply migrations to an in-memory SQLite DB, (2) verify all tables exist with correct columns, (3) verify the sentinel `deleted_user` row exists, (4) verify the UNIQUE constraint on `push_subscriptions.endpoint`. Write the migration runner and SQL to pass.
