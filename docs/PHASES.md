@@ -166,7 +166,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write integration test with two test users, full HTTP request chain. Verify data isolation, cleanup, and calorie recalculation.
   **Proof of progress:** Integration test passes covering multi-parent baby lifecycle and calorie recalculation.
 
-- [ ] **Phase 22: Integration test — Account deletion anonymization**
+- [x] **Phase 22: Integration test — Account deletion anonymization**
   **Depends on:** Phase 14, Phase 15, Phase 17, Phase 18, Phase 20
   **What to build:** End-to-end test: A user logs entries across multiple metric types (feedings, stools, temperatures, weights), deletes account, and verify all `logged_by`/`updated_by` fields are anonymized to `deleted_user` across all metric tables while entries remain intact. (Medication-related tables are tested in Phase 35 after medications are implemented.)
   **TDD approach:** Write account deletion test that asserts anonymization across all metric tables and entry preservation.

@@ -11,7 +11,18 @@ import (
 // AnonymizeTables is the configurable list of table names that have
 // logged_by/updated_by columns to anonymize on account deletion.
 // Future phases (e.g., medications, med_logs) append their table names here.
-var AnonymizeTables []string
+var AnonymizeTables = []string{
+	"feedings",
+	"stools",
+	"urine",
+	"weights",
+	"temperatures",
+	"abdomen_observations",
+	"skin_observations",
+	"bruising",
+	"lab_results",
+	"general_notes",
+}
 
 // DeleteAccountHandler handles DELETE /api/users/me.
 // Deletes the authenticated user's account with full cascade behavior per spec §2.2.
