@@ -80,6 +80,13 @@ func NewMux(opts ...Option) *http.ServeMux {
 			// Account deletion
 			mux.Handle("DELETE /api/users/me", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteAccountHandler(cfg.db))))))
 
+			// Feeding CRUD endpoints
+			mux.Handle("POST /api/babies/{id}/feedings", rateMw(authMw(csrfMw(http.HandlerFunc(CreateFeedingHandler(cfg.db))))))
+			mux.Handle("GET /api/babies/{id}/feedings", rateMw(authMw(http.HandlerFunc(ListFeedingsHandler(cfg.db)))))
+			mux.Handle("GET /api/babies/{id}/feedings/{entryId}", rateMw(authMw(http.HandlerFunc(GetFeedingHandler(cfg.db)))))
+			mux.Handle("PUT /api/babies/{id}/feedings/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateFeedingHandler(cfg.db))))))
+			mux.Handle("DELETE /api/babies/{id}/feedings/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteFeedingHandler(cfg.db))))))
+
 			// Invite endpoints
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))
 			mux.Handle("POST /api/babies/join", rateMw(authMw(csrfMw(http.HandlerFunc(JoinBabyHandler(cfg.db))))))

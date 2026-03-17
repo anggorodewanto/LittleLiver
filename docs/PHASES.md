@@ -121,7 +121,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Metric Logging — Core Metrics
 
-- [ ] **Phase 15: Reusable metric CRUD pattern and basic feeding CRUD**
+- [x] **Phase 15: Reusable metric CRUD pattern and basic feeding CRUD**
   **Depends on:** Phase 11
   **What to build:** Migration for `feedings` table with `(baby_id, timestamp)` index. A reusable metric handler pattern: create, list, get-detail, update, delete — with baby authorization, cursor pagination, date filtering, and ULID ordering. The detail endpoint follows the pattern `GET /api/babies/:id/<metric>/:entryId` (e.g., `GET /api/babies/:id/feedings/:entryId`). All UPDATE queries must explicitly set `updated_at = CURRENT_TIMESTAMP`. Implement for feedings: `POST /api/babies/:id/feedings`, `GET /api/babies/:id/feedings` (list), `GET /api/babies/:id/feedings/:entryId` (single entry detail), `PUT /api/babies/:id/feedings/:entryId`, `DELETE /api/babies/:id/feedings/:entryId`. Basic feeding fields only (no calorie calculation in this phase).
   **Note:** All metric table migrations must include a `(baby_id, timestamp)` index. This is part of the reusable pattern.

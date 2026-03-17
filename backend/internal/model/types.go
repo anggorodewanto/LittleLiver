@@ -45,6 +45,30 @@ type Session struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// Feeding represents a single feeding entry for a baby.
+type Feeding struct {
+	ID             string    `json:"id"`
+	BabyID         string    `json:"baby_id"`
+	LoggedBy       string    `json:"logged_by"`
+	UpdatedBy      *string   `json:"updated_by,omitempty"`
+	Timestamp      time.Time `json:"timestamp"`
+	FeedType       string    `json:"feed_type"`
+	VolumeMl       *float64  `json:"volume_ml,omitempty"`
+	CalDensity     *float64  `json:"cal_density,omitempty"`
+	Calories       *float64  `json:"calories,omitempty"`
+	UsedDefaultCal bool      `json:"used_default_cal"`
+	DurationMin    *int      `json:"duration_min,omitempty"`
+	Notes          *string   `json:"notes,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// MetricPage represents a paginated list of metric entries.
+type MetricPage[T any] struct {
+	Data       []T     `json:"data"`
+	NextCursor *string `json:"next_cursor"`
+}
+
 // Invite represents an invite code for linking a parent to a baby.
 type Invite struct {
 	Code      string     `json:"code"`
