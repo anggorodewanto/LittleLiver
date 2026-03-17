@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/auth"
 	"github.com/ablankz/LittleLiver/backend/internal/middleware"
@@ -51,17 +52,22 @@ func NewMux(opts ...Option) *http.ServeMux {
 			cookieName := auth.CookieName
 			authMw := middleware.Auth(cfg.db, cookieName)
 
+			// Per-session rate limiter: 100 requests per minute
+			rateLimiter := middleware.NewRateLimiter(100, time.Minute)
+			rateMw := rateLimiter.Middleware(cookieName)
+
 			// CSRF middleware for state-changing /api/ routes. When chained after
 			// authMw, it reads the session token from context (no extra DB query).
 			// Apply csrfMw to POST/PUT/DELETE API routes as they are added.
 			csrfMw := middleware.CSRF(cfg.db, cookieName, sessionSecret)
 			_ = csrfMw // used by future state-changing API routes
 
+			// Chain: rateMw -> authMw -> handler (rate limit checked first)
 			// CSRF token endpoint — behind auth middleware so session token is in context
-			mux.Handle("GET /api/csrf-token", authMw(http.HandlerFunc(CSRFTokenHandler(sessionSecret))))
+			mux.Handle("GET /api/csrf-token", rateMw(authMw(http.HandlerFunc(CSRFTokenHandler(sessionSecret)))))
 
 			// /api/me needs auth middleware (GET-only, no CSRF needed)
-			mux.Handle("GET /api/me", authMw(http.HandlerFunc(MeHandler(cfg.db))))
+			mux.Handle("GET /api/me", rateMw(authMw(http.HandlerFunc(MeHandler(cfg.db)))))
 		}
 	}
 

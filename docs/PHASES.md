@@ -87,7 +87,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Rate Limiting
 
-- [ ] **Phase 10: Rate limiting middleware**
+- [x] **Phase 10: Rate limiting middleware**
   **Depends on:** Phase 8
   **What to build:** Per-session rate limiting middleware (100 req/min uniform across all endpoints, returns 429 when exceeded). Wire into the middleware chain.
   **TDD approach:** Write tests that (1) requests under the limit succeed, (2) requests exceeding 100/min receive 429, (3) rate limit resets after the window, (4) different sessions have independent limits. Write rate limiter middleware.
