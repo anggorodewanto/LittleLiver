@@ -223,7 +223,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Integration Test — Dashboard
 
-- [ ] **Phase 30: Integration test — Dashboard aggregation**
+- [x] **Phase 30: Integration test — Dashboard aggregation**
   **Depends on:** Phase 29
   **What to build:** End-to-end test: Log diverse entries over multiple days (feedings with different types, stools with various colors, temperatures with fever, weights, med-logs with given/skipped). Hit dashboard endpoint for today and for 7-day range. Verify all summary_cards, chart_data_series, stool_color_trend, upcoming_meds, and active_alerts are correct.
   **TDD approach:** Write integration test with a rich set of seeded data. Assert every field of the dashboard response.
