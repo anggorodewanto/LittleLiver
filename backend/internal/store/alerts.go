@@ -10,6 +10,14 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 )
 
+// Alert type constants.
+const (
+	AlertTypeAcholicStool      = "acholic_stool"
+	AlertTypeFever             = "fever"
+	AlertTypeJaundiceWorsening = "jaundice_worsening"
+	AlertTypeMissedMedication  = "missed_medication"
+)
+
 // Alert represents a single active alert for the dashboard.
 type Alert struct {
 	EntryID   string  `json:"entry_id"`
@@ -95,10 +103,7 @@ func GetActiveAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 	}
 	alerts = append(alerts, missedAlerts...)
 
-	if alerts == nil {
-		alerts = make([]Alert, 0)
-	}
-	return alerts, nil
+	return emptySliceIfNil(alerts), nil
 }
 
 func getAcholicStoolAlert(db *sql.DB, babyID string) ([]Alert, error) {
@@ -125,7 +130,7 @@ func getAcholicStoolAlert(db *sql.DB, babyID string) ([]Alert, error) {
 
 	return []Alert{{
 		EntryID:   id,
-		AlertType: "acholic_stool",
+		AlertType: AlertTypeAcholicStool,
 		Value:     colorRating,
 		Timestamp: tsStr,
 	}}, nil
@@ -157,7 +162,7 @@ func getFeverAlert(db *sql.DB, babyID string) (*Alert, error) {
 
 	return &Alert{
 		EntryID:   id,
-		AlertType: "fever",
+		AlertType: AlertTypeFever,
 		Method:    &method,
 		Value:     value,
 		Timestamp: tsStr,
@@ -199,7 +204,7 @@ func getJaundiceAlert(db *sql.DB, babyID string) (*Alert, error) {
 
 	return &Alert{
 		EntryID:   id,
-		AlertType: "jaundice_worsening",
+		AlertType: AlertTypeJaundiceWorsening,
 		Value:     value,
 		Timestamp: tsStr,
 	}, nil
@@ -291,7 +296,7 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 
 				alerts = append(alerts, Alert{
 					EntryID:   m.ID,
-					AlertType: "missed_medication",
+					AlertType: AlertTypeMissedMedication,
 					Value:     st,
 					Timestamp: scheduledUTC.Format(model.DateTimeFormat),
 				})

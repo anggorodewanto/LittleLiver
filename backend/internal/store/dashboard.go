@@ -39,17 +39,10 @@ type UpcomingMed struct {
 // GetDashboardSummary returns aggregated summary cards for a baby within the given date range.
 // from and to are in YYYY-MM-DD format. last_temp and last_weight ignore the date range.
 func GetDashboardSummary(db *sql.DB, babyID, from, to string) (*DashboardSummary, error) {
-	fromDate, err := time.Parse(model.DateFormat, from)
+	fromTime, toTime, err := ParseDateRange(from, to)
 	if err != nil {
-		return nil, fmt.Errorf("parse from date: %w", err)
+		return nil, err
 	}
-	fromTime := fromDate.Format(model.DateTimeFormat)
-	// to is inclusive of the whole day
-	toDate, err := time.Parse(model.DateFormat, to)
-	if err != nil {
-		return nil, fmt.Errorf("parse to date: %w", err)
-	}
-	toTime := toDate.Add(24 * time.Hour).Format(model.DateTimeFormat)
 
 	s := &DashboardSummary{}
 

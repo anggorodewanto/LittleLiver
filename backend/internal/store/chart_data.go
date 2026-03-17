@@ -3,9 +3,6 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"time"
-
-	"github.com/ablankz/LittleLiver/backend/internal/model"
 )
 
 // FeedingByType holds per-type feed counts for a day.
@@ -66,24 +63,9 @@ type LabTrendEntry struct {
 	Unit      *string `json:"unit"`
 }
 
-// parseDateRange parses from/to date strings and returns the time boundaries.
-func parseDateRange(from, to string) (string, string, error) {
-	fromDate, err := time.Parse(model.DateFormat, from)
-	if err != nil {
-		return "", "", fmt.Errorf("parse from date: %w", err)
-	}
-	toDate, err := time.Parse(model.DateFormat, to)
-	if err != nil {
-		return "", "", fmt.Errorf("parse to date: %w", err)
-	}
-	fromTime := fromDate.Format(model.DateTimeFormat)
-	toTime := toDate.Add(24 * time.Hour).Format(model.DateTimeFormat)
-	return fromTime, toTime, nil
-}
-
 // GetFeedingDaily returns daily aggregated feeding data within the given date range.
 func GetFeedingDaily(db *sql.DB, babyID, from, to string) ([]FeedingDailyEntry, error) {
-	fromTime, toTime, err := parseDateRange(from, to)
+	fromTime, toTime, err := ParseDateRange(from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -121,15 +103,12 @@ func GetFeedingDaily(db *sql.DB, babyID, from, to string) ([]FeedingDailyEntry, 
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	if entries == nil {
-		entries = make([]FeedingDailyEntry, 0)
-	}
-	return entries, nil
+	return emptySliceIfNil(entries), nil
 }
 
 // GetDiaperDaily returns daily aggregated diaper data (wet + stool counts) within the given date range.
 func GetDiaperDaily(db *sql.DB, babyID, from, to string) ([]DiaperDailyEntry, error) {
-	fromTime, toTime, err := parseDateRange(from, to)
+	fromTime, toTime, err := ParseDateRange(from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -165,15 +144,12 @@ func GetDiaperDaily(db *sql.DB, babyID, from, to string) ([]DiaperDailyEntry, er
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	if entries == nil {
-		entries = make([]DiaperDailyEntry, 0)
-	}
-	return entries, nil
+	return emptySliceIfNil(entries), nil
 }
 
 // GetTemperatureSeries returns individual temperature readings within the given date range.
 func GetTemperatureSeries(db *sql.DB, babyID, from, to string) ([]TemperatureSeriesEntry, error) {
-	fromTime, toTime, err := parseDateRange(from, to)
+	fromTime, toTime, err := ParseDateRange(from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -202,15 +178,12 @@ func GetTemperatureSeries(db *sql.DB, babyID, from, to string) ([]TemperatureSer
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	if entries == nil {
-		entries = make([]TemperatureSeriesEntry, 0)
-	}
-	return entries, nil
+	return emptySliceIfNil(entries), nil
 }
 
 // GetWeightSeries returns individual weight readings within the given date range.
 func GetWeightSeries(db *sql.DB, babyID, from, to string) ([]WeightSeriesEntry, error) {
-	fromTime, toTime, err := parseDateRange(from, to)
+	fromTime, toTime, err := ParseDateRange(from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -241,16 +214,13 @@ func GetWeightSeries(db *sql.DB, babyID, from, to string) ([]WeightSeriesEntry, 
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	if entries == nil {
-		entries = make([]WeightSeriesEntry, 0)
-	}
-	return entries, nil
+	return emptySliceIfNil(entries), nil
 }
 
 // GetAbdomenGirthSeries returns individual abdomen girth readings within the given date range.
 // Only entries with a non-null girth_cm are included.
 func GetAbdomenGirthSeries(db *sql.DB, babyID, from, to string) ([]AbdomenGirthEntry, error) {
-	fromTime, toTime, err := parseDateRange(from, to)
+	fromTime, toTime, err := ParseDateRange(from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -279,15 +249,12 @@ func GetAbdomenGirthSeries(db *sql.DB, babyID, from, to string) ([]AbdomenGirthE
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	if entries == nil {
-		entries = make([]AbdomenGirthEntry, 0)
-	}
-	return entries, nil
+	return emptySliceIfNil(entries), nil
 }
 
 // GetStoolColorSeries returns individual stool color readings within the given date range.
 func GetStoolColorSeries(db *sql.DB, babyID, from, to string) ([]StoolColorSeriesEntry, error) {
-	fromTime, toTime, err := parseDateRange(from, to)
+	fromTime, toTime, err := ParseDateRange(from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -316,15 +283,12 @@ func GetStoolColorSeries(db *sql.DB, babyID, from, to string) ([]StoolColorSerie
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	if entries == nil {
-		entries = make([]StoolColorSeriesEntry, 0)
-	}
-	return entries, nil
+	return emptySliceIfNil(entries), nil
 }
 
 // GetLabTrends returns lab results grouped by test_name within the given date range.
 func GetLabTrends(db *sql.DB, babyID, from, to string) (map[string][]LabTrendEntry, error) {
-	fromTime, toTime, err := parseDateRange(from, to)
+	fromTime, toTime, err := ParseDateRange(from, to)
 	if err != nil {
 		return nil, err
 	}

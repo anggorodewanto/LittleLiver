@@ -140,6 +140,31 @@ func listMetricWithTZ[T any](
 	return page, nil
 }
 
+// ParseDateRange parses from/to date strings (YYYY-MM-DD) and returns datetime boundaries
+// suitable for SQL WHERE clauses: fromTime is start of from-date, toTime is start of day after to-date.
+func ParseDateRange(from, to string) (string, string, error) {
+	fromDate, err := time.Parse(model.DateFormat, from)
+	if err != nil {
+		return "", "", fmt.Errorf("parse from date: %w", err)
+	}
+	toDate, err := time.Parse(model.DateFormat, to)
+	if err != nil {
+		return "", "", fmt.Errorf("parse to date: %w", err)
+	}
+	fromTime := fromDate.Format(model.DateTimeFormat)
+	toTime := toDate.Add(24 * time.Hour).Format(model.DateTimeFormat)
+	return fromTime, toTime, nil
+}
+
+// emptySliceIfNil returns an empty slice if s is nil, otherwise returns s unchanged.
+// This ensures JSON serialization produces [] instead of null.
+func emptySliceIfNil[T any](s []T) []T {
+	if s == nil {
+		return make([]T, 0)
+	}
+	return s
+}
+
 // parseMetricTimes parses the three standard time strings (timestamp, created_at, updated_at).
 func parseMetricTimes(tsStr, createdStr, updatedStr string) (timestamp, createdAt, updatedAt time.Time, err error) {
 	timestamp, err = parseTime(tsStr)

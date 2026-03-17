@@ -50,22 +50,13 @@ type chartDataSeriesResponse struct {
 	LabTrends    map[string][]store.LabTrendEntry `json:"lab_trends"`
 }
 
-// alertResponse is the JSON response for a single alert.
-type alertResponse struct {
-	EntryID   string  `json:"entry_id"`
-	AlertType string  `json:"alert_type"`
-	Method    *string `json:"method,omitempty"`
-	Value     any     `json:"value"`
-	Timestamp string  `json:"timestamp"`
-}
-
 // dashboardResponseJSON is the full dashboard API response.
 type dashboardResponseJSON struct {
 	SummaryCards    summaryCardsResponse    `json:"summary_cards"`
 	StoolColorTrend []stoolColorTrendEntry  `json:"stool_color_trend"`
 	UpcomingMeds    []upcomingMedResponse   `json:"upcoming_meds"`
 	ChartDataSeries chartDataSeriesResponse `json:"chart_data_series"`
-	ActiveAlerts    []alertResponse         `json:"active_alerts"`
+	ActiveAlerts    []store.Alert           `json:"active_alerts"`
 }
 
 // DashboardHandler handles GET /api/babies/{id}/dashboard.
@@ -171,17 +162,6 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		activeAlerts := make([]alertResponse, 0, len(storeAlerts))
-		for _, a := range storeAlerts {
-			activeAlerts = append(activeAlerts, alertResponse{
-				EntryID:   a.EntryID,
-				AlertType: a.AlertType,
-				Method:    a.Method,
-				Value:     a.Value,
-				Timestamp: a.Timestamp,
-			})
-		}
-
 		// Map store types to response types
 		summaryResp := summaryCardsResponse{
 			TotalFeeds:     summary.TotalFeeds,
@@ -229,7 +209,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 				StoolColor:   stoolColorSeries,
 				LabTrends:    labTrends,
 			},
-			ActiveAlerts: activeAlerts,
+			ActiveAlerts: storeAlerts,
 		}
 
 		writeJSON(w, http.StatusOK, result)
