@@ -38,8 +38,13 @@ func (req *feedingRequest) validate() (string, bool) {
 	if _, err := time.Parse(model.DateTimeFormat, req.Timestamp); err != nil {
 		return "timestamp must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)", false
 	}
+	// cal_density without volume is invalid
+	if req.CalDensity != nil && req.VolumeMl == nil {
+		return "cal_density cannot be provided without volume_ml", false
+	}
 	return "", true
 }
+
 
 // feedingResponse is the JSON response for a feeding.
 type feedingResponse struct {

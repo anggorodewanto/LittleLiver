@@ -66,14 +66,34 @@ const feedingColumns = `id, baby_id, logged_by, updated_by, timestamp,
 	feed_type, volume_ml, cal_density, calories,
 	used_default_cal, duration_min, notes, created_at, updated_at`
 
-// CreateFeeding inserts a new feeding entry and returns it.
+// getDefaultCalPerFeed retrieves the baby's default_cal_per_feed.
+func getDefaultCalPerFeed(db *sql.DB, babyID string) (float64, error) {
+	var val float64
+	err := db.QueryRow("SELECT default_cal_per_feed FROM babies WHERE id = ?", babyID).Scan(&val)
+	if err != nil {
+		return 0, fmt.Errorf("get default_cal_per_feed: %w", err)
+	}
+	return val, nil
+}
+
+// CreateFeeding inserts a new feeding entry with calorie calculation and returns it.
 func CreateFeeding(db *sql.DB, babyID, loggedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string) (*model.Feeding, error) {
+	defaultCal, err := getDefaultCalPerFeed(db, babyID)
+	if err != nil {
+		return nil, fmt.Errorf("create feeding: %w", err)
+	}
+
+	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCal)
+	if err != nil {
+		return nil, fmt.Errorf("create feeding: %w", err)
+	}
+
 	id := model.NewULID()
 
-	_, err := db.Exec(
-		`INSERT INTO feedings (id, baby_id, logged_by, timestamp, feed_type, volume_ml, cal_density, duration_min, notes)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, babyID, loggedBy, timestamp, feedType, volumeMl, calDensity, durationMin, notes,
+	_, err = db.Exec(
+		`INSERT INTO feedings (id, baby_id, logged_by, timestamp, feed_type, volume_ml, cal_density, calories, used_default_cal, duration_min, notes)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, babyID, loggedBy, timestamp, feedType, volumeMl, calResult.CalDensity, calResult.Calories, calResult.UsedDefaultCal, durationMin, notes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create feeding: %w", err)
@@ -178,17 +198,30 @@ func ListFeedingsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, lim
 	return page, nil
 }
 
-// UpdateFeeding updates a feeding entry. Sets updated_at = CURRENT_TIMESTAMP.
+// UpdateFeeding updates a feeding entry with calorie recalculation.
+// Sets updated_at = CURRENT_TIMESTAMP.
 // Returns sql.ErrNoRows if the feeding doesn't exist for the given baby.
 func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string) (*model.Feeding, error) {
+	defaultCal, err := getDefaultCalPerFeed(db, babyID)
+	if err != nil {
+		return nil, fmt.Errorf("update feeding: %w", err)
+	}
+
+	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCal)
+	if err != nil {
+		return nil, fmt.Errorf("update feeding: %w", err)
+	}
+
 	res, err := db.Exec(
 		`UPDATE feedings SET
 			updated_by = ?, timestamp = ?, feed_type = ?,
-			volume_ml = ?, cal_density = ?, duration_min = ?, notes = ?,
+			volume_ml = ?, cal_density = ?, calories = ?,
+			used_default_cal = ?, duration_min = ?, notes = ?,
 			updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ? AND baby_id = ?`,
 		updatedBy, timestamp, feedType,
-		volumeMl, calDensity, durationMin, notes,
+		volumeMl, calResult.CalDensity, calResult.Calories,
+		calResult.UsedDefaultCal, durationMin, notes,
 		feedingID, babyID,
 	)
 	if err != nil {
@@ -204,6 +237,27 @@ func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType
 	}
 
 	return GetFeedingByID(db, babyID, feedingID)
+}
+
+// RecalculateFeedingCalories updates all feedings for a baby where used_default_cal=true,
+// setting their calories to the new defaultCalPerFeed value.
+// Returns the number of affected rows.
+func RecalculateFeedingCalories(db *sql.DB, babyID string, newDefault float64) (int64, error) {
+	res, err := db.Exec(
+		`UPDATE feedings SET calories = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE baby_id = ? AND used_default_cal = 1`,
+		newDefault, babyID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("recalculate feeding calories: %w", err)
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("recalculate feeding calories: rows affected: %w", err)
+	}
+
+	return count, nil
 }
 
 // DeleteFeeding hard-deletes a feeding entry.

@@ -781,3 +781,163 @@ func TestCreateFeedingHandler_MissingFeedType(t *testing.T) {
 		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
+
+// --- Calorie calculation handler tests ---
+
+func TestCreateFeedingHandler_FormulaWithCalDensity_CalculatesCalories(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"formula","volume_ml":120,"cal_density":24}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/feedings")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateFeedingHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/feedings", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if resp["calories"] == nil {
+		t.Fatal("expected non-nil calories in response")
+	}
+	// 120 * 24 / 29.5735 ≈ 97.4
+	cal := resp["calories"].(float64)
+	if cal < 97.0 || cal > 98.0 {
+		t.Errorf("expected calories ~97.4, got %.2f", cal)
+	}
+	if resp["used_default_cal"] != false {
+		t.Errorf("expected used_default_cal=false, got %v", resp["used_default_cal"])
+	}
+}
+
+func TestCreateFeedingHandler_BreastDirect_UsesDefaultCalPerFeed(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"breast_milk","duration_min":15}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/feedings")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateFeedingHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/feedings", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if resp["calories"] == nil {
+		t.Fatal("expected non-nil calories for breast-direct")
+	}
+	cal := resp["calories"].(float64)
+	if cal != 67.0 {
+		t.Errorf("expected calories=67.0 (default), got %.2f", cal)
+	}
+	if resp["used_default_cal"] != true {
+		t.Errorf("expected used_default_cal=true, got %v", resp["used_default_cal"])
+	}
+}
+
+func TestCreateFeedingHandler_BreastDirectWithCalDensity_Returns400(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"breast_milk","cal_density":24}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/feedings")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateFeedingHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/feedings", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for breast-direct with cal_density, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateFeedingHandler_BreastMilkWithVolume_DefaultsCal(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"breast_milk","volume_ml":100}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/feedings")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateFeedingHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/feedings", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	// 100 * 20 / 29.5735 ≈ 67.6
+	if resp["calories"] == nil {
+		t.Fatal("expected non-nil calories")
+	}
+	cal := resp["calories"].(float64)
+	if cal < 67.0 || cal > 68.0 {
+		t.Errorf("expected calories ~67.6, got %.2f", cal)
+	}
+	if resp["cal_density"] != 20.0 {
+		t.Errorf("expected cal_density=20.0, got %v", resp["cal_density"])
+	}
+	if resp["used_default_cal"] != false {
+		t.Errorf("expected used_default_cal=false, got %v", resp["used_default_cal"])
+	}
+}

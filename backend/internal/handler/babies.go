@@ -232,7 +232,14 @@ func UnlinkSelfHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// updateBabyEnvelope is the response envelope when recalculate_calories=true.
+type updateBabyEnvelope struct {
+	Baby              babyResponse `json:"baby"`
+	RecalculatedCount int64        `json:"recalculated_count"`
+}
+
 // UpdateBabyHandler handles PUT /api/babies/:id.
+// Supports ?recalculate_calories=true to recalculate all feedings using default_cal_per_feed.
 func UpdateBabyHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -264,6 +271,22 @@ func UpdateBabyHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toBabyResponse(updated))
+		recalculate := r.URL.Query().Get("recalculate_calories") == "true"
+		if !recalculate {
+			writeJSON(w, http.StatusOK, toBabyResponse(updated))
+			return
+		}
+
+		count, err := store.RecalculateFeedingCalories(db, updated.ID, updated.DefaultCalPerFeed)
+		if err != nil {
+			log.Printf("recalculate feeding calories: %v", err)
+			http.Error(w, "failed to recalculate calories", http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, updateBabyEnvelope{
+			Baby:              toBabyResponse(updated),
+			RecalculatedCount: count,
+		})
 	}
 }

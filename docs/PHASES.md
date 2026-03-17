@@ -128,7 +128,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests for (1) creating a feeding stores fields correctly, (2) cursor pagination returns correct pages, (3) date filtering with timezone, (4) get-detail returns single entry, (5) update sets `updated_at`, (6) delete removes entry, (7) baby authorization rejects unauthorized access, (8) verify the `(baby_id, timestamp)` index exists on the feedings table after migration. Write store + handlers.
   **Proof of progress:** Full feeding CRUD tested; reusable metric pattern established; pagination verified.
 
-- [ ] **Phase 16: Feeding calorie calculation**
+- [x] **Phase 16: Feeding calorie calculation**
   **Depends on:** Phase 15
   **What to build:** Caloric calculation logic layered onto feeding CRUD: formula-based with `cal_density`, breast_milk default 20 kcal/oz, breast-direct with `default_cal_per_feed`. `used_default_cal` tracking. Validation: return 400 if `cal_density` is provided with breast-direct (no volume). Recalculate endpoint on `PUT /api/babies/:id` with `recalculate_calories=true` query param.
   **TDD approach:** Write tests for (1) formula feeding with cal_density calculates calories correctly, (2) breast_milk defaults to 20 kcal/oz, (3) breast-direct uses default_cal_per_feed, (4) `used_default_cal` flag set correctly, (5) breast-direct with cal_density returns 400, (6) recalculate endpoint updates all affected entries, (7) normal `PUT /api/babies/:id` returns just the baby object, while PUT with `recalculate_calories=true` returns `{ "baby": {...}, "recalculated_count": N }`. Write calculation logic.

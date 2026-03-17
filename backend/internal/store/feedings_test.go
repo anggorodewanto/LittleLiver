@@ -2,8 +2,11 @@ package store
 
 import (
 	"database/sql"
+	"math"
 	"testing"
 	"time"
+
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 )
 
 func TestCreateFeeding_StoresFieldsCorrectly(t *testing.T) {
@@ -630,5 +633,218 @@ func TestListFeedings_EmptyResult(t *testing.T) {
 	}
 	if page.NextCursor != nil {
 		t.Error("expected nil next_cursor for empty result")
+	}
+}
+
+// --- Calorie calculation integration tests ---
+
+func TestCreateFeeding_FormulaWithCalDensity_CalculatesCalories(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	vol := 120.0
+	calDen := 24.0
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding failed: %v", err)
+	}
+
+	expected := 120.0 * (24.0 / model.MlPerOz)
+	if feeding.Calories == nil {
+		t.Fatal("expected non-nil calories")
+	}
+	if math.Abs(*feeding.Calories-expected) > 0.01 {
+		t.Errorf("expected calories ~%.2f, got %.2f", expected, *feeding.Calories)
+	}
+	if feeding.UsedDefaultCal {
+		t.Error("expected used_default_cal=false")
+	}
+}
+
+func TestCreateFeeding_BreastMilkNoCalDensity_DefaultsTo20(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	vol := 100.0
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", &vol, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding failed: %v", err)
+	}
+
+	expected := 100.0 * (20.0 / model.MlPerOz)
+	if feeding.Calories == nil {
+		t.Fatal("expected non-nil calories")
+	}
+	if math.Abs(*feeding.Calories-expected) > 0.01 {
+		t.Errorf("expected calories ~%.2f, got %.2f", expected, *feeding.Calories)
+	}
+	if feeding.UsedDefaultCal {
+		t.Error("expected used_default_cal=false for breast_milk with volume")
+	}
+	if feeding.CalDensity == nil || *feeding.CalDensity != 20.0 {
+		t.Errorf("expected cal_density=20.0, got %v", feeding.CalDensity)
+	}
+}
+
+func TestCreateFeeding_BreastDirect_UsesDefaultCalPerFeed(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding failed: %v", err)
+	}
+
+	if feeding.Calories == nil {
+		t.Fatal("expected non-nil calories for breast-direct")
+	}
+	if *feeding.Calories != model.DefaultCalPerFeed {
+		t.Errorf("expected calories=%.2f, got %.2f", model.DefaultCalPerFeed, *feeding.Calories)
+	}
+	if !feeding.UsedDefaultCal {
+		t.Error("expected used_default_cal=true for breast-direct")
+	}
+}
+
+func TestCreateFeeding_BreastDirectWithCalDensity_ReturnsError(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	calDen := 24.0
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, &calDen, nil, nil)
+	if err == nil {
+		t.Fatal("expected error for breast-direct with cal_density, got nil")
+	}
+}
+
+func TestUpdateFeeding_RecalculatesCalories(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	vol := 120.0
+	calDen := 20.0
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding failed: %v", err)
+	}
+
+	// Update with different cal_density
+	newCalDen := 24.0
+	updated, err := UpdateFeeding(db, baby.ID, feeding.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &newCalDen, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateFeeding failed: %v", err)
+	}
+
+	expected := 120.0 * (24.0 / model.MlPerOz)
+	if updated.Calories == nil {
+		t.Fatal("expected non-nil calories after update")
+	}
+	if math.Abs(*updated.Calories-expected) > 0.01 {
+		t.Errorf("expected calories ~%.2f, got %.2f", expected, *updated.Calories)
+	}
+}
+
+func TestRecalculateFeedingCalories_UpdatesAffectedEntries(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	// Create 2 breast-direct feedings (used_default_cal=true)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding 1 failed: %v", err)
+	}
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T14:30:00Z", "breast_milk", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding 2 failed: %v", err)
+	}
+
+	// Create 1 formula feeding (used_default_cal=false) — should NOT be affected
+	vol := 120.0
+	calDen := 24.0
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T18:30:00Z", "formula", &vol, &calDen, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding 3 failed: %v", err)
+	}
+
+	newDefault := 80.0
+	count, err := RecalculateFeedingCalories(db, baby.ID, newDefault)
+	if err != nil {
+		t.Fatalf("RecalculateFeedingCalories failed: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 recalculated entries, got %d", count)
+	}
+
+	// Verify the breast-direct feedings were updated
+	page, err := ListFeedings(db, baby.ID, nil, nil, nil, 50)
+	if err != nil {
+		t.Fatalf("ListFeedings failed: %v", err)
+	}
+	for _, f := range page.Data {
+		if f.UsedDefaultCal {
+			if f.Calories == nil || *f.Calories != 80.0 {
+				t.Errorf("expected calories=80.0 for recalculated breast-direct, got %v", f.Calories)
+			}
+		}
 	}
 }

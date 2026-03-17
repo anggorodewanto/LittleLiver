@@ -946,3 +946,169 @@ func TestBabyCRUD_EndToEnd(t *testing.T) {
 		t.Errorf("expected notes='Growing well', got %v", updated.Notes)
 	}
 }
+
+// --- PUT /api/babies/:id with recalculate_calories ---
+
+func TestUpdateBabyHandler_NormalPut_ReturnsBabyObject(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"name":"Luna","sex":"female","date_of_birth":"2025-01-01","default_cal_per_feed":80}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPut, "/api/babies/"+baby.ID)
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UpdateBabyHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("PUT /api/babies/{id}", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	// Normal PUT should return just the baby object (no envelope)
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	// Should have baby fields directly
+	if resp["id"] == nil {
+		t.Error("expected id field in response")
+	}
+	// Should NOT have recalculated_count
+	if _, ok := resp["recalculated_count"]; ok {
+		t.Error("expected no recalculated_count in normal PUT response")
+	}
+	// Should NOT have nested baby object
+	if _, ok := resp["baby"]; ok {
+		t.Error("expected no nested baby object in normal PUT response")
+	}
+	if resp["default_cal_per_feed"] != 80.0 {
+		t.Errorf("expected default_cal_per_feed=80, got %v", resp["default_cal_per_feed"])
+	}
+}
+
+func TestUpdateBabyHandler_RecalculateCalories_ReturnsEnvelope(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	// Create breast-direct feedings (used_default_cal=true)
+	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding 1 failed: %v", err)
+	}
+	_, err = store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T14:30:00Z", "breast_milk", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding 2 failed: %v", err)
+	}
+
+	// Create a formula feeding (should NOT be recalculated)
+	vol := 120.0
+	calDen := 24.0
+	_, err = store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T18:30:00Z", "formula", &vol, &calDen, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding 3 failed: %v", err)
+	}
+
+	// Update baby with recalculate_calories=true
+	body := `{"name":"Luna","sex":"female","date_of_birth":"2025-01-01","default_cal_per_feed":80}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPut, "/api/babies/"+baby.ID+"?recalculate_calories=true")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UpdateBabyHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("PUT /api/babies/{id}", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Baby struct {
+			ID                string  `json:"id"`
+			DefaultCalPerFeed float64 `json:"default_cal_per_feed"`
+		} `json:"baby"`
+		RecalculatedCount int `json:"recalculated_count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if resp.Baby.ID != baby.ID {
+		t.Errorf("expected baby.id=%q, got %q", baby.ID, resp.Baby.ID)
+	}
+	if resp.Baby.DefaultCalPerFeed != 80.0 {
+		t.Errorf("expected baby.default_cal_per_feed=80, got %v", resp.Baby.DefaultCalPerFeed)
+	}
+	if resp.RecalculatedCount != 2 {
+		t.Errorf("expected recalculated_count=2, got %d", resp.RecalculatedCount)
+	}
+}
+
+func TestUpdateBabyHandler_RecalculateCalories_NoAffectedEntries(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	// No breast-direct feedings
+	vol := 120.0
+	calDen := 24.0
+	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateFeeding failed: %v", err)
+	}
+
+	body := `{"name":"Luna","sex":"female","date_of_birth":"2025-01-01","default_cal_per_feed":80}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPut, "/api/babies/"+baby.ID+"?recalculate_calories=true")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UpdateBabyHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("PUT /api/babies/{id}", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Baby struct {
+			ID string `json:"id"`
+		} `json:"baby"`
+		RecalculatedCount int `json:"recalculated_count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if resp.RecalculatedCount != 0 {
+		t.Errorf("expected recalculated_count=0, got %d", resp.RecalculatedCount)
+	}
+}
