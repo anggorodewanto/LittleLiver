@@ -5,17 +5,19 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
+	"github.com/ablankz/LittleLiver/backend/internal/storage"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
 // generalNoteRequest is the JSON request body for creating/updating a general note.
 type generalNoteRequest struct {
-	Timestamp string  `json:"timestamp"`
-	Content   string  `json:"content"`
-	PhotoKeys *string `json:"photo_keys,omitempty"`
-	Category  *string `json:"category,omitempty"`
+	Timestamp string   `json:"timestamp"`
+	Content   string   `json:"content"`
+	PhotoKeys []string `json:"photo_keys,omitempty"`
+	Category  *string  `json:"category,omitempty"`
 }
 
 // validate checks required fields for a general note request.
@@ -34,16 +36,16 @@ func (req *generalNoteRequest) validate() (string, bool) {
 
 // generalNoteResponse is the JSON response for a general note.
 type generalNoteResponse struct {
-	ID        string  `json:"id"`
-	BabyID    string  `json:"baby_id"`
-	LoggedBy  string  `json:"logged_by"`
-	UpdatedBy *string `json:"updated_by,omitempty"`
-	Timestamp string  `json:"timestamp"`
-	Content   string  `json:"content"`
-	PhotoKeys *string `json:"photo_keys,omitempty"`
-	Category  *string `json:"category,omitempty"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
+	ID        string          `json:"id"`
+	BabyID    string          `json:"baby_id"`
+	LoggedBy  string          `json:"logged_by"`
+	UpdatedBy *string         `json:"updated_by,omitempty"`
+	Timestamp string          `json:"timestamp"`
+	Content   string          `json:"content"`
+	Photos    []photoResponse `json:"photos"`
+	Category  *string         `json:"category,omitempty"`
+	CreatedAt string          `json:"created_at"`
+	UpdatedAt string          `json:"updated_at"`
 }
 
 func toGeneralNoteResponse(n *model.GeneralNote) generalNoteResponse {
@@ -54,15 +56,26 @@ func toGeneralNoteResponse(n *model.GeneralNote) generalNoteResponse {
 		UpdatedBy: n.UpdatedBy,
 		Timestamp: n.Timestamp.Format(model.DateTimeFormat),
 		Content:   n.Content,
-		PhotoKeys: n.PhotoKeys,
+		Photos:    []photoResponse{},
 		Category:  n.Category,
 		CreatedAt: n.CreatedAt.Format(model.DateTimeFormat),
 		UpdatedAt: n.UpdatedAt.Format(model.DateTimeFormat),
 	}
 }
 
+func toGeneralNoteResponseWithPhotos(n *model.GeneralNote, db *sql.DB, objStore storage.ObjectStore, r *http.Request) generalNoteResponse {
+	resp := toGeneralNoteResponse(n)
+	resp.Photos = resolvePhotos(r.Context(), db, objStore, n.PhotoKeys)
+	return resp
+}
+
 // CreateGeneralNoteHandler handles POST /api/babies/{id}/notes.
-func CreateGeneralNoteHandler(db *sql.DB) http.HandlerFunc {
+func CreateGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -85,19 +98,34 @@ func CreateGeneralNoteHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		note, err := store.CreateGeneralNote(db, baby.ID, user.ID, req.Timestamp, req.Content, req.PhotoKeys, req.Category)
+		var photoKeysStr *string
+		if len(req.PhotoKeys) > 0 {
+			var errMsg string
+			photoKeysStr, errMsg, ok = handlePhotoLinking(db, baby.ID, nil, req.PhotoKeys)
+			if !ok {
+				http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
+				return
+			}
+		}
+
+		note, err := store.CreateGeneralNote(db, baby.ID, user.ID, req.Timestamp, req.Content, photoKeysStr, req.Category)
 		if err != nil {
 			log.Printf("create general note: %v", err)
 			http.Error(w, "failed to create general note", http.StatusInternalServerError)
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toGeneralNoteResponse(note))
+		writeJSON(w, http.StatusCreated, toGeneralNoteResponseWithPhotos(note, db, objStore, r))
 	}
 }
 
 // ListGeneralNotesHandler handles GET /api/babies/{id}/notes.
-func ListGeneralNotesHandler(db *sql.DB) http.HandlerFunc {
+func ListGeneralNotesHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -118,12 +146,20 @@ func ListGeneralNotesHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, mapMetricPage(page, toGeneralNoteResponse))
+		convert := func(n *model.GeneralNote) generalNoteResponse {
+			return toGeneralNoteResponseWithPhotos(n, db, objStore, r)
+		}
+		writeJSON(w, http.StatusOK, mapMetricPage(page, convert))
 	}
 }
 
 // GetGeneralNoteHandler handles GET /api/babies/{id}/notes/{entryId}.
-func GetGeneralNoteHandler(db *sql.DB) http.HandlerFunc {
+func GetGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -146,12 +182,17 @@ func GetGeneralNoteHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toGeneralNoteResponse(note))
+		writeJSON(w, http.StatusOK, toGeneralNoteResponseWithPhotos(note, db, objStore, r))
 	}
 }
 
 // UpdateGeneralNoteHandler handles PUT /api/babies/{id}/notes/{entryId}.
-func UpdateGeneralNoteHandler(db *sql.DB) http.HandlerFunc {
+func UpdateGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -179,18 +220,30 @@ func UpdateGeneralNoteHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		note, err := store.UpdateGeneralNote(db, baby.ID, entryID, user.ID, req.Timestamp, req.Content, req.PhotoKeys, req.Category)
+		existing, err := store.GetGeneralNoteByID(db, baby.ID, entryID)
 		if err != nil {
 			handleStoreError(w, err, "note not found")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toGeneralNoteResponse(note))
+		photoKeysStr, errMsg, ok := handlePhotoLinking(db, baby.ID, existing.PhotoKeys, req.PhotoKeys)
+		if !ok {
+			http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
+			return
+		}
+
+		note, err := store.UpdateGeneralNote(db, baby.ID, entryID, user.ID, req.Timestamp, req.Content, photoKeysStr, req.Category)
+		if err != nil {
+			handleStoreError(w, err, "note not found")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toGeneralNoteResponseWithPhotos(note, db, objStore, r))
 	}
 }
 
 // DeleteGeneralNoteHandler handles DELETE /api/babies/{id}/notes/{entryId}.
-func DeleteGeneralNoteHandler(db *sql.DB) http.HandlerFunc {
+func DeleteGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -207,7 +260,20 @@ func DeleteGeneralNoteHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		err := store.DeleteGeneralNote(db, baby.ID, entryID)
+		existing, err := store.GetGeneralNoteByID(db, baby.ID, entryID)
+		if err != nil {
+			handleStoreError(w, err, "note not found")
+			return
+		}
+
+		if existing.PhotoKeys != nil && *existing.PhotoKeys != "" {
+			oldKeys := strings.Split(*existing.PhotoKeys, ",")
+			if unlinkErr := store.UnlinkPhotos(db, oldKeys); unlinkErr != nil {
+				log.Printf("unlink photos on delete: %v", unlinkErr)
+			}
+		}
+
+		err = store.DeleteGeneralNote(db, baby.ID, entryID)
 		if err != nil {
 			handleStoreError(w, err, "note not found")
 			return

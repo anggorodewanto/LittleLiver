@@ -44,12 +44,17 @@ func scanStool(s scanner) (*model.Stool, error) {
 
 // CreateStool inserts a new stool entry and returns it.
 func CreateStool(db *sql.DB, babyID, loggedBy, timestamp string, colorRating int, colorLabel, consistency, volumeEstimate, notes *string) (*model.Stool, error) {
+	return CreateStoolWithPhotos(db, babyID, loggedBy, timestamp, colorRating, colorLabel, consistency, volumeEstimate, nil, notes)
+}
+
+// CreateStoolWithPhotos inserts a new stool entry with optional photo keys and returns it.
+func CreateStoolWithPhotos(db *sql.DB, babyID, loggedBy, timestamp string, colorRating int, colorLabel, consistency, volumeEstimate, photoKeys, notes *string) (*model.Stool, error) {
 	id := model.NewULID()
 
 	_, err := db.Exec(
-		`INSERT INTO stools (id, baby_id, logged_by, timestamp, color_rating, color_label, consistency, volume_estimate, notes)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, babyID, loggedBy, timestamp, colorRating, colorLabel, consistency, volumeEstimate, notes,
+		`INSERT INTO stools (id, baby_id, logged_by, timestamp, color_rating, color_label, consistency, volume_estimate, photo_keys, notes)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, babyID, loggedBy, timestamp, colorRating, colorLabel, consistency, volumeEstimate, photoKeys, notes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create stool: %w", err)
@@ -79,15 +84,20 @@ func ListStoolsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit
 
 // UpdateStool updates a stool entry.
 func UpdateStool(db *sql.DB, babyID, stoolID, updatedBy, timestamp string, colorRating int, colorLabel, consistency, volumeEstimate, notes *string) (*model.Stool, error) {
+	return UpdateStoolWithPhotos(db, babyID, stoolID, updatedBy, timestamp, colorRating, colorLabel, consistency, volumeEstimate, nil, notes)
+}
+
+// UpdateStoolWithPhotos updates a stool entry with optional photo keys.
+func UpdateStoolWithPhotos(db *sql.DB, babyID, stoolID, updatedBy, timestamp string, colorRating int, colorLabel, consistency, volumeEstimate, photoKeys, notes *string) (*model.Stool, error) {
 	res, err := db.Exec(
 		`UPDATE stools SET
 			updated_by = ?, timestamp = ?, color_rating = ?,
 			color_label = ?, consistency = ?, volume_estimate = ?,
-			notes = ?, updated_at = CURRENT_TIMESTAMP
+			photo_keys = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ? AND baby_id = ?`,
 		updatedBy, timestamp, colorRating,
 		colorLabel, consistency, volumeEstimate,
-		notes,
+		photoKeys, notes,
 		stoolID, babyID,
 	)
 	if err != nil {

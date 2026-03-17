@@ -42,12 +42,17 @@ func scanAbdomen(s scanner) (*model.AbdomenObservation, error) {
 
 // CreateAbdomen inserts a new abdomen observation and returns it.
 func CreateAbdomen(db *sql.DB, babyID, loggedBy, timestamp, firmness string, tenderness bool, girthCm *float64, notes *string) (*model.AbdomenObservation, error) {
+	return CreateAbdomenWithPhotos(db, babyID, loggedBy, timestamp, firmness, tenderness, girthCm, nil, notes)
+}
+
+// CreateAbdomenWithPhotos inserts a new abdomen observation with optional photo keys and returns it.
+func CreateAbdomenWithPhotos(db *sql.DB, babyID, loggedBy, timestamp, firmness string, tenderness bool, girthCm *float64, photoKeys, notes *string) (*model.AbdomenObservation, error) {
 	id := model.NewULID()
 
 	_, err := db.Exec(
-		`INSERT INTO abdomen_observations (id, baby_id, logged_by, timestamp, firmness, tenderness, girth_cm, notes)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, babyID, loggedBy, timestamp, firmness, tenderness, girthCm, notes,
+		`INSERT INTO abdomen_observations (id, baby_id, logged_by, timestamp, firmness, tenderness, girth_cm, photo_keys, notes)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, babyID, loggedBy, timestamp, firmness, tenderness, girthCm, photoKeys, notes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create abdomen: %w", err)
@@ -77,14 +82,19 @@ func ListAbdomenWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limi
 
 // UpdateAbdomen updates an abdomen observation.
 func UpdateAbdomen(db *sql.DB, babyID, abdomenID, updatedBy, timestamp, firmness string, tenderness bool, girthCm *float64, notes *string) (*model.AbdomenObservation, error) {
+	return UpdateAbdomenWithPhotos(db, babyID, abdomenID, updatedBy, timestamp, firmness, tenderness, girthCm, nil, notes)
+}
+
+// UpdateAbdomenWithPhotos updates an abdomen observation with optional photo keys.
+func UpdateAbdomenWithPhotos(db *sql.DB, babyID, abdomenID, updatedBy, timestamp, firmness string, tenderness bool, girthCm *float64, photoKeys, notes *string) (*model.AbdomenObservation, error) {
 	res, err := db.Exec(
 		`UPDATE abdomen_observations SET
 			updated_by = ?, timestamp = ?, firmness = ?,
-			tenderness = ?, girth_cm = ?, notes = ?,
+			tenderness = ?, girth_cm = ?, photo_keys = ?, notes = ?,
 			updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ? AND baby_id = ?`,
 		updatedBy, timestamp, firmness,
-		tenderness, girthCm, notes,
+		tenderness, girthCm, photoKeys, notes,
 		abdomenID, babyID,
 	)
 	if err != nil {

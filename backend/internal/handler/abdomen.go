@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
+	"github.com/ablankz/LittleLiver/backend/internal/storage"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
@@ -16,6 +18,7 @@ type abdomenRequest struct {
 	Firmness   *string  `json:"firmness"`
 	Tenderness *bool    `json:"tenderness,omitempty"`
 	GirthCm    *float64 `json:"girth_cm,omitempty"`
+	PhotoKeys  []string `json:"photo_keys,omitempty"`
 	Notes      *string  `json:"notes,omitempty"`
 }
 
@@ -38,18 +41,18 @@ func (req *abdomenRequest) validate() (string, bool) {
 
 // abdomenResponse is the JSON response for an abdomen observation.
 type abdomenResponse struct {
-	ID         string   `json:"id"`
-	BabyID     string   `json:"baby_id"`
-	LoggedBy   string   `json:"logged_by"`
-	UpdatedBy  *string  `json:"updated_by,omitempty"`
-	Timestamp  string   `json:"timestamp"`
-	Firmness   string   `json:"firmness"`
-	Tenderness bool     `json:"tenderness"`
-	GirthCm    *float64 `json:"girth_cm,omitempty"`
-	PhotoKeys  *string  `json:"photo_keys,omitempty"`
-	Notes      *string  `json:"notes,omitempty"`
-	CreatedAt  string   `json:"created_at"`
-	UpdatedAt  string   `json:"updated_at"`
+	ID         string          `json:"id"`
+	BabyID     string          `json:"baby_id"`
+	LoggedBy   string          `json:"logged_by"`
+	UpdatedBy  *string         `json:"updated_by,omitempty"`
+	Timestamp  string          `json:"timestamp"`
+	Firmness   string          `json:"firmness"`
+	Tenderness bool            `json:"tenderness"`
+	GirthCm    *float64        `json:"girth_cm,omitempty"`
+	Photos     []photoResponse `json:"photos"`
+	Notes      *string         `json:"notes,omitempty"`
+	CreatedAt  string          `json:"created_at"`
+	UpdatedAt  string          `json:"updated_at"`
 }
 
 func toAbdomenResponse(a *model.AbdomenObservation) abdomenResponse {
@@ -62,15 +65,26 @@ func toAbdomenResponse(a *model.AbdomenObservation) abdomenResponse {
 		Firmness:   a.Firmness,
 		Tenderness: a.Tenderness,
 		GirthCm:    a.GirthCm,
-		PhotoKeys:  a.PhotoKeys,
+		Photos:     []photoResponse{},
 		Notes:      a.Notes,
 		CreatedAt:  a.CreatedAt.Format(model.DateTimeFormat),
 		UpdatedAt:  a.UpdatedAt.Format(model.DateTimeFormat),
 	}
 }
 
+func toAbdomenResponseWithPhotos(a *model.AbdomenObservation, db *sql.DB, objStore storage.ObjectStore, r *http.Request) abdomenResponse {
+	resp := toAbdomenResponse(a)
+	resp.Photos = resolvePhotos(r.Context(), db, objStore, a.PhotoKeys)
+	return resp
+}
+
 // CreateAbdomenHandler handles POST /api/babies/{id}/abdomen.
-func CreateAbdomenHandler(db *sql.DB) http.HandlerFunc {
+func CreateAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -98,19 +112,34 @@ func CreateAbdomenHandler(db *sql.DB) http.HandlerFunc {
 			tenderness = *req.Tenderness
 		}
 
-		abdomen, err := store.CreateAbdomen(db, baby.ID, user.ID, req.Timestamp, *req.Firmness, tenderness, req.GirthCm, req.Notes)
+		var photoKeysStr *string
+		if len(req.PhotoKeys) > 0 {
+			var errMsg string
+			photoKeysStr, errMsg, ok = handlePhotoLinking(db, baby.ID, nil, req.PhotoKeys)
+			if !ok {
+				http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
+				return
+			}
+		}
+
+		abdomen, err := store.CreateAbdomenWithPhotos(db, baby.ID, user.ID, req.Timestamp, *req.Firmness, tenderness, req.GirthCm, photoKeysStr, req.Notes)
 		if err != nil {
 			log.Printf("create abdomen: %v", err)
 			http.Error(w, "failed to create abdomen observation", http.StatusInternalServerError)
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toAbdomenResponse(abdomen))
+		writeJSON(w, http.StatusCreated, toAbdomenResponseWithPhotos(abdomen, db, objStore, r))
 	}
 }
 
 // ListAbdomenHandler handles GET /api/babies/{id}/abdomen.
-func ListAbdomenHandler(db *sql.DB) http.HandlerFunc {
+func ListAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -131,12 +160,20 @@ func ListAbdomenHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, mapMetricPage(page, toAbdomenResponse))
+		convert := func(a *model.AbdomenObservation) abdomenResponse {
+			return toAbdomenResponseWithPhotos(a, db, objStore, r)
+		}
+		writeJSON(w, http.StatusOK, mapMetricPage(page, convert))
 	}
 }
 
 // GetAbdomenHandler handles GET /api/babies/{id}/abdomen/{entryId}.
-func GetAbdomenHandler(db *sql.DB) http.HandlerFunc {
+func GetAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -159,12 +196,17 @@ func GetAbdomenHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toAbdomenResponse(abdomen))
+		writeJSON(w, http.StatusOK, toAbdomenResponseWithPhotos(abdomen, db, objStore, r))
 	}
 }
 
 // UpdateAbdomenHandler handles PUT /api/babies/{id}/abdomen/{entryId}.
-func UpdateAbdomenHandler(db *sql.DB) http.HandlerFunc {
+func UpdateAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -197,18 +239,30 @@ func UpdateAbdomenHandler(db *sql.DB) http.HandlerFunc {
 			tenderness = *req.Tenderness
 		}
 
-		abdomen, err := store.UpdateAbdomen(db, baby.ID, entryID, user.ID, req.Timestamp, *req.Firmness, tenderness, req.GirthCm, req.Notes)
+		existing, err := store.GetAbdomenByID(db, baby.ID, entryID)
 		if err != nil {
 			handleStoreError(w, err, "abdomen observation not found")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toAbdomenResponse(abdomen))
+		photoKeysStr, errMsg, ok := handlePhotoLinking(db, baby.ID, existing.PhotoKeys, req.PhotoKeys)
+		if !ok {
+			http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
+			return
+		}
+
+		abdomen, err := store.UpdateAbdomenWithPhotos(db, baby.ID, entryID, user.ID, req.Timestamp, *req.Firmness, tenderness, req.GirthCm, photoKeysStr, req.Notes)
+		if err != nil {
+			handleStoreError(w, err, "abdomen observation not found")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toAbdomenResponseWithPhotos(abdomen, db, objStore, r))
 	}
 }
 
 // DeleteAbdomenHandler handles DELETE /api/babies/{id}/abdomen/{entryId}.
-func DeleteAbdomenHandler(db *sql.DB) http.HandlerFunc {
+func DeleteAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -225,7 +279,20 @@ func DeleteAbdomenHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		err := store.DeleteAbdomen(db, baby.ID, entryID)
+		existing, err := store.GetAbdomenByID(db, baby.ID, entryID)
+		if err != nil {
+			handleStoreError(w, err, "abdomen observation not found")
+			return
+		}
+
+		if existing.PhotoKeys != nil && *existing.PhotoKeys != "" {
+			oldKeys := strings.Split(*existing.PhotoKeys, ",")
+			if unlinkErr := store.UnlinkPhotos(db, oldKeys); unlinkErr != nil {
+				log.Printf("unlink photos on delete: %v", unlinkErr)
+			}
+		}
+
+		err = store.DeleteAbdomen(db, baby.ID, entryID)
 		if err != nil {
 			handleStoreError(w, err, "abdomen observation not found")
 			return

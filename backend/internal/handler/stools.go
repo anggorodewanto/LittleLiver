@@ -5,19 +5,22 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
+	"github.com/ablankz/LittleLiver/backend/internal/storage"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
 // stoolRequest is the JSON request body for creating/updating a stool.
 type stoolRequest struct {
-	Timestamp      string  `json:"timestamp"`
-	ColorRating    *int    `json:"color_rating"`
-	ColorLabel     *string `json:"color_label,omitempty"`
-	Consistency    *string `json:"consistency,omitempty"`
-	VolumeEstimate *string `json:"volume_estimate,omitempty"`
-	Notes          *string `json:"notes,omitempty"`
+	Timestamp      string   `json:"timestamp"`
+	ColorRating    *int     `json:"color_rating"`
+	ColorLabel     *string  `json:"color_label,omitempty"`
+	Consistency    *string  `json:"consistency,omitempty"`
+	VolumeEstimate *string  `json:"volume_estimate,omitempty"`
+	PhotoKeys      []string `json:"photo_keys,omitempty"`
+	Notes          *string  `json:"notes,omitempty"`
 }
 
 // validate checks required fields for a stool request.
@@ -45,19 +48,19 @@ func (req *stoolRequest) validate() (string, bool) {
 
 // stoolResponse is the JSON response for a stool.
 type stoolResponse struct {
-	ID             string  `json:"id"`
-	BabyID         string  `json:"baby_id"`
-	LoggedBy       string  `json:"logged_by"`
-	UpdatedBy      *string `json:"updated_by,omitempty"`
-	Timestamp      string  `json:"timestamp"`
-	ColorRating    int     `json:"color_rating"`
-	ColorLabel     *string `json:"color_label,omitempty"`
-	Consistency    *string `json:"consistency,omitempty"`
-	VolumeEstimate *string `json:"volume_estimate,omitempty"`
-	PhotoKeys      *string `json:"photo_keys,omitempty"`
-	Notes          *string `json:"notes,omitempty"`
-	CreatedAt      string  `json:"created_at"`
-	UpdatedAt      string  `json:"updated_at"`
+	ID             string          `json:"id"`
+	BabyID         string          `json:"baby_id"`
+	LoggedBy       string          `json:"logged_by"`
+	UpdatedBy      *string         `json:"updated_by,omitempty"`
+	Timestamp      string          `json:"timestamp"`
+	ColorRating    int             `json:"color_rating"`
+	ColorLabel     *string         `json:"color_label,omitempty"`
+	Consistency    *string         `json:"consistency,omitempty"`
+	VolumeEstimate *string         `json:"volume_estimate,omitempty"`
+	Photos         []photoResponse `json:"photos"`
+	Notes          *string         `json:"notes,omitempty"`
+	CreatedAt      string          `json:"created_at"`
+	UpdatedAt      string          `json:"updated_at"`
 }
 
 func toStoolResponse(s *model.Stool) stoolResponse {
@@ -71,15 +74,26 @@ func toStoolResponse(s *model.Stool) stoolResponse {
 		ColorLabel:     s.ColorLabel,
 		Consistency:    s.Consistency,
 		VolumeEstimate: s.VolumeEstimate,
-		PhotoKeys:      s.PhotoKeys,
+		Photos:         []photoResponse{},
 		Notes:          s.Notes,
 		CreatedAt:      s.CreatedAt.Format(model.DateTimeFormat),
 		UpdatedAt:      s.UpdatedAt.Format(model.DateTimeFormat),
 	}
 }
 
+func toStoolResponseWithPhotos(s *model.Stool, db *sql.DB, objStore storage.ObjectStore, r *http.Request) stoolResponse {
+	resp := toStoolResponse(s)
+	resp.Photos = resolvePhotos(r.Context(), db, objStore, s.PhotoKeys)
+	return resp
+}
+
 // CreateStoolHandler handles POST /api/babies/{id}/stools.
-func CreateStoolHandler(db *sql.DB) http.HandlerFunc {
+func CreateStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -102,19 +116,35 @@ func CreateStoolHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		stool, err := store.CreateStool(db, baby.ID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, req.Notes)
+		// Handle photo linking
+		var photoKeysStr *string
+		if len(req.PhotoKeys) > 0 {
+			var errMsg string
+			photoKeysStr, errMsg, ok = handlePhotoLinking(db, baby.ID, nil, req.PhotoKeys)
+			if !ok {
+				http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
+				return
+			}
+		}
+
+		stool, err := store.CreateStoolWithPhotos(db, baby.ID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, photoKeysStr, req.Notes)
 		if err != nil {
 			log.Printf("create stool: %v", err)
 			http.Error(w, "failed to create stool", http.StatusInternalServerError)
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toStoolResponse(stool))
+		writeJSON(w, http.StatusCreated, toStoolResponseWithPhotos(stool, db, objStore, r))
 	}
 }
 
 // ListStoolsHandler handles GET /api/babies/{id}/stools.
-func ListStoolsHandler(db *sql.DB) http.HandlerFunc {
+func ListStoolsHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -135,12 +165,20 @@ func ListStoolsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, mapMetricPage(page, toStoolResponse))
+		convert := func(s *model.Stool) stoolResponse {
+			return toStoolResponseWithPhotos(s, db, objStore, r)
+		}
+		writeJSON(w, http.StatusOK, mapMetricPage(page, convert))
 	}
 }
 
 // GetStoolHandler handles GET /api/babies/{id}/stools/{entryId}.
-func GetStoolHandler(db *sql.DB) http.HandlerFunc {
+func GetStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -163,12 +201,17 @@ func GetStoolHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toStoolResponse(stool))
+		writeJSON(w, http.StatusOK, toStoolResponseWithPhotos(stool, db, objStore, r))
 	}
 }
 
 // UpdateStoolHandler handles PUT /api/babies/{id}/stools/{entryId}.
-func UpdateStoolHandler(db *sql.DB) http.HandlerFunc {
+func UpdateStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -196,18 +239,32 @@ func UpdateStoolHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		stool, err := store.UpdateStool(db, baby.ID, entryID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, req.Notes)
+		// Get existing stool to find old photo keys
+		existing, err := store.GetStoolByID(db, baby.ID, entryID)
 		if err != nil {
 			handleStoreError(w, err, "stool not found")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toStoolResponse(stool))
+		// Handle photo linking/unlinking
+		photoKeysStr, errMsg, ok := handlePhotoLinking(db, baby.ID, existing.PhotoKeys, req.PhotoKeys)
+		if !ok {
+			http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
+			return
+		}
+
+		stool, err := store.UpdateStoolWithPhotos(db, baby.ID, entryID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, photoKeysStr, req.Notes)
+		if err != nil {
+			handleStoreError(w, err, "stool not found")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toStoolResponseWithPhotos(stool, db, objStore, r))
 	}
 }
 
 // DeleteStoolHandler handles DELETE /api/babies/{id}/stools/{entryId}.
-func DeleteStoolHandler(db *sql.DB) http.HandlerFunc {
+func DeleteStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -224,7 +281,21 @@ func DeleteStoolHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		err := store.DeleteStool(db, baby.ID, entryID)
+		// Get existing stool to unlink photos before deletion
+		existing, err := store.GetStoolByID(db, baby.ID, entryID)
+		if err != nil {
+			handleStoreError(w, err, "stool not found")
+			return
+		}
+
+		if existing.PhotoKeys != nil && *existing.PhotoKeys != "" {
+			oldKeys := strings.Split(*existing.PhotoKeys, ",")
+			if unlinkErr := store.UnlinkPhotos(db, oldKeys); unlinkErr != nil {
+				log.Printf("unlink photos on delete: %v", unlinkErr)
+			}
+		}
+
+		err = store.DeleteStool(db, baby.ID, entryID)
 		if err != nil {
 			handleStoreError(w, err, "stool not found")
 			return

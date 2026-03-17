@@ -43,12 +43,17 @@ func scanSkinObservation(s scanner) (*model.SkinObservation, error) {
 
 // CreateSkinObservation inserts a new skin observation and returns it.
 func CreateSkinObservation(db *sql.DB, babyID, loggedBy, timestamp string, jaundiceLevel *string, scleralIcterus bool, rashes, bruising, notes *string) (*model.SkinObservation, error) {
+	return CreateSkinObservationWithPhotos(db, babyID, loggedBy, timestamp, jaundiceLevel, scleralIcterus, rashes, bruising, nil, notes)
+}
+
+// CreateSkinObservationWithPhotos inserts a new skin observation with optional photo keys and returns it.
+func CreateSkinObservationWithPhotos(db *sql.DB, babyID, loggedBy, timestamp string, jaundiceLevel *string, scleralIcterus bool, rashes, bruising, photoKeys, notes *string) (*model.SkinObservation, error) {
 	id := model.NewULID()
 
 	_, err := db.Exec(
-		`INSERT INTO skin_observations (id, baby_id, logged_by, timestamp, jaundice_level, scleral_icterus, rashes, bruising, notes)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, babyID, loggedBy, timestamp, jaundiceLevel, scleralIcterus, rashes, bruising, notes,
+		`INSERT INTO skin_observations (id, baby_id, logged_by, timestamp, jaundice_level, scleral_icterus, rashes, bruising, photo_keys, notes)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, babyID, loggedBy, timestamp, jaundiceLevel, scleralIcterus, rashes, bruising, photoKeys, notes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create skin observation: %w", err)
@@ -78,14 +83,19 @@ func ListSkinObservationsWithTZ(db *sql.DB, babyID string, from, to, cursor *str
 
 // UpdateSkinObservation updates a skin observation.
 func UpdateSkinObservation(db *sql.DB, babyID, skinID, updatedBy, timestamp string, jaundiceLevel *string, scleralIcterus bool, rashes, bruising, notes *string) (*model.SkinObservation, error) {
+	return UpdateSkinObservationWithPhotos(db, babyID, skinID, updatedBy, timestamp, jaundiceLevel, scleralIcterus, rashes, bruising, nil, notes)
+}
+
+// UpdateSkinObservationWithPhotos updates a skin observation with optional photo keys.
+func UpdateSkinObservationWithPhotos(db *sql.DB, babyID, skinID, updatedBy, timestamp string, jaundiceLevel *string, scleralIcterus bool, rashes, bruising, photoKeys, notes *string) (*model.SkinObservation, error) {
 	res, err := db.Exec(
 		`UPDATE skin_observations SET
 			updated_by = ?, timestamp = ?, jaundice_level = ?,
-			scleral_icterus = ?, rashes = ?, bruising = ?, notes = ?,
+			scleral_icterus = ?, rashes = ?, bruising = ?, photo_keys = ?, notes = ?,
 			updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ? AND baby_id = ?`,
 		updatedBy, timestamp, jaundiceLevel,
-		scleralIcterus, rashes, bruising, notes,
+		scleralIcterus, rashes, bruising, photoKeys, notes,
 		skinID, babyID,
 	)
 	if err != nil {

@@ -180,7 +180,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests with a mock R2 client that (1) rejects files over 5MB, (2) rejects invalid MIME types, (3) HEIC input is converted to JPEG before storage, (4) stores original + thumbnail, (5) creates `photo_uploads` row with correct keys, (6) returns R2 key. Write storage + handler.
   **Proof of progress:** Upload endpoint tested with mock R2; validation, HEIC conversion, and thumbnail generation verified.
 
-- [ ] **Phase 24: Photo linking, unlinking, and signed URL replacement**
+- [x] **Phase 24: Photo linking, unlinking, and signed URL replacement**
   **Depends on:** Phase 23, Phase 17, Phase 18, Phase 19, Phase 20
   **What to build:** On metric create/update, validate `photo_keys` against `photo_uploads` table (matching baby_id), set `linked_at`. Enforce 4-photo limit. On update, unlink removed photos (`linked_at = NULL`). On metric read (list/detail), replace R2 keys with signed URLs (1hr TTL) — each photo becomes `{ url, thumbnail_url }` with both original and thumbnail signed URLs. Apply to: stools, abdomen, skin, bruising, general_notes.
   **TDD approach:** Write tests that (1) creating a stool with valid photo_keys sets linked_at, (2) invalid/wrong-baby photo_keys are rejected, (3) exceeding 4 photos is rejected, (4) removing a photo on update nulls linked_at, (5) list response contains signed URLs not raw keys, (6) each photo includes both `url` and `thumbnail_url`, (7) detail response also contains signed URLs with `url` and `thumbnail_url`. Write the linking/signing logic.

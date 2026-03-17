@@ -5,19 +5,22 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
+	"github.com/ablankz/LittleLiver/backend/internal/storage"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
 // skinObservationRequest is the JSON request body for creating/updating a skin observation.
 type skinObservationRequest struct {
-	Timestamp      string  `json:"timestamp"`
-	JaundiceLevel  *string `json:"jaundice_level,omitempty"`
-	ScleralIcterus *bool   `json:"scleral_icterus,omitempty"`
-	Rashes         *string `json:"rashes,omitempty"`
-	Bruising       *string `json:"bruising,omitempty"`
-	Notes          *string `json:"notes,omitempty"`
+	Timestamp      string   `json:"timestamp"`
+	JaundiceLevel  *string  `json:"jaundice_level,omitempty"`
+	ScleralIcterus *bool    `json:"scleral_icterus,omitempty"`
+	Rashes         *string  `json:"rashes,omitempty"`
+	Bruising       *string  `json:"bruising,omitempty"`
+	PhotoKeys      []string `json:"photo_keys,omitempty"`
+	Notes          *string  `json:"notes,omitempty"`
 }
 
 // validate checks required fields for a skin observation request.
@@ -33,19 +36,19 @@ func (req *skinObservationRequest) validate() (string, bool) {
 
 // skinObservationResponse is the JSON response for a skin observation.
 type skinObservationResponse struct {
-	ID             string  `json:"id"`
-	BabyID         string  `json:"baby_id"`
-	LoggedBy       string  `json:"logged_by"`
-	UpdatedBy      *string `json:"updated_by,omitempty"`
-	Timestamp      string  `json:"timestamp"`
-	JaundiceLevel  *string `json:"jaundice_level,omitempty"`
-	ScleralIcterus bool    `json:"scleral_icterus"`
-	Rashes         *string `json:"rashes,omitempty"`
-	Bruising       *string `json:"bruising,omitempty"`
-	PhotoKeys      *string `json:"photo_keys,omitempty"`
-	Notes          *string `json:"notes,omitempty"`
-	CreatedAt      string  `json:"created_at"`
-	UpdatedAt      string  `json:"updated_at"`
+	ID             string          `json:"id"`
+	BabyID         string          `json:"baby_id"`
+	LoggedBy       string          `json:"logged_by"`
+	UpdatedBy      *string         `json:"updated_by,omitempty"`
+	Timestamp      string          `json:"timestamp"`
+	JaundiceLevel  *string         `json:"jaundice_level,omitempty"`
+	ScleralIcterus bool            `json:"scleral_icterus"`
+	Rashes         *string         `json:"rashes,omitempty"`
+	Bruising       *string         `json:"bruising,omitempty"`
+	Photos         []photoResponse `json:"photos"`
+	Notes          *string         `json:"notes,omitempty"`
+	CreatedAt      string          `json:"created_at"`
+	UpdatedAt      string          `json:"updated_at"`
 }
 
 func toSkinObservationResponse(s *model.SkinObservation) skinObservationResponse {
@@ -59,15 +62,26 @@ func toSkinObservationResponse(s *model.SkinObservation) skinObservationResponse
 		ScleralIcterus: s.ScleralIcterus,
 		Rashes:         s.Rashes,
 		Bruising:       s.Bruising,
-		PhotoKeys:      s.PhotoKeys,
+		Photos:         []photoResponse{},
 		Notes:          s.Notes,
 		CreatedAt:      s.CreatedAt.Format(model.DateTimeFormat),
 		UpdatedAt:      s.UpdatedAt.Format(model.DateTimeFormat),
 	}
 }
 
+func toSkinObservationResponseWithPhotos(s *model.SkinObservation, db *sql.DB, objStore storage.ObjectStore, r *http.Request) skinObservationResponse {
+	resp := toSkinObservationResponse(s)
+	resp.Photos = resolvePhotos(r.Context(), db, objStore, s.PhotoKeys)
+	return resp
+}
+
 // CreateSkinObservationHandler handles POST /api/babies/{id}/skin.
-func CreateSkinObservationHandler(db *sql.DB) http.HandlerFunc {
+func CreateSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -95,19 +109,34 @@ func CreateSkinObservationHandler(db *sql.DB) http.HandlerFunc {
 			scleralIcterus = *req.ScleralIcterus
 		}
 
-		skin, err := store.CreateSkinObservation(db, baby.ID, user.ID, req.Timestamp, req.JaundiceLevel, scleralIcterus, req.Rashes, req.Bruising, req.Notes)
+		var photoKeysStr *string
+		if len(req.PhotoKeys) > 0 {
+			var errMsg string
+			photoKeysStr, errMsg, ok = handlePhotoLinking(db, baby.ID, nil, req.PhotoKeys)
+			if !ok {
+				http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
+				return
+			}
+		}
+
+		skin, err := store.CreateSkinObservationWithPhotos(db, baby.ID, user.ID, req.Timestamp, req.JaundiceLevel, scleralIcterus, req.Rashes, req.Bruising, photoKeysStr, req.Notes)
 		if err != nil {
 			log.Printf("create skin observation: %v", err)
 			http.Error(w, "failed to create skin observation", http.StatusInternalServerError)
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toSkinObservationResponse(skin))
+		writeJSON(w, http.StatusCreated, toSkinObservationResponseWithPhotos(skin, db, objStore, r))
 	}
 }
 
 // ListSkinObservationsHandler handles GET /api/babies/{id}/skin.
-func ListSkinObservationsHandler(db *sql.DB) http.HandlerFunc {
+func ListSkinObservationsHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -128,12 +157,20 @@ func ListSkinObservationsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, mapMetricPage(page, toSkinObservationResponse))
+		convert := func(s *model.SkinObservation) skinObservationResponse {
+			return toSkinObservationResponseWithPhotos(s, db, objStore, r)
+		}
+		writeJSON(w, http.StatusOK, mapMetricPage(page, convert))
 	}
 }
 
 // GetSkinObservationHandler handles GET /api/babies/{id}/skin/{entryId}.
-func GetSkinObservationHandler(db *sql.DB) http.HandlerFunc {
+func GetSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -156,12 +193,17 @@ func GetSkinObservationHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toSkinObservationResponse(skin))
+		writeJSON(w, http.StatusOK, toSkinObservationResponseWithPhotos(skin, db, objStore, r))
 	}
 }
 
 // UpdateSkinObservationHandler handles PUT /api/babies/{id}/skin/{entryId}.
-func UpdateSkinObservationHandler(db *sql.DB) http.HandlerFunc {
+func UpdateSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
+	var objStore storage.ObjectStore
+	if len(objStores) > 0 {
+		objStore = objStores[0]
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -194,18 +236,30 @@ func UpdateSkinObservationHandler(db *sql.DB) http.HandlerFunc {
 			scleralIcterus = *req.ScleralIcterus
 		}
 
-		skin, err := store.UpdateSkinObservation(db, baby.ID, entryID, user.ID, req.Timestamp, req.JaundiceLevel, scleralIcterus, req.Rashes, req.Bruising, req.Notes)
+		existing, err := store.GetSkinObservationByID(db, baby.ID, entryID)
 		if err != nil {
 			handleStoreError(w, err, "skin observation not found")
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toSkinObservationResponse(skin))
+		photoKeysStr, errMsg, ok := handlePhotoLinking(db, baby.ID, existing.PhotoKeys, req.PhotoKeys)
+		if !ok {
+			http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
+			return
+		}
+
+		skin, err := store.UpdateSkinObservationWithPhotos(db, baby.ID, entryID, user.ID, req.Timestamp, req.JaundiceLevel, scleralIcterus, req.Rashes, req.Bruising, photoKeysStr, req.Notes)
+		if err != nil {
+			handleStoreError(w, err, "skin observation not found")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toSkinObservationResponseWithPhotos(skin, db, objStore, r))
 	}
 }
 
 // DeleteSkinObservationHandler handles DELETE /api/babies/{id}/skin/{entryId}.
-func DeleteSkinObservationHandler(db *sql.DB) http.HandlerFunc {
+func DeleteSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -222,7 +276,20 @@ func DeleteSkinObservationHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		err := store.DeleteSkinObservation(db, baby.ID, entryID)
+		existing, err := store.GetSkinObservationByID(db, baby.ID, entryID)
+		if err != nil {
+			handleStoreError(w, err, "skin observation not found")
+			return
+		}
+
+		if existing.PhotoKeys != nil && *existing.PhotoKeys != "" {
+			oldKeys := strings.Split(*existing.PhotoKeys, ",")
+			if unlinkErr := store.UnlinkPhotos(db, oldKeys); unlinkErr != nil {
+				log.Printf("unlink photos on delete: %v", unlinkErr)
+			}
+		}
+
+		err = store.DeleteSkinObservation(db, baby.ID, entryID)
 		if err != nil {
 			handleStoreError(w, err, "skin observation not found")
 			return
