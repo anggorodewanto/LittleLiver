@@ -103,22 +103,23 @@ func ListMedLogs(db *sql.DB, babyID string, medicationID, from, to, cursor *stri
 	}
 
 	if from != nil {
-		_, err := time.Parse(model.DateFormat, *from)
+		fromDate, err := time.Parse(model.DateFormat, *from)
 		if err != nil {
 			return nil, fmt.Errorf("parse from date: %w", err)
 		}
 		conditions = append(conditions, "created_at >= ?")
-		args = append(args, *from+"T00:00:00Z")
+		args = append(args, fromDate.Format(model.DateTimeFormat))
 	}
 
 	if to != nil {
-		_, err := time.Parse(model.DateFormat, *to)
+		toDate, err := time.Parse(model.DateFormat, *to)
 		if err != nil {
 			return nil, fmt.Errorf("parse to date: %w", err)
 		}
 		// to is inclusive of the whole day
+		toTime := toDate.Add(24 * time.Hour).Format(model.DateTimeFormat)
 		conditions = append(conditions, "created_at < ?")
-		args = append(args, *to+"T00:00:00Z")
+		args = append(args, toTime)
 	}
 
 	if cursor != nil {

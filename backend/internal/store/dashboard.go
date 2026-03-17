@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 )
 
 // DashboardSummary holds the aggregated summary cards for the dashboard.
@@ -37,13 +39,17 @@ type UpcomingMed struct {
 // GetDashboardSummary returns aggregated summary cards for a baby within the given date range.
 // from and to are in YYYY-MM-DD format. last_temp and last_weight ignore the date range.
 func GetDashboardSummary(db *sql.DB, babyID, from, to string) (*DashboardSummary, error) {
-	fromTime := from + "T00:00:00Z"
+	fromDate, err := time.Parse(model.DateFormat, from)
+	if err != nil {
+		return nil, fmt.Errorf("parse from date: %w", err)
+	}
+	fromTime := fromDate.Format(model.DateTimeFormat)
 	// to is inclusive of the whole day
-	toDate, err := time.Parse("2006-01-02", to)
+	toDate, err := time.Parse(model.DateFormat, to)
 	if err != nil {
 		return nil, fmt.Errorf("parse to date: %w", err)
 	}
-	toTime := toDate.Add(24 * time.Hour).Format("2006-01-02T15:04:05Z")
+	toTime := toDate.Add(24 * time.Hour).Format(model.DateTimeFormat)
 
 	s := &DashboardSummary{}
 
@@ -126,7 +132,7 @@ func GetDashboardSummary(db *sql.DB, babyID, from, to string) (*DashboardSummary
 // GetStoolColorTrend returns stool color entries for the last 7 days, regardless of any params.
 // Returns one entry per stool (multiple per day possible), ordered by date descending.
 func GetStoolColorTrend(db *sql.DB, babyID string) ([]StoolColorEntry, error) {
-	sevenDaysAgo := time.Now().UTC().AddDate(0, 0, -6).Format("2006-01-02") + "T00:00:00Z"
+	sevenDaysAgo := time.Now().UTC().AddDate(0, 0, -6).Format(model.DateFormat) + "T00:00:00Z"
 
 	rows, err := db.Query(
 		`SELECT DATE(timestamp) as date, color_label, color_rating

@@ -53,16 +53,6 @@ type medicationResponse struct {
 }
 
 func toMedicationResponse(m *model.Medication) medicationResponse {
-	var scheduleTimes []string
-	if m.Schedule != nil && *m.Schedule != "" {
-		if err := json.Unmarshal([]byte(*m.Schedule), &scheduleTimes); err != nil {
-			log.Printf("unmarshal medication schedule: %v", err)
-		}
-	}
-	if scheduleTimes == nil {
-		scheduleTimes = []string{}
-	}
-
 	return medicationResponse{
 		ID:            m.ID,
 		BabyID:        m.BabyID,
@@ -71,7 +61,7 @@ func toMedicationResponse(m *model.Medication) medicationResponse {
 		Name:          m.Name,
 		Dose:          m.Dose,
 		Frequency:     m.Frequency,
-		ScheduleTimes: scheduleTimes,
+		ScheduleTimes: parseScheduleTimes(m.Schedule),
 		Timezone:      m.Timezone,
 		Active:        m.Active,
 		CreatedAt:     m.CreatedAt.Format(model.DateTimeFormat),
@@ -118,12 +108,7 @@ func CreateMedicationHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		schedule := scheduleTimesToJSON(req.ScheduleTimes)
-
-		// Get timezone from X-Timezone header
-		var tz *string
-		if tzHeader := r.Header.Get("X-Timezone"); tzHeader != "" {
-			tz = &tzHeader
-		}
+		tz := optionalTimezone(r)
 
 		med, err := store.CreateMedication(db, baby.ID, user.ID, req.Name, req.Dose, req.Frequency, schedule, tz)
 		if err != nil {
@@ -177,9 +162,8 @@ func GetMedicationHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		medID := r.PathValue("medId")
-		if medID == "" {
-			http.Error(w, "missing medication ID", http.StatusBadRequest)
+		medID, ok := requirePathParam(w, r, "medId", "medication ID")
+		if !ok {
 			return
 		}
 
@@ -206,9 +190,8 @@ func UpdateMedicationHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		medID := r.PathValue("medId")
-		if medID == "" {
-			http.Error(w, "missing medication ID", http.StatusBadRequest)
+		medID, ok := requirePathParam(w, r, "medId", "medication ID")
+		if !ok {
 			return
 		}
 
@@ -224,12 +207,7 @@ func UpdateMedicationHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		schedule := scheduleTimesToJSON(req.ScheduleTimes)
-
-		// Get timezone from X-Timezone header
-		var tz *string
-		if tzHeader := r.Header.Get("X-Timezone"); tzHeader != "" {
-			tz = &tzHeader
-		}
+		tz := optionalTimezone(r)
 
 		med, err := store.UpdateMedication(db, baby.ID, medID, user.ID, req.Name, req.Dose, req.Frequency, schedule, tz, req.Active)
 		if err != nil {
@@ -243,7 +221,7 @@ func UpdateMedicationHandler(db *sql.DB) http.HandlerFunc {
 
 // DeleteMedicationHandler handles DELETE /api/babies/{id}/medications/{medId}.
 // Medications cannot be deleted, only deactivated. Returns 405 Method Not Allowed.
-func DeleteMedicationHandler(db *sql.DB) http.HandlerFunc {
+func DeleteMedicationHandler(_ *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "medications cannot be deleted, use PUT to deactivate", http.StatusMethodNotAllowed)
 	}

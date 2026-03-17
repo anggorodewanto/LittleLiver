@@ -24,15 +24,43 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
+// requirePathParam extracts a named path parameter from the request.
+// Returns the value and true, or writes a 400 response and returns false.
+func requirePathParam(w http.ResponseWriter, r *http.Request, key, label string) (string, bool) {
+	val := r.PathValue(key)
+	if val == "" {
+		http.Error(w, "missing "+label, http.StatusBadRequest)
+		return "", false
+	}
+	return val, true
+}
+
 // requireEntryID extracts the entry ID from the request path.
 // Returns the ID and true, or writes a 400 response and returns false.
 func requireEntryID(w http.ResponseWriter, r *http.Request) (string, bool) {
-	entryID := r.PathValue("entryId")
-	if entryID == "" {
-		http.Error(w, "missing entry ID", http.StatusBadRequest)
-		return "", false
+	return requirePathParam(w, r, "entryId", "entry ID")
+}
+
+// optionalTimezone extracts the timezone from the X-Timezone header, if present.
+func optionalTimezone(r *http.Request) *string {
+	if tz := r.Header.Get("X-Timezone"); tz != "" {
+		return &tz
 	}
-	return entryID, true
+	return nil
+}
+
+// parseScheduleTimes parses a JSON array string of schedule times into a string slice.
+// Returns an empty slice on nil/empty input or parse error.
+func parseScheduleTimes(schedule *string) []string {
+	if schedule == nil || *schedule == "" {
+		return []string{}
+	}
+	var times []string
+	if err := json.Unmarshal([]byte(*schedule), &times); err != nil {
+		log.Printf("unmarshal schedule: %v", err)
+		return []string{}
+	}
+	return times
 }
 
 // optionalQuery returns a pointer to the query parameter value if present,

@@ -1,8 +1,9 @@
 package handler
 
 import (
-	"database/sql"
 	"encoding/json"
+	"errors"
+	"database/sql"
 	"log"
 	"net/http"
 
@@ -145,7 +146,7 @@ func CreateMedLogHandler(db *sql.DB) http.HandlerFunc {
 		// Validate that the medication's baby_id matches
 		medBabyID, err := store.GetMedicationBabyID(db, req.MedicationID)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				http.Error(w, "medication not found", http.StatusBadRequest)
 				return
 			}
@@ -209,9 +210,8 @@ func GetMedLogHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		entryID := r.PathValue("entryId")
-		if entryID == "" {
-			http.Error(w, "missing entry ID", http.StatusBadRequest)
+		entryID, ok := requireEntryID(w, r)
+		if !ok {
 			return
 		}
 
@@ -238,9 +238,8 @@ func UpdateMedLogHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		entryID := r.PathValue("entryId")
-		if entryID == "" {
-			http.Error(w, "missing entry ID", http.StatusBadRequest)
+		entryID, ok := requireEntryID(w, r)
+		if !ok {
 			return
 		}
 
@@ -278,9 +277,8 @@ func DeleteMedLogHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		entryID := r.PathValue("entryId")
-		if entryID == "" {
-			http.Error(w, "missing entry ID", http.StatusBadRequest)
+		entryID, ok := requireEntryID(w, r)
+		if !ok {
 			return
 		}
 

@@ -2,13 +2,31 @@ package handler
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
+
+// summaryCardsResponse is the JSON response for dashboard summary cards.
+type summaryCardsResponse struct {
+	TotalFeeds     int      `json:"total_feeds"`
+	TotalCalories  float64  `json:"total_calories"`
+	WetDiapers     int      `json:"wet_diapers"`
+	Stools         int      `json:"stools"`
+	ColorIndicator *string  `json:"color_indicator"`
+	LastTemp       *float64 `json:"last_temp"`
+	LastWeight     *float64 `json:"last_weight"`
+}
+
+// stoolColorTrendEntry is the JSON response for a stool color trend entry.
+type stoolColorTrendEntry struct {
+	Date        string `json:"date"`
+	Color       string `json:"color"`
+	ColorRating int    `json:"color_rating"`
+}
 
 // upcomingMedResponse is the JSON response for a single upcoming medication.
 type upcomingMedResponse struct {
@@ -23,9 +41,9 @@ type upcomingMedResponse struct {
 
 // dashboardResponseJSON is the full dashboard API response.
 type dashboardResponseJSON struct {
-	SummaryCards    *store.DashboardSummary `json:"summary_cards"`
-	StoolColorTrend []store.StoolColorEntry `json:"stool_color_trend"`
-	UpcomingMeds    []upcomingMedResponse   `json:"upcoming_meds"`
+	SummaryCards    summaryCardsResponse   `json:"summary_cards"`
+	StoolColorTrend []stoolColorTrendEntry `json:"stool_color_trend"`
+	UpcomingMeds    []upcomingMedResponse  `json:"upcoming_meds"`
 }
 
 // DashboardHandler handles GET /api/babies/{id}/dashboard.
@@ -42,7 +60,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Parse from/to, default to today
-		today := time.Now().UTC().Format("2006-01-02")
+		today := time.Now().UTC().Format(model.DateFormat)
 		from := r.URL.Query().Get("from")
 		if from == "" {
 			from = today
@@ -73,38 +91,43 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Map store types to response types
+		summaryResp := summaryCardsResponse{
+			TotalFeeds:     summary.TotalFeeds,
+			TotalCalories:  summary.TotalCalories,
+			WetDiapers:     summary.WetDiapers,
+			Stools:         summary.Stools,
+			ColorIndicator: summary.ColorIndicator,
+			LastTemp:       summary.LastTemp,
+			LastWeight:     summary.LastWeight,
+		}
+
+		trendResp := make([]stoolColorTrendEntry, 0, len(trend))
+		for _, e := range trend {
+			trendResp = append(trendResp, stoolColorTrendEntry{
+				Date:        e.Date,
+				Color:       e.Color,
+				ColorRating: e.ColorRating,
+			})
+		}
+
 		upcomingMeds := make([]upcomingMedResponse, 0, len(meds))
 		for _, m := range meds {
 			resp := upcomingMedResponse{
-				ID:        m.ID,
-				Name:      m.Name,
-				Dose:      m.Dose,
-				Frequency: m.Frequency,
-				Timezone:  m.Timezone,
+				ID:            m.ID,
+				Name:          m.Name,
+				Dose:          m.Dose,
+				Frequency:     m.Frequency,
+				ScheduleTimes: parseScheduleTimes(m.Schedule),
+				Timezone:      m.Timezone,
 			}
-
-			// Parse schedule_times from JSON
-			if m.Schedule != nil && *m.Schedule != "" {
-				var times []string
-				if err := json.Unmarshal([]byte(*m.Schedule), &times); err != nil {
-					log.Printf("unmarshal schedule for med %s: %v", m.ID, err)
-				} else {
-					resp.ScheduleTimes = times
-				}
-			}
-			if resp.ScheduleTimes == nil {
-				resp.ScheduleTimes = []string{}
-			}
-
-			// Compute next_dose_at if we have schedule and timezone
 			resp.NextDoseAt = computeNextDoseAt(resp.ScheduleTimes, m.Timezone)
-
 			upcomingMeds = append(upcomingMeds, resp)
 		}
 
 		result := dashboardResponseJSON{
-			SummaryCards:    summary,
-			StoolColorTrend: trend,
+			SummaryCards:    summaryResp,
+			StoolColorTrend: trendResp,
 			UpcomingMeds:    upcomingMeds,
 		}
 
@@ -125,14 +148,14 @@ func computeNextDoseAt(scheduleTimes []string, tz *string) *string {
 	}
 
 	now := time.Now().In(loc)
-	todayStr := now.Format("2006-01-02")
+	todayStr := now.Format(model.DateFormat)
 
 	var earliest time.Time
 	found := false
 
 	// Check today's remaining schedule times
 	for _, st := range scheduleTimes {
-		t, err := time.ParseInLocation("2006-01-02 15:04", todayStr+" "+st, loc)
+		t, err := time.ParseInLocation(model.DateFormat+" 15:04", todayStr+" "+st, loc)
 		if err != nil {
 			continue
 		}
@@ -144,9 +167,9 @@ func computeNextDoseAt(scheduleTimes []string, tz *string) *string {
 
 	// If no remaining times today, use tomorrow's first time
 	if !found {
-		tomorrowStr := now.AddDate(0, 0, 1).Format("2006-01-02")
+		tomorrowStr := now.AddDate(0, 0, 1).Format(model.DateFormat)
 		for _, st := range scheduleTimes {
-			t, err := time.ParseInLocation("2006-01-02 15:04", tomorrowStr+" "+st, loc)
+			t, err := time.ParseInLocation(model.DateFormat+" 15:04", tomorrowStr+" "+st, loc)
 			if err != nil {
 				continue
 			}
@@ -161,6 +184,6 @@ func computeNextDoseAt(scheduleTimes []string, tz *string) *string {
 		return nil
 	}
 
-	s := earliest.UTC().Format("2006-01-02T15:04:05Z")
+	s := earliest.UTC().Format(model.DateTimeFormat)
 	return &s
 }
