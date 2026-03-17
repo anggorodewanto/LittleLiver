@@ -51,7 +51,7 @@ func TestBabyFields(t *testing.T) {
 		DateOfBirth:       dob,
 		DiagnosisDate:     &diag,
 		KasaiDate:         &kasai,
-		DefaultCalPerFeed: 67.0,
+		DefaultCalPerFeed: model.DefaultCalPerFeed,
 		Notes:             ptrStr("some notes"),
 		CreatedAt:         now,
 	}
@@ -67,7 +67,7 @@ func TestBabyFields(t *testing.T) {
 	if b.KasaiDate == nil || *b.KasaiDate != kasai {
 		t.Errorf("Baby.KasaiDate = %v", b.KasaiDate)
 	}
-	if b.DefaultCalPerFeed != 67.0 {
+	if b.DefaultCalPerFeed != model.DefaultCalPerFeed {
 		t.Errorf("Baby.DefaultCalPerFeed = %f", b.DefaultCalPerFeed)
 	}
 }

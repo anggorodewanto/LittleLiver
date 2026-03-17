@@ -31,8 +31,8 @@ func CSRFTokenHandler(secret string) http.HandlerFunc {
 
 // meResponse is the JSON response for GET /api/me.
 type meResponse struct {
-	User   meUser   `json:"user"`
-	Babies []meBaby `json:"babies"`
+	User   meUser         `json:"user"`
+	Babies []babyResponse `json:"babies"`
 }
 
 type meUser struct {
@@ -42,21 +42,12 @@ type meUser struct {
 	Timezone *string `json:"timezone,omitempty"`
 }
 
-type meBaby struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Sex         string  `json:"sex"`
-	DateOfBirth string  `json:"date_of_birth"`
-	Notes       *string `json:"notes,omitempty"`
-}
-
 // MeHandler handles GET /api/me.
 // Requires the Auth middleware to set the user in context.
 func MeHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := middleware.UserFromContext(r.Context())
-		if user == nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		user, ok := requireUser(w, r)
+		if !ok {
 			return
 		}
 
@@ -73,17 +64,11 @@ func MeHandler(db *sql.DB) http.HandlerFunc {
 				Name:     user.Name,
 				Timezone: user.Timezone,
 			},
-			Babies: make([]meBaby, 0, len(babies)),
+			Babies: make([]babyResponse, 0, len(babies)),
 		}
 
-		for _, b := range babies {
-			resp.Babies = append(resp.Babies, meBaby{
-				ID:          b.ID,
-				Name:        b.Name,
-				Sex:         b.Sex,
-				DateOfBirth: b.DateOfBirth.Format("2006-01-02"),
-				Notes:       b.Notes,
-			})
+		for i := range babies {
+			resp.Babies = append(resp.Babies, toBabyResponse(&babies[i]))
 		}
 
 		w.Header().Set("Content-Type", "application/json")

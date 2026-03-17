@@ -2,6 +2,9 @@ package model
 
 import "time"
 
+// DefaultCalPerFeed is the default kcal estimate for breast-direct feeds without volume.
+const DefaultCalPerFeed = 67.0
+
 // User represents a parent user authenticated via Google OAuth.
 type User struct {
 	ID        string    `json:"id"`

@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"testing"
 	"time"
+
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 )
 
 func TestCreateBaby_ReturnsWithULIDAndLinks(t *testing.T) {
@@ -37,8 +39,8 @@ func TestCreateBaby_ReturnsWithULIDAndLinks(t *testing.T) {
 	if baby.DateOfBirth.Format("2006-01-02") != "2025-06-15" {
 		t.Errorf("expected dob=2025-06-15, got %q", baby.DateOfBirth.Format("2006-01-02"))
 	}
-	if baby.DefaultCalPerFeed != 67 {
-		t.Errorf("expected default_cal_per_feed=67, got %f", baby.DefaultCalPerFeed)
+	if baby.DefaultCalPerFeed != model.DefaultCalPerFeed {
+		t.Errorf("expected default_cal_per_feed=%v, got %f", model.DefaultCalPerFeed, baby.DefaultCalPerFeed)
 	}
 
 	// Verify the creator is linked as a parent

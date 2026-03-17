@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/ablankz/LittleLiver/backend/internal/middleware"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
@@ -33,43 +32,17 @@ type joinResponse struct {
 // Requires the authenticated user to be a parent of the baby.
 func CreateInviteHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := middleware.UserFromContext(r.Context())
-		if user == nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		user, ok := requireUser(w, r)
+		if !ok {
 			return
 		}
 
-		babyID := extractBabyID(r)
-		if babyID == "" {
-			http.Error(w, "missing baby ID", http.StatusBadRequest)
+		baby, ok := requireBabyAccess(w, r, db, user.ID)
+		if !ok {
 			return
 		}
 
-		// Check baby exists
-		_, err := store.GetBabyByID(db, babyID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "baby not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("create invite: get baby: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-
-		// Check authorization
-		linked, err := store.IsParentOfBaby(db, user.ID, babyID)
-		if err != nil {
-			log.Printf("create invite: check parent: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		if !linked {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-
-		invite, err := store.CreateInvite(db, babyID, user.ID)
+		invite, err := store.CreateInvite(db, baby.ID, user.ID)
 		if err != nil {
 			log.Printf("create invite: %v", err)
 			http.Error(w, "failed to create invite", http.StatusInternalServerError)
@@ -80,7 +53,7 @@ func CreateInviteHandler(db *sql.DB) http.HandlerFunc {
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(inviteResponse{
 			Code:      invite.Code,
-			ExpiresAt: invite.ExpiresAt.Format("2006-01-02T15:04:05Z"),
+			ExpiresAt: invite.ExpiresAt.Format(dateTimeFormat),
 		}); err != nil {
 			log.Printf("create invite: encode response: %v", err)
 		}
@@ -91,9 +64,8 @@ func CreateInviteHandler(db *sql.DB) http.HandlerFunc {
 // Redeems an invite code, linking the authenticated user to the baby.
 func JoinBabyHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := middleware.UserFromContext(r.Context())
-		if user == nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		user, ok := requireUser(w, r)
+		if !ok {
 			return
 		}
 

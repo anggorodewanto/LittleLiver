@@ -48,7 +48,8 @@ func CreateInvite(db *sql.DB, babyID, createdBy string) (*model.Invite, error) {
 		return nil, fmt.Errorf("create invite: delete prior: %w", err)
 	}
 
-	expiresAt := time.Now().Add(InviteExpiry).UTC()
+	now := time.Now().UTC()
+	expiresAt := now.Add(InviteExpiry)
 
 	var code string
 	var lastErr error
@@ -81,7 +82,7 @@ func CreateInvite(db *sql.DB, babyID, createdBy string) (*model.Invite, error) {
 		BabyID:    babyID,
 		CreatedBy: createdBy,
 		ExpiresAt: expiresAt,
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: now,
 	}, nil
 }
 

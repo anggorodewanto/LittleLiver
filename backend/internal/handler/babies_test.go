@@ -10,6 +10,7 @@ import (
 
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
 	"github.com/ablankz/LittleLiver/backend/internal/middleware"
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
@@ -62,8 +63,8 @@ func TestCreateBabyHandler_Success(t *testing.T) {
 	if resp.DateOfBirth != "2025-06-15" {
 		t.Errorf("expected dob=2025-06-15, got %q", resp.DateOfBirth)
 	}
-	if resp.DefaultCalPerFeed != 67 {
-		t.Errorf("expected default_cal_per_feed=67, got %f", resp.DefaultCalPerFeed)
+	if resp.DefaultCalPerFeed != model.DefaultCalPerFeed {
+		t.Errorf("expected default_cal_per_feed=%v, got %f", model.DefaultCalPerFeed, resp.DefaultCalPerFeed)
 	}
 
 	// Verify the baby is linked to the creator
@@ -100,10 +101,10 @@ func TestCreateBabyHandler_WithOptionalFields(t *testing.T) {
 	}
 
 	var resp struct {
-		DiagnosisDate     *string  `json:"diagnosis_date"`
-		KasaiDate         *string  `json:"kasai_date"`
-		DefaultCalPerFeed float64  `json:"default_cal_per_feed"`
-		Notes             *string  `json:"notes"`
+		DiagnosisDate     *string `json:"diagnosis_date"`
+		KasaiDate         *string `json:"kasai_date"`
+		DefaultCalPerFeed float64 `json:"default_cal_per_feed"`
+		Notes             *string `json:"notes"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
@@ -718,8 +719,8 @@ func TestBabyCRUD_EndToEnd(t *testing.T) {
 	}
 
 	var created struct {
-		ID   string  `json:"id"`
-		Name string  `json:"name"`
+		ID    string  `json:"id"`
+		Name  string  `json:"name"`
 		Notes *string `json:"notes"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
@@ -736,7 +737,9 @@ func TestBabyCRUD_EndToEnd(t *testing.T) {
 		t.Fatalf("list: expected 200, got %d", rec2.Code)
 	}
 
-	var listed []struct{ ID string `json:"id"` }
+	var listed []struct {
+		ID string `json:"id"`
+	}
 	if err := json.Unmarshal(rec2.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}

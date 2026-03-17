@@ -430,6 +430,8 @@ func TestRunMigrations_ClosedDB(t *testing.T) {
 
 // --- helpers ---
 
+// setupTestDB mirrors testutil.SetupTestDB but is defined locally to avoid
+// a circular import (testutil imports store). Keep these in sync.
 func setupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := OpenDB(":memory:")

@@ -7,55 +7,20 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 )
 
-// CreateBaby inserts a new baby and links the creator as a parent.
-// Optional fields (diagnosisDate, kasaiDate, defaultCalPerFeed, notes) may be nil.
-func CreateBaby(db *sql.DB, creatorID, name, sex, dob string, diagnosisDate, kasaiDate *string, defaultCalPerFeed *float64, notes *string) (*model.Baby, error) {
-	id := model.NewULID()
-
-	tx, err := db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("create baby: begin tx: %w", err)
-	}
-
-	_, err = tx.Exec(
-		`INSERT INTO babies (id, name, sex, date_of_birth, diagnosis_date, kasai_date, default_cal_per_feed, notes)
-		 VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, 67), ?)`,
-		id, name, sex, dob, diagnosisDate, kasaiDate, defaultCalPerFeed, notes,
-	)
-	if err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("create baby: insert: %w", err)
-	}
-
-	_, err = tx.Exec(
-		"INSERT INTO baby_parents (baby_id, user_id) VALUES (?, ?)",
-		id, creatorID,
-	)
-	if err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("create baby: link parent: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("create baby: commit: %w", err)
-	}
-
-	return GetBabyByID(db, id)
+// scanner is an interface satisfied by both *sql.Row and *sql.Rows.
+type scanner interface {
+	Scan(dest ...any) error
 }
 
-// GetBabyByID retrieves a baby by its ID.
-// Returns sql.ErrNoRows if the baby does not exist.
-func GetBabyByID(db *sql.DB, id string) (*model.Baby, error) {
+// scanBaby scans a single baby row from the given scanner and parses its
+// time-related fields.
+func scanBaby(s scanner) (*model.Baby, error) {
 	var b model.Baby
 	var dobStr string
 	var diagStr, kasaiStr, notesStr sql.NullString
 	var createdStr string
 
-	err := db.QueryRow(
-		`SELECT id, name, sex, date_of_birth, diagnosis_date, kasai_date,
-		        default_cal_per_feed, notes, created_at
-		 FROM babies WHERE id = ?`, id,
-	).Scan(&b.ID, &b.Name, &b.Sex, &dobStr, &diagStr, &kasaiStr,
+	err := s.Scan(&b.ID, &b.Name, &b.Sex, &dobStr, &diagStr, &kasaiStr,
 		&b.DefaultCalPerFeed, &notesStr, &createdStr)
 	if err != nil {
 		return nil, err
@@ -88,6 +53,53 @@ func GetBabyByID(db *sql.DB, id string) (*model.Baby, error) {
 	}
 
 	return &b, nil
+}
+
+// CreateBaby inserts a new baby and links the creator as a parent.
+// Optional fields (diagnosisDate, kasaiDate, defaultCalPerFeed, notes) may be nil.
+func CreateBaby(db *sql.DB, creatorID, name, sex, dob string, diagnosisDate, kasaiDate *string, defaultCalPerFeed *float64, notes *string) (*model.Baby, error) {
+	id := model.NewULID()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("create baby: begin tx: %w", err)
+	}
+
+	_, err = tx.Exec(
+		`INSERT INTO babies (id, name, sex, date_of_birth, diagnosis_date, kasai_date, default_cal_per_feed, notes)
+		 VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, ?), ?)`,
+		id, name, sex, dob, diagnosisDate, kasaiDate, defaultCalPerFeed, model.DefaultCalPerFeed, notes,
+	)
+	if err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("create baby: insert: %w", err)
+	}
+
+	_, err = tx.Exec(
+		"INSERT INTO baby_parents (baby_id, user_id) VALUES (?, ?)",
+		id, creatorID,
+	)
+	if err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("create baby: link parent: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("create baby: commit: %w", err)
+	}
+
+	return GetBabyByID(db, id)
+}
+
+// GetBabyByID retrieves a baby by its ID.
+// Returns sql.ErrNoRows if the baby does not exist.
+func GetBabyByID(db *sql.DB, id string) (*model.Baby, error) {
+	row := db.QueryRow(
+		`SELECT id, name, sex, date_of_birth, diagnosis_date, kasai_date,
+		        default_cal_per_feed, notes, created_at
+		 FROM babies WHERE id = ?`, id,
+	)
+	return scanBaby(row)
 }
 
 // IsParentOfBaby checks whether the given user is linked to the given baby.
@@ -146,41 +158,11 @@ func GetBabiesByUserID(db *sql.DB, userID string) ([]model.Baby, error) {
 
 	var babies []model.Baby
 	for rows.Next() {
-		var b model.Baby
-		var dobStr string
-		var diagStr, kasaiStr, notesStr sql.NullString
-		var createdStr string
-		err := rows.Scan(&b.ID, &b.Name, &b.Sex, &dobStr, &diagStr, &kasaiStr,
-			&b.DefaultCalPerFeed, &notesStr, &createdStr)
+		b, err := scanBaby(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan baby: %w", err)
 		}
-		b.DateOfBirth, err = parseTime(dobStr)
-		if err != nil {
-			return nil, fmt.Errorf("parse date_of_birth: %w", err)
-		}
-		if diagStr.Valid {
-			t, err := parseTime(diagStr.String)
-			if err != nil {
-				return nil, fmt.Errorf("parse diagnosis_date: %w", err)
-			}
-			b.DiagnosisDate = &t
-		}
-		if kasaiStr.Valid {
-			t, err := parseTime(kasaiStr.String)
-			if err != nil {
-				return nil, fmt.Errorf("parse kasai_date: %w", err)
-			}
-			b.KasaiDate = &t
-		}
-		if notesStr.Valid {
-			b.Notes = &notesStr.String
-		}
-		b.CreatedAt, err = parseTime(createdStr)
-		if err != nil {
-			return nil, fmt.Errorf("parse created_at: %w", err)
-		}
-		babies = append(babies, b)
+		babies = append(babies, *b)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows iteration: %w", err)
