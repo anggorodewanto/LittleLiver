@@ -208,7 +208,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) seed various metric entries, (2) verify summary_cards counts/values, (3) stool_color_trend is always 7 days regardless of params, (4) upcoming_meds excludes deactivated, (5) default date behavior. Write the aggregation query layer.
   **Proof of progress:** Dashboard essentials endpoint returns correct summary_cards, stool_color_trend, and upcoming_meds.
 
-- [ ] **Phase 28: Dashboard chart data series**
+- [x] **Phase 28: Dashboard chart data series**
   **Depends on:** Phase 27, Phase 18, Phase 19
   **What to build:** Add `chart_data_series` to the dashboard response: `feeding_daily` (aggregated daily kcal/volume), `diaper_daily` (stool + urine counts), `temperature` (individual readings), `weight` (individual readings), `abdomen_girth` (individual readings), `stool_color` (color-coded scatter data), `lab_trends` (per-test time series). All respect from/to params.
   **TDD approach:** Write tests that (1) chart_data_series aggregates feeding data correctly, (2) diaper_daily combines stool + urine, (3) temperature/weight/abdomen return individual readings, (4) stool_color returns color-coded data, (5) lab_trends groups by test_name. Write the additional aggregation queries.

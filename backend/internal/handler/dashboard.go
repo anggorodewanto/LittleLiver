@@ -39,11 +39,23 @@ type upcomingMedResponse struct {
 	NextDoseAt    *string  `json:"next_dose_at,omitempty"`
 }
 
+// chartDataSeriesResponse holds all chart data series for the dashboard.
+type chartDataSeriesResponse struct {
+	FeedingDaily []store.FeedingDailyEntry     `json:"feeding_daily"`
+	DiaperDaily  []store.DiaperDailyEntry      `json:"diaper_daily"`
+	Temperature  []store.TemperatureSeriesEntry `json:"temperature"`
+	Weight       []store.WeightSeriesEntry      `json:"weight"`
+	AbdomenGirth []store.AbdomenGirthEntry      `json:"abdomen_girth"`
+	StoolColor   []store.StoolColorSeriesEntry  `json:"stool_color"`
+	LabTrends    map[string][]store.LabTrendEntry `json:"lab_trends"`
+}
+
 // dashboardResponseJSON is the full dashboard API response.
 type dashboardResponseJSON struct {
-	SummaryCards    summaryCardsResponse   `json:"summary_cards"`
-	StoolColorTrend []stoolColorTrendEntry `json:"stool_color_trend"`
-	UpcomingMeds    []upcomingMedResponse  `json:"upcoming_meds"`
+	SummaryCards    summaryCardsResponse    `json:"summary_cards"`
+	StoolColorTrend []stoolColorTrendEntry  `json:"stool_color_trend"`
+	UpcomingMeds    []upcomingMedResponse   `json:"upcoming_meds"`
+	ChartDataSeries chartDataSeriesResponse `json:"chart_data_series"`
 }
 
 // DashboardHandler handles GET /api/babies/{id}/dashboard.
@@ -91,6 +103,56 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Fetch chart data series
+		feedingDaily, err := store.GetFeedingDaily(db, baby.ID, from, to)
+		if err != nil {
+			log.Printf("feeding daily: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		diaperDaily, err := store.GetDiaperDaily(db, baby.ID, from, to)
+		if err != nil {
+			log.Printf("diaper daily: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		tempSeries, err := store.GetTemperatureSeries(db, baby.ID, from, to)
+		if err != nil {
+			log.Printf("temperature series: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		weightSeries, err := store.GetWeightSeries(db, baby.ID, from, to)
+		if err != nil {
+			log.Printf("weight series: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		abdomenSeries, err := store.GetAbdomenGirthSeries(db, baby.ID, from, to)
+		if err != nil {
+			log.Printf("abdomen girth series: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		stoolColorSeries, err := store.GetStoolColorSeries(db, baby.ID, from, to)
+		if err != nil {
+			log.Printf("stool color series: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		labTrends, err := store.GetLabTrends(db, baby.ID, from, to)
+		if err != nil {
+			log.Printf("lab trends: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
 		// Map store types to response types
 		summaryResp := summaryCardsResponse{
 			TotalFeeds:     summary.TotalFeeds,
@@ -129,6 +191,15 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			SummaryCards:    summaryResp,
 			StoolColorTrend: trendResp,
 			UpcomingMeds:    upcomingMeds,
+			ChartDataSeries: chartDataSeriesResponse{
+				FeedingDaily: feedingDaily,
+				DiaperDaily:  diaperDaily,
+				Temperature:  tempSeries,
+				Weight:       weightSeries,
+				AbdomenGirth: abdomenSeries,
+				StoolColor:   stoolColorSeries,
+				LabTrends:    labTrends,
+			},
 		}
 
 		writeJSON(w, http.StatusOK, result)
