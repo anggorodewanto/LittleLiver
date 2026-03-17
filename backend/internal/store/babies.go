@@ -142,6 +142,47 @@ func UpdateBaby(db *sql.DB, id, name, sex, dob string, diagnosisDate, kasaiDate 
 	return GetBabyByID(db, id)
 }
 
+// UnlinkParent removes the link between a user and a baby.
+// If the user was the last parent, the baby is deleted (CASCADE removes associated data).
+func UnlinkParent(db *sql.DB, babyID, userID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("unlink parent: begin tx: %w", err)
+	}
+
+	_, err = tx.Exec(
+		"DELETE FROM baby_parents WHERE baby_id = ? AND user_id = ?",
+		babyID, userID,
+	)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("unlink parent: delete link: %w", err)
+	}
+
+	var remaining int
+	err = tx.QueryRow(
+		"SELECT COUNT(*) FROM baby_parents WHERE baby_id = ?", babyID,
+	).Scan(&remaining)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("unlink parent: count remaining: %w", err)
+	}
+
+	if remaining == 0 {
+		_, err = tx.Exec("DELETE FROM babies WHERE id = ?", babyID)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("unlink parent: delete baby: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("unlink parent: commit: %w", err)
+	}
+
+	return nil
+}
+
 // GetBabiesByUserID returns all babies linked to the given user.
 func GetBabiesByUserID(db *sql.DB, userID string) ([]model.Baby, error) {
 	rows, err := db.Query(

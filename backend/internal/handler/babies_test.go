@@ -693,6 +693,151 @@ func TestUpdateBabyHandler_InvalidDateFormat(t *testing.T) {
 	}
 }
 
+// --- DELETE /api/babies/:id/parents/me ---
+
+func TestUnlinkSelfHandler_WithOtherParents_Returns204(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user1 := testutil.CreateTestUser(t, db)
+	user2 := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user1.ID)
+
+	// Link user2 as second parent
+	_, err := db.Exec("INSERT INTO baby_parents (baby_id, user_id) VALUES (?, ?)", baby.ID, user2.ID)
+	if err != nil {
+		t.Fatalf("link user2 failed: %v", err)
+	}
+
+	req := testutil.AuthenticatedRequest(t, db, user1.ID, testCookieName, testSecret, http.MethodDelete, "/api/babies/"+baby.ID+"/parents/me")
+	req.SetPathValue("id", baby.ID)
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UnlinkSelfHandler(db))))
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	// Baby should still exist
+	linked, err := store.IsParentOfBaby(db, user2.ID, baby.ID)
+	if err != nil {
+		t.Fatalf("IsParentOfBaby failed: %v", err)
+	}
+	if !linked {
+		t.Error("expected user2 to still be linked to baby")
+	}
+
+	// user1 should not be linked
+	linked, err = store.IsParentOfBaby(db, user1.ID, baby.ID)
+	if err != nil {
+		t.Fatalf("IsParentOfBaby failed: %v", err)
+	}
+	if linked {
+		t.Error("expected user1 to be unlinked from baby")
+	}
+}
+
+func TestUnlinkSelfHandler_LastParent_Returns204_DeletesBaby(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodDelete, "/api/babies/"+baby.ID+"/parents/me")
+	req.SetPathValue("id", baby.ID)
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UnlinkSelfHandler(db))))
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	// Baby should be deleted
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM babies WHERE id = ?", baby.ID).Scan(&count)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected baby to be deleted, got count=%d", count)
+	}
+}
+
+func TestUnlinkSelfHandler_NotLinked_Returns403(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user1 := testutil.CreateTestUser(t, db)
+	user2 := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user1.ID)
+
+	req := testutil.AuthenticatedRequest(t, db, user2.ID, testCookieName, testSecret, http.MethodDelete, "/api/babies/"+baby.ID+"/parents/me")
+	req.SetPathValue("id", baby.ID)
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UnlinkSelfHandler(db))))
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUnlinkSelfHandler_NotFound_Returns404(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodDelete, "/api/babies/nonexistent/parents/me")
+	req.SetPathValue("id", "nonexistent")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UnlinkSelfHandler(db))))
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUnlinkSelfHandler_Unauthorized(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	h := http.HandlerFunc(handler.UnlinkSelfHandler(db))
+	req := httptest.NewRequest(http.MethodDelete, "/api/babies/someid/parents/me", nil)
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
 // --- End-to-end create + get flow ---
 
 func TestBabyCRUD_EndToEnd(t *testing.T) {

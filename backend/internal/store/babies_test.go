@@ -405,6 +405,150 @@ func TestGetBabiesByUserID_OnlyLinkedBabies(t *testing.T) {
 	}
 }
 
+// --- UnlinkParent tests ---
+
+func TestUnlinkParent_WithOtherParentsRemaining(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user1, err := UpsertUser(db, "google1", "a@b.com", "Parent1")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	user2, err := UpsertUser(db, "google2", "b@b.com", "Parent2")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+
+	baby, err := CreateBaby(db, user1.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	// Link user2 as second parent
+	_, err = db.Exec("INSERT INTO baby_parents (baby_id, user_id) VALUES (?, ?)", baby.ID, user2.ID)
+	if err != nil {
+		t.Fatalf("link user2 failed: %v", err)
+	}
+
+	// Unlink user1 — baby should survive
+	err = UnlinkParent(db, baby.ID, user1.ID)
+	if err != nil {
+		t.Fatalf("UnlinkParent failed: %v", err)
+	}
+
+	// user1 should no longer be linked
+	linked, err := IsParentOfBaby(db, user1.ID, baby.ID)
+	if err != nil {
+		t.Fatalf("IsParentOfBaby failed: %v", err)
+	}
+	if linked {
+		t.Error("expected user1 to be unlinked from baby")
+	}
+
+	// user2 should still be linked
+	linked, err = IsParentOfBaby(db, user2.ID, baby.ID)
+	if err != nil {
+		t.Fatalf("IsParentOfBaby failed: %v", err)
+	}
+	if !linked {
+		t.Error("expected user2 to still be linked to baby")
+	}
+
+	// Baby should still exist
+	_, err = GetBabyByID(db, baby.ID)
+	if err != nil {
+		t.Errorf("expected baby to still exist, got error: %v", err)
+	}
+}
+
+func TestUnlinkParent_LastParent_DeletesBaby(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	// Unlink the only parent — baby should be deleted
+	err = UnlinkParent(db, baby.ID, user.ID)
+	if err != nil {
+		t.Fatalf("UnlinkParent failed: %v", err)
+	}
+
+	// Baby should no longer exist
+	_, err = GetBabyByID(db, baby.ID)
+	if err != sql.ErrNoRows {
+		t.Errorf("expected sql.ErrNoRows after last parent unlinked, got %v", err)
+	}
+
+	// baby_parents should be empty for this baby
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM baby_parents WHERE baby_id = ?", baby.ID).Scan(&count)
+	if err != nil {
+		t.Fatalf("count query failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 baby_parents after cascade delete, got %d", count)
+	}
+}
+
+func TestUnlinkParent_LastParent_DeletesInvites(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	// Create an invite for this baby
+	_, err = CreateInvite(db, baby.ID, user.ID)
+	if err != nil {
+		t.Fatalf("CreateInvite failed: %v", err)
+	}
+
+	// Unlink the only parent — baby + invites should be deleted via CASCADE
+	err = UnlinkParent(db, baby.ID, user.ID)
+	if err != nil {
+		t.Fatalf("UnlinkParent failed: %v", err)
+	}
+
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM invites WHERE baby_id = ?", baby.ID).Scan(&count)
+	if err != nil {
+		t.Fatalf("count query failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 invites after cascade delete, got %d", count)
+	}
+}
+
+func TestUnlinkParent_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	db.Close()
+
+	err := UnlinkParent(db, "b1", "u1")
+	if err == nil {
+		t.Fatal("expected error for closed DB, got nil")
+	}
+}
+
 func TestGetBabyByID_WithOptionalFields(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)

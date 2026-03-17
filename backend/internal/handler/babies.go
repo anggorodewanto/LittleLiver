@@ -221,6 +221,33 @@ func GetBabyHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// UnlinkSelfHandler handles DELETE /api/babies/:id/parents/me.
+// Unlinks the authenticated user from the baby. If the user was the last
+// parent, the baby and all associated data are deleted via CASCADE.
+// Returns 204 No Content on success.
+func UnlinkSelfHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+
+		_, ok = requireBabyAccess(w, r, db, user.ID)
+		if !ok {
+			return
+		}
+
+		babyID := extractBabyID(r)
+		if err := store.UnlinkParent(db, babyID, user.ID); err != nil {
+			log.Printf("unlink self: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // UpdateBabyHandler handles PUT /api/babies/:id.
 func UpdateBabyHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

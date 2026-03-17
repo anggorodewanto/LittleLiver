@@ -107,7 +107,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) generating invite returns 6-digit code with 24h expiry, (2) prior codes are deleted on new generation, (3) join with valid code links parent, (4) join with expired/used/invalid code returns generic error, (5) already-linked parent gets friendly response, (6) collision retry works. Write store + handlers to pass.
   **Proof of progress:** Full invite flow tested: generate, join, edge cases.
 
-- [ ] **Phase 13: Self-unlink from baby**
+- [x] **Phase 13: Self-unlink from baby**
   **Depends on:** Phase 12
   **What to build:** `DELETE /api/babies/:id/parents/me` — unlink self from baby; if last parent, delete baby + all data (CASCADE). Returns 204.
   **TDD approach:** Write tests that (1) unlinking with other parents remaining keeps baby, (2) last parent unlinking deletes baby and all associated data, (3) both cases return 204. Write handler to pass.
