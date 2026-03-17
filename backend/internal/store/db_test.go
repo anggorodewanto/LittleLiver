@@ -387,6 +387,30 @@ func TestOpenDB_InvalidPath(t *testing.T) {
 	}
 }
 
+func TestRunMigrations_UnreadableFile(t *testing.T) {
+	t.Parallel()
+	db, err := OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	defer db.Close()
+
+	migDir := t.TempDir()
+	filePath := filepath.Join(migDir, "001_test.sql")
+	writeFile(t, filePath, "CREATE TABLE t (id TEXT);")
+	// Remove read permission
+	if err := os.Chmod(filePath, 0000); err != nil {
+		t.Fatalf("chmod failed: %v", err)
+	}
+	// Restore permission after test for cleanup
+	defer os.Chmod(filePath, 0644)
+
+	err = RunMigrations(db, migDir)
+	if err == nil {
+		t.Fatal("expected error for unreadable migration file, got nil")
+	}
+}
+
 func TestRunMigrations_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db, err := OpenDB(":memory:")

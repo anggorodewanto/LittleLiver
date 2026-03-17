@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
+	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
 func TestNewMux_HealthRoute(t *testing.T) {
@@ -163,5 +164,49 @@ func TestNewMux_StaticDir_HealthTakesPriority(t *testing.T) {
 
 	if body["status"] != "ok" {
 		t.Fatalf("expected status=ok, got %q", body["status"])
+	}
+}
+
+func TestNewMux_AuthRoutes_RegisteredWhenConfigured(t *testing.T) {
+	db, err := store.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	defer db.Close()
+
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd failed: %v", err)
+	}
+	migDir := filepath.Join(dir, "..", "..", "migrations")
+	if err := store.RunMigrations(db, migDir); err != nil {
+		t.Fatalf("RunMigrations failed: %v", err)
+	}
+
+	t.Setenv("GOOGLE_CLIENT_ID", "test-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "test-secret")
+	t.Setenv("BASE_URL", "http://localhost:8080")
+
+	mux := handler.NewMux(handler.WithDB(db))
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// GET /auth/google/login should redirect (302) to Google
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	resp, err := client.Get(srv.URL + "/auth/google/login")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("expected 302, got %d", resp.StatusCode)
+	}
+
+	loc := resp.Header.Get("Location")
+	if loc == "" {
+		t.Fatal("expected Location header")
 	}
 }

@@ -57,7 +57,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Authentication & Sessions
 
-- [ ] **Phase 6: Google OAuth flow (login, callback, session creation)**
+- [x] **Phase 6: Google OAuth flow (login, callback, session creation)**
   **Depends on:** Phase 3, Phase 4
   **What to build:** `internal/auth/` package: Google OAuth redirect (`GET /auth/google/login`), callback handler (`GET /auth/google/callback`) that exchanges code for token, upserts user record, creates session in DB, sets HttpOnly/Secure/SameSite=Lax cookie. Session store (`internal/store/sessions.go`) with create/get/delete/extend operations. 30-day sliding window expiry.
   **TDD approach:** Write tests that (1) login endpoint returns a redirect to Google with correct params, (2) callback handler with a mocked Google token exchange creates a user and session, (3) session cookie is set correctly, (4) expired sessions are rejected with 401. Mock the Google HTTP client. Write handlers to pass.
