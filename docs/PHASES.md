@@ -95,7 +95,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Baby Profiles & Invite System
 
-- [ ] **Phase 11: Baby CRUD endpoints**
+- [x] **Phase 11: Baby CRUD endpoints**
   **Depends on:** Phase 8
   **What to build:** `POST /api/babies` (create baby, auto-link creator as parent), `GET /api/babies` (list user's babies), `GET /api/babies/:id` (get baby details with authorization check), `PUT /api/babies/:id` (update baby info — name, DOB, sex, diagnosis_date, kasai_date, default_cal_per_feed, notes). Baby store layer in `internal/store/babies.go`. Authorization: only linked parents can access.
   **TDD approach:** Write tests that (1) creating a baby returns it with a ULID and links the creator, (2) listing babies returns only the user's babies, (3) getting a baby the user is not linked to returns 403, (4) updating baby fields persists correctly, (5) notes field is stored and returned correctly. Write store + handlers to pass.

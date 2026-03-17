@@ -60,7 +60,6 @@ func NewMux(opts ...Option) *http.ServeMux {
 			// authMw, it reads the session token from context (no extra DB query).
 			// Apply csrfMw to POST/PUT/DELETE API routes as they are added.
 			csrfMw := middleware.CSRF(cfg.db, cookieName, sessionSecret)
-			_ = csrfMw // used by future state-changing API routes
 
 			// Chain: rateMw -> authMw -> handler (rate limit checked first)
 			// CSRF token endpoint — behind auth middleware so session token is in context
@@ -68,6 +67,12 @@ func NewMux(opts ...Option) *http.ServeMux {
 
 			// /api/me needs auth middleware (GET-only, no CSRF needed)
 			mux.Handle("GET /api/me", rateMw(authMw(http.HandlerFunc(MeHandler(cfg.db)))))
+
+			// Baby CRUD endpoints
+			mux.Handle("POST /api/babies", rateMw(authMw(csrfMw(http.HandlerFunc(CreateBabyHandler(cfg.db))))))
+			mux.Handle("GET /api/babies", rateMw(authMw(http.HandlerFunc(ListBabiesHandler(cfg.db)))))
+			mux.Handle("GET /api/babies/{id}", rateMw(authMw(http.HandlerFunc(GetBabyHandler(cfg.db)))))
+			mux.Handle("PUT /api/babies/{id}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateBabyHandler(cfg.db))))))
 		}
 	}
 
