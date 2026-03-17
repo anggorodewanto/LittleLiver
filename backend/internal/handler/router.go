@@ -86,8 +86,8 @@ func NewMux(opts ...Option) *http.ServeMux {
 				CreateFeedingHandler(cfg.db), ListFeedingsHandler(cfg.db),
 				GetFeedingHandler(cfg.db), UpdateFeedingHandler(cfg.db), DeleteFeedingHandler(cfg.db))
 			registerMetricCRUD(mux, "/api/babies/{id}/stools", rateMw, authMw, csrfMw,
-				CreateStoolHandler(cfg.db), ListStoolsHandler(cfg.db),
-				GetStoolHandler(cfg.db), UpdateStoolHandler(cfg.db), DeleteStoolHandler(cfg.db))
+				CreateStoolHandler(cfg.db, cfg.objStore), ListStoolsHandler(cfg.db, cfg.objStore),
+				GetStoolHandler(cfg.db, cfg.objStore), UpdateStoolHandler(cfg.db, cfg.objStore), DeleteStoolHandler(cfg.db))
 			registerMetricCRUD(mux, "/api/babies/{id}/urine", rateMw, authMw, csrfMw,
 				CreateUrineHandler(cfg.db), ListUrineHandler(cfg.db),
 				GetUrineHandler(cfg.db), UpdateUrineHandler(cfg.db), DeleteUrineHandler(cfg.db))
@@ -98,20 +98,20 @@ func NewMux(opts ...Option) *http.ServeMux {
 				CreateTemperatureHandler(cfg.db), ListTemperaturesHandler(cfg.db),
 				GetTemperatureHandler(cfg.db), UpdateTemperatureHandler(cfg.db), DeleteTemperatureHandler(cfg.db))
 			registerMetricCRUD(mux, "/api/babies/{id}/abdomen", rateMw, authMw, csrfMw,
-				CreateAbdomenHandler(cfg.db), ListAbdomenHandler(cfg.db),
-				GetAbdomenHandler(cfg.db), UpdateAbdomenHandler(cfg.db), DeleteAbdomenHandler(cfg.db))
+				CreateAbdomenHandler(cfg.db, cfg.objStore), ListAbdomenHandler(cfg.db, cfg.objStore),
+				GetAbdomenHandler(cfg.db, cfg.objStore), UpdateAbdomenHandler(cfg.db, cfg.objStore), DeleteAbdomenHandler(cfg.db))
 			registerMetricCRUD(mux, "/api/babies/{id}/skin", rateMw, authMw, csrfMw,
-				CreateSkinObservationHandler(cfg.db), ListSkinObservationsHandler(cfg.db),
-				GetSkinObservationHandler(cfg.db), UpdateSkinObservationHandler(cfg.db), DeleteSkinObservationHandler(cfg.db))
+				CreateSkinObservationHandler(cfg.db, cfg.objStore), ListSkinObservationsHandler(cfg.db, cfg.objStore),
+				GetSkinObservationHandler(cfg.db, cfg.objStore), UpdateSkinObservationHandler(cfg.db, cfg.objStore), DeleteSkinObservationHandler(cfg.db))
 			registerMetricCRUD(mux, "/api/babies/{id}/bruising", rateMw, authMw, csrfMw,
-				CreateBruisingHandler(cfg.db), ListBruisingHandler(cfg.db),
-				GetBruisingHandler(cfg.db), UpdateBruisingHandler(cfg.db), DeleteBruisingHandler(cfg.db))
+				CreateBruisingHandler(cfg.db, cfg.objStore), ListBruisingHandler(cfg.db, cfg.objStore),
+				GetBruisingHandler(cfg.db, cfg.objStore), UpdateBruisingHandler(cfg.db, cfg.objStore), DeleteBruisingHandler(cfg.db))
 			registerMetricCRUD(mux, "/api/babies/{id}/labs", rateMw, authMw, csrfMw,
 				CreateLabResultHandler(cfg.db), ListLabResultsHandler(cfg.db),
 				GetLabResultHandler(cfg.db), UpdateLabResultHandler(cfg.db), DeleteLabResultHandler(cfg.db))
 			registerMetricCRUD(mux, "/api/babies/{id}/notes", rateMw, authMw, csrfMw,
-				CreateGeneralNoteHandler(cfg.db), ListGeneralNotesHandler(cfg.db),
-				GetGeneralNoteHandler(cfg.db), UpdateGeneralNoteHandler(cfg.db), DeleteGeneralNoteHandler(cfg.db))
+				CreateGeneralNoteHandler(cfg.db, cfg.objStore), ListGeneralNotesHandler(cfg.db, cfg.objStore),
+				GetGeneralNoteHandler(cfg.db, cfg.objStore), UpdateGeneralNoteHandler(cfg.db, cfg.objStore), DeleteGeneralNoteHandler(cfg.db))
 
 			// Invite endpoints
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))

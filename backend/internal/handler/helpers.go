@@ -231,6 +231,39 @@ func parsePhotoKeysJSON(s *string) []string {
 	return keys
 }
 
+// unlinkAllPhotos parses and unlinks all photos from a photo_keys JSON string.
+func unlinkAllPhotos(db *sql.DB, photoKeys *string) {
+	keys := parsePhotoKeysJSON(photoKeys)
+	if len(keys) == 0 {
+		return
+	}
+	if err := store.UnlinkPhotos(db, keys); err != nil {
+		log.Printf("unlink photos on delete: %v", err)
+	}
+}
+
+// firstObjStore returns the first ObjectStore from a variadic list, or nil.
+func firstObjStore(stores []storage.ObjectStore) storage.ObjectStore {
+	if len(stores) > 0 {
+		return stores[0]
+	}
+	return nil
+}
+
+// linkPhotosForCreate validates and links photos for a create operation.
+// Returns the photo keys JSON string and true, or writes a 400 response and returns false.
+func linkPhotosForCreate(w http.ResponseWriter, db *sql.DB, babyID string, photoKeys []string) (*string, bool) {
+	if len(photoKeys) == 0 {
+		return nil, true
+	}
+	result, errMsg, ok := handlePhotoLinking(db, babyID, nil, photoKeys)
+	if !ok {
+		http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
+		return nil, false
+	}
+	return result, true
+}
+
 // dedup removes duplicate strings while preserving order.
 func dedup(ss []string) []string {
 	seen := make(map[string]bool, len(ss))

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
@@ -80,10 +79,7 @@ func toAbdomenResponseWithPhotos(a *model.AbdomenObservation, db *sql.DB, objSto
 
 // CreateAbdomenHandler handles POST /api/babies/{id}/abdomen.
 func CreateAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -112,14 +108,9 @@ func CreateAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Han
 			tenderness = *req.Tenderness
 		}
 
-		var photoKeysStr *string
-		if len(req.PhotoKeys) > 0 {
-			var errMsg string
-			photoKeysStr, errMsg, ok = handlePhotoLinking(db, baby.ID, nil, req.PhotoKeys)
-			if !ok {
-				http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
-				return
-			}
+		photoKeysStr, ok := linkPhotosForCreate(w, db, baby.ID, req.PhotoKeys)
+		if !ok {
+			return
 		}
 
 		abdomen, err := store.CreateAbdomenWithPhotos(db, baby.ID, user.ID, req.Timestamp, *req.Firmness, tenderness, req.GirthCm, photoKeysStr, req.Notes)
@@ -135,10 +126,7 @@ func CreateAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Han
 
 // ListAbdomenHandler handles GET /api/babies/{id}/abdomen.
 func ListAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -169,10 +157,7 @@ func ListAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Handl
 
 // GetAbdomenHandler handles GET /api/babies/{id}/abdomen/{entryId}.
 func GetAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -202,10 +187,7 @@ func GetAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Handle
 
 // UpdateAbdomenHandler handles PUT /api/babies/{id}/abdomen/{entryId}.
 func UpdateAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -285,12 +267,7 @@ func DeleteAbdomenHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Han
 			return
 		}
 
-		if existing.PhotoKeys != nil && *existing.PhotoKeys != "" {
-			oldKeys := strings.Split(*existing.PhotoKeys, ",")
-			if unlinkErr := store.UnlinkPhotos(db, oldKeys); unlinkErr != nil {
-				log.Printf("unlink photos on delete: %v", unlinkErr)
-			}
-		}
+		unlinkAllPhotos(db, existing.PhotoKeys)
 
 		err = store.DeleteAbdomen(db, baby.ID, entryID)
 		if err != nil {

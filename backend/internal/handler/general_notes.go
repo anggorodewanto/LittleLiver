@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
@@ -71,10 +70,7 @@ func toGeneralNoteResponseWithPhotos(n *model.GeneralNote, db *sql.DB, objStore 
 
 // CreateGeneralNoteHandler handles POST /api/babies/{id}/notes.
 func CreateGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -98,14 +94,9 @@ func CreateGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http
 			return
 		}
 
-		var photoKeysStr *string
-		if len(req.PhotoKeys) > 0 {
-			var errMsg string
-			photoKeysStr, errMsg, ok = handlePhotoLinking(db, baby.ID, nil, req.PhotoKeys)
-			if !ok {
-				http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
-				return
-			}
+		photoKeysStr, ok := linkPhotosForCreate(w, db, baby.ID, req.PhotoKeys)
+		if !ok {
+			return
 		}
 
 		note, err := store.CreateGeneralNote(db, baby.ID, user.ID, req.Timestamp, req.Content, photoKeysStr, req.Category)
@@ -121,10 +112,7 @@ func CreateGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http
 
 // ListGeneralNotesHandler handles GET /api/babies/{id}/notes.
 func ListGeneralNotesHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -155,10 +143,7 @@ func ListGeneralNotesHandler(db *sql.DB, objStores ...storage.ObjectStore) http.
 
 // GetGeneralNoteHandler handles GET /api/babies/{id}/notes/{entryId}.
 func GetGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -188,10 +173,7 @@ func GetGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Ha
 
 // UpdateGeneralNoteHandler handles PUT /api/babies/{id}/notes/{entryId}.
 func UpdateGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -266,12 +248,7 @@ func DeleteGeneralNoteHandler(db *sql.DB, objStores ...storage.ObjectStore) http
 			return
 		}
 
-		if existing.PhotoKeys != nil && *existing.PhotoKeys != "" {
-			oldKeys := strings.Split(*existing.PhotoKeys, ",")
-			if unlinkErr := store.UnlinkPhotos(db, oldKeys); unlinkErr != nil {
-				log.Printf("unlink photos on delete: %v", unlinkErr)
-			}
-		}
+		unlinkAllPhotos(db, existing.PhotoKeys)
 
 		err = store.DeleteGeneralNote(db, baby.ID, entryID)
 		if err != nil {

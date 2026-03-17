@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
@@ -86,10 +85,7 @@ func toBruisingResponseWithPhotos(b *model.BruisingObservation, db *sql.DB, objS
 
 // CreateBruisingHandler handles POST /api/babies/{id}/bruising.
 func CreateBruisingHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -113,14 +109,9 @@ func CreateBruisingHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Ha
 			return
 		}
 
-		var photoKeysStr *string
-		if len(req.PhotoKeys) > 0 {
-			var errMsg string
-			photoKeysStr, errMsg, ok = handlePhotoLinking(db, baby.ID, nil, req.PhotoKeys)
-			if !ok {
-				http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
-				return
-			}
+		photoKeysStr, ok := linkPhotosForCreate(w, db, baby.ID, req.PhotoKeys)
+		if !ok {
+			return
 		}
 
 		bruising, err := store.CreateBruisingWithPhotos(db, baby.ID, user.ID, req.Timestamp, *req.Location, *req.SizeEstimate, req.SizeCm, req.Color, photoKeysStr, req.Notes)
@@ -136,10 +127,7 @@ func CreateBruisingHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Ha
 
 // ListBruisingHandler handles GET /api/babies/{id}/bruising.
 func ListBruisingHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -170,10 +158,7 @@ func ListBruisingHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Hand
 
 // GetBruisingHandler handles GET /api/babies/{id}/bruising/{entryId}.
 func GetBruisingHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -203,10 +188,7 @@ func GetBruisingHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Handl
 
 // UpdateBruisingHandler handles PUT /api/babies/{id}/bruising/{entryId}.
 func UpdateBruisingHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -281,12 +263,7 @@ func DeleteBruisingHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Ha
 			return
 		}
 
-		if existing.PhotoKeys != nil && *existing.PhotoKeys != "" {
-			oldKeys := strings.Split(*existing.PhotoKeys, ",")
-			if unlinkErr := store.UnlinkPhotos(db, oldKeys); unlinkErr != nil {
-				log.Printf("unlink photos on delete: %v", unlinkErr)
-			}
-		}
+		unlinkAllPhotos(db, existing.PhotoKeys)
 
 		err = store.DeleteBruising(db, baby.ID, entryID)
 		if err != nil {

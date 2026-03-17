@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
@@ -89,10 +88,7 @@ func toStoolResponseWithPhotos(s *model.Stool, db *sql.DB, objStore storage.Obje
 
 // CreateStoolHandler handles POST /api/babies/{id}/stools.
 func CreateStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -117,14 +113,9 @@ func CreateStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Handl
 		}
 
 		// Handle photo linking
-		var photoKeysStr *string
-		if len(req.PhotoKeys) > 0 {
-			var errMsg string
-			photoKeysStr, errMsg, ok = handlePhotoLinking(db, baby.ID, nil, req.PhotoKeys)
-			if !ok {
-				http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
-				return
-			}
+		photoKeysStr, ok := linkPhotosForCreate(w, db, baby.ID, req.PhotoKeys)
+		if !ok {
+			return
 		}
 
 		stool, err := store.CreateStoolWithPhotos(db, baby.ID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, photoKeysStr, req.Notes)
@@ -140,10 +131,7 @@ func CreateStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Handl
 
 // ListStoolsHandler handles GET /api/babies/{id}/stools.
 func ListStoolsHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -174,10 +162,7 @@ func ListStoolsHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Handle
 
 // GetStoolHandler handles GET /api/babies/{id}/stools/{entryId}.
 func GetStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -207,10 +192,7 @@ func GetStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerF
 
 // UpdateStoolHandler handles PUT /api/babies/{id}/stools/{entryId}.
 func UpdateStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -288,12 +270,7 @@ func DeleteStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Handl
 			return
 		}
 
-		if existing.PhotoKeys != nil && *existing.PhotoKeys != "" {
-			oldKeys := strings.Split(*existing.PhotoKeys, ",")
-			if unlinkErr := store.UnlinkPhotos(db, oldKeys); unlinkErr != nil {
-				log.Printf("unlink photos on delete: %v", unlinkErr)
-			}
-		}
+		unlinkAllPhotos(db, existing.PhotoKeys)
 
 		err = store.DeleteStool(db, baby.ID, entryID)
 		if err != nil {

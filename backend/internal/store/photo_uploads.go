@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 )
@@ -87,34 +88,66 @@ func ValidateAndLinkPhotos(db *sql.DB, babyID string, keys []string) error {
 	return tx.Commit()
 }
 
-// UnlinkPhotos sets linked_at = NULL for the given R2 keys.
+// UnlinkPhotos sets linked_at = NULL for the given R2 keys using a single query.
 func UnlinkPhotos(db *sql.DB, keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
-	for _, key := range keys {
-		_, err := db.Exec(
-			`UPDATE photo_uploads SET linked_at = NULL WHERE r2_key = ?`, key,
-		)
-		if err != nil {
-			return fmt.Errorf("unlink photo %q: %w", key, err)
-		}
+	placeholders := strings.Repeat("?,", len(keys))
+	placeholders = placeholders[:len(placeholders)-1] // trim trailing comma
+	args := make([]any, len(keys))
+	for i, k := range keys {
+		args[i] = k
+	}
+	_, err := db.Exec(
+		fmt.Sprintf(`UPDATE photo_uploads SET linked_at = NULL WHERE r2_key IN (%s)`, placeholders),
+		args...,
+	)
+	if err != nil {
+		return fmt.Errorf("unlink photos: %w", err)
 	}
 	return nil
 }
 
-// GetPhotoUploadsByR2Keys retrieves photo uploads for the given R2 keys.
+// GetPhotoUploadsByR2Keys retrieves photo uploads for the given R2 keys using a single query.
 func GetPhotoUploadsByR2Keys(db *sql.DB, keys []string) ([]model.PhotoUpload, error) {
 	if len(keys) == 0 {
 		return nil, nil
 	}
-	var photos []model.PhotoUpload
-	for _, key := range keys {
-		p, err := GetPhotoUploadByR2Key(db, key)
+	placeholders := strings.Repeat("?,", len(keys))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(keys))
+	for i, k := range keys {
+		args[i] = k
+	}
+	rows, err := db.Query(
+		fmt.Sprintf(`SELECT id, baby_id, r2_key, thumbnail_key, uploaded_at, linked_at FROM photo_uploads WHERE r2_key IN (%s)`, placeholders),
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get photos by r2 keys: %w", err)
+	}
+	defer rows.Close()
+
+	// Index results by r2_key for ordered output
+	byKey := make(map[string]model.PhotoUpload, len(keys))
+	for rows.Next() {
+		p, err := scanPhotoUpload(rows)
 		if err != nil {
-			return nil, fmt.Errorf("get photo %q: %w", key, err)
+			return nil, err
 		}
-		photos = append(photos, *p)
+		byKey[p.R2Key] = *p
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate photo rows: %w", err)
+	}
+
+	// Return in original key order
+	photos := make([]model.PhotoUpload, 0, len(keys))
+	for _, k := range keys {
+		if p, ok := byKey[k]; ok {
+			photos = append(photos, p)
+		}
 	}
 	return photos, nil
 }

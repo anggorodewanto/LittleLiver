@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
@@ -77,10 +76,7 @@ func toSkinObservationResponseWithPhotos(s *model.SkinObservation, db *sql.DB, o
 
 // CreateSkinObservationHandler handles POST /api/babies/{id}/skin.
 func CreateSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -109,14 +105,9 @@ func CreateSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) 
 			scleralIcterus = *req.ScleralIcterus
 		}
 
-		var photoKeysStr *string
-		if len(req.PhotoKeys) > 0 {
-			var errMsg string
-			photoKeysStr, errMsg, ok = handlePhotoLinking(db, baby.ID, nil, req.PhotoKeys)
-			if !ok {
-				http.Error(w, "invalid photo_keys: "+errMsg, http.StatusBadRequest)
-				return
-			}
+		photoKeysStr, ok := linkPhotosForCreate(w, db, baby.ID, req.PhotoKeys)
+		if !ok {
+			return
 		}
 
 		skin, err := store.CreateSkinObservationWithPhotos(db, baby.ID, user.ID, req.Timestamp, req.JaundiceLevel, scleralIcterus, req.Rashes, req.Bruising, photoKeysStr, req.Notes)
@@ -132,10 +123,7 @@ func CreateSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) 
 
 // ListSkinObservationsHandler handles GET /api/babies/{id}/skin.
 func ListSkinObservationsHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -166,10 +154,7 @@ func ListSkinObservationsHandler(db *sql.DB, objStores ...storage.ObjectStore) h
 
 // GetSkinObservationHandler handles GET /api/babies/{id}/skin/{entryId}.
 func GetSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -199,10 +184,7 @@ func GetSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) htt
 
 // UpdateSkinObservationHandler handles PUT /api/babies/{id}/skin/{entryId}.
 func UpdateSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) http.HandlerFunc {
-	var objStore storage.ObjectStore
-	if len(objStores) > 0 {
-		objStore = objStores[0]
-	}
+	objStore := firstObjStore(objStores)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
@@ -282,12 +264,7 @@ func DeleteSkinObservationHandler(db *sql.DB, objStores ...storage.ObjectStore) 
 			return
 		}
 
-		if existing.PhotoKeys != nil && *existing.PhotoKeys != "" {
-			oldKeys := strings.Split(*existing.PhotoKeys, ",")
-			if unlinkErr := store.UnlinkPhotos(db, oldKeys); unlinkErr != nil {
-				log.Printf("unlink photos on delete: %v", unlinkErr)
-			}
-		}
+		unlinkAllPhotos(db, existing.PhotoKeys)
 
 		err = store.DeleteSkinObservation(db, baby.ID, entryID)
 		if err != nil {
