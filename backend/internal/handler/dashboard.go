@@ -41,13 +41,22 @@ type upcomingMedResponse struct {
 
 // chartDataSeriesResponse holds all chart data series for the dashboard.
 type chartDataSeriesResponse struct {
-	FeedingDaily []store.FeedingDailyEntry     `json:"feeding_daily"`
-	DiaperDaily  []store.DiaperDailyEntry      `json:"diaper_daily"`
-	Temperature  []store.TemperatureSeriesEntry `json:"temperature"`
-	Weight       []store.WeightSeriesEntry      `json:"weight"`
-	AbdomenGirth []store.AbdomenGirthEntry      `json:"abdomen_girth"`
-	StoolColor   []store.StoolColorSeriesEntry  `json:"stool_color"`
+	FeedingDaily []store.FeedingDailyEntry        `json:"feeding_daily"`
+	DiaperDaily  []store.DiaperDailyEntry         `json:"diaper_daily"`
+	Temperature  []store.TemperatureSeriesEntry   `json:"temperature"`
+	Weight       []store.WeightSeriesEntry        `json:"weight"`
+	AbdomenGirth []store.AbdomenGirthEntry        `json:"abdomen_girth"`
+	StoolColor   []store.StoolColorSeriesEntry    `json:"stool_color"`
 	LabTrends    map[string][]store.LabTrendEntry `json:"lab_trends"`
+}
+
+// alertResponse is the JSON response for a single alert.
+type alertResponse struct {
+	EntryID   string  `json:"entry_id"`
+	AlertType string  `json:"alert_type"`
+	Method    *string `json:"method,omitempty"`
+	Value     any     `json:"value"`
+	Timestamp string  `json:"timestamp"`
 }
 
 // dashboardResponseJSON is the full dashboard API response.
@@ -56,6 +65,7 @@ type dashboardResponseJSON struct {
 	StoolColorTrend []stoolColorTrendEntry  `json:"stool_color_trend"`
 	UpcomingMeds    []upcomingMedResponse   `json:"upcoming_meds"`
 	ChartDataSeries chartDataSeriesResponse `json:"chart_data_series"`
+	ActiveAlerts    []alertResponse         `json:"active_alerts"`
 }
 
 // DashboardHandler handles GET /api/babies/{id}/dashboard.
@@ -153,6 +163,25 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Fetch active alerts (global, ignores from/to)
+		storeAlerts, err := store.GetActiveAlerts(db, baby.ID)
+		if err != nil {
+			log.Printf("active alerts: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		activeAlerts := make([]alertResponse, 0, len(storeAlerts))
+		for _, a := range storeAlerts {
+			activeAlerts = append(activeAlerts, alertResponse{
+				EntryID:   a.EntryID,
+				AlertType: a.AlertType,
+				Method:    a.Method,
+				Value:     a.Value,
+				Timestamp: a.Timestamp,
+			})
+		}
+
 		// Map store types to response types
 		summaryResp := summaryCardsResponse{
 			TotalFeeds:     summary.TotalFeeds,
@@ -200,6 +229,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 				StoolColor:   stoolColorSeries,
 				LabTrends:    labTrends,
 			},
+			ActiveAlerts: activeAlerts,
 		}
 
 		writeJSON(w, http.StatusOK, result)

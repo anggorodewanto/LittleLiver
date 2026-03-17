@@ -214,7 +214,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) chart_data_series aggregates feeding data correctly, (2) diaper_daily combines stool + urine, (3) temperature/weight/abdomen return individual readings, (4) stool_color returns color-coded data, (5) lab_trends groups by test_name. Write the additional aggregation queries.
   **Proof of progress:** Full chart_data_series tested with various seeded data scenarios.
 
-- [ ] **Phase 29: Alert system (acholic stool, fever, jaundice, missed medication)**
+- [x] **Phase 29: Alert system (acholic stool, fever, jaundice, missed medication)**
   **Depends on:** Phase 27
   **What to build:** `active_alerts` array in dashboard response. Alert types: `acholic_stool` (color_rating <= 3, cleared by >= 4), `fever` (method-specific thresholds, single most recent temp), `jaundice_worsening` (severe level or scleral icterus), `missed_medication` (scheduled doses >30 min past due with no med_log within +/-30 min). Alerts are global (ignore from/to). Each alert: `{ entry_id, alert_type, method?, value, timestamp }`.
   **Note:** Extract the missed-medication +/-30 min suppression check as a shared utility in `internal/store/` so Phase 34 (scheduler) can reuse it.

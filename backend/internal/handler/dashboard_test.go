@@ -14,6 +14,15 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
 
+// alertResp is the expected shape of a single alert in the dashboard response.
+type alertResp struct {
+	EntryID   string  `json:"entry_id"`
+	AlertType string  `json:"alert_type"`
+	Method    *string `json:"method,omitempty"`
+	Value     any     `json:"value"`
+	Timestamp string  `json:"timestamp"`
+}
+
 // dashboardResp is the expected shape of the dashboard API response.
 type dashboardResp struct {
 	SummaryCards struct {
@@ -40,6 +49,7 @@ type dashboardResp struct {
 		NextDoseAt    *string  `json:"next_dose_at"`
 	} `json:"upcoming_meds"`
 	ChartDataSeries *chartDataSeriesResp `json:"chart_data_series"`
+	ActiveAlerts    []alertResp          `json:"active_alerts"`
 }
 
 type chartDataSeriesResp struct {
@@ -555,5 +565,154 @@ func TestDashboardHandler_Forbidden(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDashboardHandler_ActiveAlerts_EmptyByDefault(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	rec, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	// active_alerts must be an empty array, not null
+	raw := rec.Body.Bytes()
+	var rawJSON map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &rawJSON); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+	if string(rawJSON["active_alerts"]) == "null" {
+		t.Error("expected active_alerts to be empty array, not null")
+	}
+	if len(resp.ActiveAlerts) != 0 {
+		t.Errorf("expected 0 active alerts, got %d", len(resp.ActiveAlerts))
+	}
+}
+
+func TestDashboardHandler_ActiveAlerts_AcholicStool(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	ts := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	clay := "clay"
+	store.CreateStool(db, baby.ID, user.ID, ts, 2, &clay, nil, nil, nil)
+
+	rec, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	found := false
+	for _, a := range resp.ActiveAlerts {
+		if a.AlertType == "acholic_stool" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected acholic_stool alert in dashboard response")
+	}
+}
+
+func TestDashboardHandler_ActiveAlerts_Fever(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	ts := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	store.CreateTemperature(db, baby.ID, user.ID, ts, 38.5, "rectal", nil)
+
+	rec, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	found := false
+	for _, a := range resp.ActiveAlerts {
+		if a.AlertType == "fever" {
+			found = true
+			if a.Method == nil || *a.Method != "rectal" {
+				t.Errorf("expected method=rectal, got %v", a.Method)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected fever alert in dashboard response")
+	}
+}
+
+func TestDashboardHandler_ActiveAlerts_Jaundice(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	ts := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	severe := "severe_limbs_and_trunk"
+	store.CreateSkinObservation(db, baby.ID, user.ID, ts, &severe, false, nil, nil, nil)
+
+	rec, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	found := false
+	for _, a := range resp.ActiveAlerts {
+		if a.AlertType == "jaundice_worsening" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected jaundice_worsening alert in dashboard response")
+	}
+}
+
+func TestDashboardHandler_ActiveAlerts_IgnoresDateRange(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	// Create an acholic stool entry from a week ago
+	weekAgo := time.Now().UTC().AddDate(0, 0, -7).Format("2006-01-02T15:04:05Z")
+	clay := "clay"
+	store.CreateStool(db, baby.ID, user.ID, weekAgo, 1, &clay, nil, nil, nil)
+
+	// Query only today — alerts should still appear (they're global)
+	today := time.Now().UTC().Format("2006-01-02")
+	rec, resp := doDashboardRequest(t, db, user.ID, baby.ID, "from="+today+"&to="+today)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	found := false
+	for _, a := range resp.ActiveAlerts {
+		if a.AlertType == "acholic_stool" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected acholic_stool alert even when querying only today (alerts are global)")
 	}
 }
