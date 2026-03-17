@@ -57,8 +57,8 @@ func NewMux(opts ...Option) *http.ServeMux {
 			csrfMw := middleware.CSRF(cfg.db, cookieName, sessionSecret)
 			_ = csrfMw // used by future state-changing API routes
 
-			// CSRF token endpoint (needs session but not auth middleware context)
-			mux.HandleFunc("GET /api/csrf-token", CSRFTokenHandler(cfg.db, cookieName, sessionSecret))
+			// CSRF token endpoint — behind auth middleware so session token is in context
+			mux.Handle("GET /api/csrf-token", authMw(http.HandlerFunc(CSRFTokenHandler(sessionSecret))))
 
 			// /api/me needs auth middleware (GET-only, no CSRF needed)
 			mux.Handle("GET /api/me", authMw(http.HandlerFunc(MeHandler(cfg.db))))

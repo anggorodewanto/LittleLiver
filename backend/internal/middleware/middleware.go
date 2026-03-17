@@ -66,7 +66,7 @@ func Auth(db *sql.DB, cookieName string) func(http.Handler) http.Handler {
 
 			// Update timezone from header if present and valid
 			tz := r.Header.Get("X-Timezone")
-			if tz != "" {
+			if tz != "" && (user.Timezone == nil || *user.Timezone != tz) {
 				if _, err := time.LoadLocation(tz); err == nil {
 					if err := store.UpdateUserTimezone(db, user.ID, tz); err != nil {
 						log.Printf("auth: failed to update timezone for user %s: %v", user.ID, err)

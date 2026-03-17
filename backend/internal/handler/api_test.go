@@ -31,7 +31,9 @@ func TestCSRFTokenHandler_ReturnsToken(t *testing.T) {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
 
-	h := handler.CSRFTokenHandler(db, testCookieName, testSecret)
+	// CSRFTokenHandler now requires Auth middleware to set session token in context
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.CSRFTokenHandler(testSecret)))
 	req := httptest.NewRequest(http.MethodGet, "/api/csrf-token", nil)
 	req.AddCookie(&http.Cookie{Name: testCookieName, Value: sess.ID})
 	rec := httptest.NewRecorder()
@@ -58,7 +60,9 @@ func TestCSRFTokenHandler_NoCookie_Returns401(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
-	h := handler.CSRFTokenHandler(db, testCookieName, testSecret)
+	// Without auth middleware, no session token in context → 401
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.CSRFTokenHandler(testSecret)))
 	req := httptest.NewRequest(http.MethodGet, "/api/csrf-token", nil)
 	rec := httptest.NewRecorder()
 
@@ -74,7 +78,8 @@ func TestCSRFTokenHandler_InvalidSession_Returns401(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
-	h := handler.CSRFTokenHandler(db, testCookieName, testSecret)
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.CSRFTokenHandler(testSecret)))
 	req := httptest.NewRequest(http.MethodGet, "/api/csrf-token", nil)
 	req.AddCookie(&http.Cookie{Name: testCookieName, Value: "invalid-session"})
 	rec := httptest.NewRecorder()

@@ -11,23 +11,16 @@ import (
 )
 
 // CSRFTokenHandler handles GET /api/csrf-token.
-// It reads the session cookie, looks up the session token, and derives
-// a CSRF token using HMAC-SHA256.
-func CSRFTokenHandler(db *sql.DB, cookieName, secret string) http.HandlerFunc {
+// Requires the Auth middleware to set the session token in context.
+func CSRFTokenHandler(secret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(cookieName)
-		if err != nil {
+		sessionToken := middleware.SessionTokenFromContext(r.Context())
+		if sessionToken == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		sess, err := store.GetSessionByID(db, cookie.Value)
-		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		csrfToken := middleware.CSRFToken(sess.Token, secret)
+		csrfToken := middleware.CSRFToken(sessionToken, secret)
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]string{"csrf_token": csrfToken}); err != nil {
