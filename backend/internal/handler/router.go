@@ -131,6 +131,9 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))
 			mux.Handle("POST /api/babies/join", rateMw(authMw(csrfMw(http.HandlerFunc(JoinBabyHandler(cfg.db))))))
 
+			// Dashboard endpoint
+			mux.Handle("GET /api/babies/{id}/dashboard", rateMw(authMw(http.HandlerFunc(DashboardHandler(cfg.db)))))
+
 			// Photo upload endpoint
 			if cfg.objStore != nil {
 				mux.Handle("POST /api/babies/{id}/upload", rateMw(authMw(csrfMw(http.HandlerFunc(UploadPhotoHandler(cfg.db, cfg.objStore))))))

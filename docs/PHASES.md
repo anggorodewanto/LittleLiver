@@ -202,7 +202,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Dashboard & Alerts
 
-- [ ] **Phase 27: Dashboard essentials**
+- [x] **Phase 27: Dashboard essentials**
   **Depends on:** Phase 15, Phase 17, Phase 18, Phase 25, Phase 26
   **What to build:** `GET /api/babies/:id/dashboard?from=&to=` returning: `summary_cards` (total feeds, calories, wet diapers, stools with color indicator, last temp, last weight), `stool_color_trend` (always last 7 days regardless of params), `upcoming_meds` (active only, with countdown). Default to today when from/to omitted. All aggregation server-side.
   **TDD approach:** Write tests that (1) seed various metric entries, (2) verify summary_cards counts/values, (3) stool_color_trend is always 7 days regardless of params, (4) upcoming_meds excludes deactivated, (5) default date behavior. Write the aggregation query layer.
