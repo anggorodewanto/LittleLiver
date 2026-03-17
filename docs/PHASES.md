@@ -43,7 +43,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) apply migrations to an in-memory SQLite DB, (2) verify all tables exist with correct columns, (3) verify the sentinel `deleted_user` row exists, (4) verify the UNIQUE constraint on `push_subscriptions.endpoint`. Write the migration runner and SQL to pass.
   **Proof of progress:** `go test ./internal/store/...` passes; all core tables are created with correct constraints.
 
-- [ ] **Phase 4: ULID generation and domain model types**
+- [x] **Phase 4: ULID generation and domain model types**
   **Depends on:** Phase 1
   **What to build:** ULID generation utility in `internal/model/ulid.go`. Domain types for `User`, `Baby`, `BabyParent`, `Session`, `Invite` in `internal/model/`. Validation functions for enums (sex, feed_type, etc.).
   **TDD approach:** Write tests that (1) ULID generation produces valid, sortable IDs, (2) enum validators accept valid values and reject invalid ones. Write minimal code to pass.
