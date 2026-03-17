@@ -240,6 +240,22 @@ type Medication struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// MedLog represents a single medication administration log entry.
+type MedLog struct {
+	ID            string     `json:"id"`
+	MedicationID  string     `json:"medication_id"`
+	BabyID        string     `json:"baby_id"`
+	LoggedBy      string     `json:"logged_by"`
+	UpdatedBy     *string    `json:"updated_by,omitempty"`
+	ScheduledTime *time.Time `json:"scheduled_time,omitempty"`
+	GivenAt       *time.Time `json:"given_at,omitempty"`
+	Skipped       bool       `json:"skipped"`
+	SkipReason    *string    `json:"skip_reason,omitempty"`
+	Notes         *string    `json:"notes,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
 // PhotoUpload represents a photo upload staging row.
 type PhotoUpload struct {
 	ID           string     `json:"id"`

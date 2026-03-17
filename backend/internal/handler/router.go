@@ -120,6 +120,13 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("PUT /api/babies/{id}/medications/{medId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateMedicationHandler(cfg.db))))))
 			mux.Handle("DELETE /api/babies/{id}/medications/{medId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteMedicationHandler(cfg.db))))))
 
+			// Med-log CRUD endpoints
+			mux.Handle("POST /api/babies/{id}/med-logs", rateMw(authMw(csrfMw(http.HandlerFunc(CreateMedLogHandler(cfg.db))))))
+			mux.Handle("GET /api/babies/{id}/med-logs", rateMw(authMw(http.HandlerFunc(ListMedLogsHandler(cfg.db)))))
+			mux.Handle("GET /api/babies/{id}/med-logs/{entryId}", rateMw(authMw(http.HandlerFunc(GetMedLogHandler(cfg.db)))))
+			mux.Handle("PUT /api/babies/{id}/med-logs/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateMedLogHandler(cfg.db))))))
+			mux.Handle("DELETE /api/babies/{id}/med-logs/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteMedLogHandler(cfg.db))))))
+
 			// Invite endpoints
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))
 			mux.Handle("POST /api/babies/join", rateMw(authMw(csrfMw(http.HandlerFunc(JoinBabyHandler(cfg.db))))))
