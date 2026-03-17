@@ -268,6 +268,7 @@ DELETE /api/babies/:id/parents/me   → Unlink self from baby (last parent trigg
 ```
 POST   /api/babies/:id/feedings              → Log feeding
 GET    /api/babies/:id/feedings?from=&to=&cursor=  → List feedings in range (from/to are YYYY-MM-DD calendar dates)
+GET    /api/babies/:id/feedings/:entryId     → Returns a single entry by ID. Useful for deep-linking and direct lookup.
 PUT    /api/babies/:id/feedings/:entryId     → Edit entry
 DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 ```
@@ -320,7 +321,12 @@ POST   /api/push/subscribe                    → Register push subscription (pe
 DELETE /api/push/subscribe                    → Unregister
 ```
 
-### 5.6 Reports
+### 5.6 WHO Growth Data
+```
+GET    /api/who/percentiles?sex=<male|female>&from_days=<int>&to_days=<int>  → Returns the 3rd, 15th, 50th, 85th, and 97th weight-for-age percentile curves as arrays of { age_days, weight_kg } points. Used by the frontend to overlay WHO growth bands on the weight chart.
+```
+
+### 5.7 Reports
 ```
 GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON for charts). When `from`/`to` are omitted, defaults to today. Trends view uses the same endpoint with different date ranges (e.g., `?from=2026-03-09&to=2026-03-16` for 7-day view). All aggregation is server-side. The response always returns the same structure regardless of date range — the frontend picks what to display based on context (today view vs trends view).
 
@@ -367,14 +373,14 @@ GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PD
 - The Go backend runs a **scheduler** (e.g., a goroutine with a ticker or a lightweight cron library).
 - Every minute, the scheduler queries only **active** medications (`active=true`). It computes "today" **relative to each medication's own timezone** (the `timezone` column on the medication record, set at creation time from the creator's `X-Timezone` header). It looks **forward** (next minute) for initial notifications and **backward** (up to 30 minutes) for follow-ups. This means at 23:50 UTC, a medication in UTC+2 checks against the next calendar day's schedule in that timezone. Scheduled times are stored as local time strings and interpreted per the medication's timezone. All parents are notified based on this single timezone, preventing dose drift and double-dosing when parents are in different timezones.
 - Sends a push notification to all subscribed devices for that baby's parents.
-- Notification includes: medication name, dose, and a "Log as given" action button (deep-links to the logging screen).
+- Notification includes: medication name, dose, and baby name.
 
 ### 6.3 Notification Content
 ```
 Title: "💊 UDCA — Time for dose"
 Body:  "50mg for [Baby Name]. Tap to log."
-Action: Opens app to medication logging screen with pre-filled medication.
 ```
+Clicking the notification opens the app to `/log/med?medication_id=<id>` with the medication pre-filled for logging. No action buttons — click-to-open only.
 
 ### 6.4 Suppression & Follow-ups
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
@@ -682,7 +688,8 @@ CREATE TABLE med_logs (
     skipped         BOOLEAN DEFAULT FALSE,  -- mutually exclusive with given_at: skipped=true → given_at is null; skipped=false → given_at is non-null
     skip_reason     TEXT,              -- optional even when skipped=true
     notes           TEXT,
-    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Photo upload staging (for orphan cleanup)
@@ -711,7 +718,7 @@ CREATE TABLE sessions (
 CREATE TABLE push_subscriptions (
     id          TEXT PRIMARY KEY,
     user_id     TEXT REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-    endpoint    TEXT NOT NULL,
+    endpoint    TEXT NOT NULL UNIQUE,
     p256dh      TEXT NOT NULL,
     auth        TEXT NOT NULL,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -749,7 +756,7 @@ RUN CGO_ENABLED=1 go build -o /server ./cmd/server
 
 # Stage 3: Runtime
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates imagemagick && rm -rf /var/lib/apt/lists/*
 COPY --from=backend /server /server
 COPY --from=frontend /app/frontend/build /static
 EXPOSE 8080
