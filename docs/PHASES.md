@@ -188,7 +188,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Medications & Med-Logs
 
-- [ ] **Phase 25: Medication CRUD (create, list, detail, update/deactivate)**
+- [x] **Phase 25: Medication CRUD (create, list, detail, update/deactivate)**
   **Depends on:** Phase 15
   **What to build:** Migration for `medications` table. `POST /api/babies/:id/medications` — create with name, dose, frequency, schedule times array, timezone from `X-Timezone` header, `logged_by` set to current user. `GET /api/babies/:id/medications` — list all (active and inactive). `GET /api/babies/:id/medications/:id` — single medication detail. `PUT /api/babies/:id/medications/:id` — update fields including `active=false` for deactivation, timezone update, `updated_by` set to current user. No DELETE endpoint.
   **TDD approach:** Write tests that (1) creation stores schedule as JSON array, sets timezone, and records `logged_by`, (2) listing returns both active and inactive, (3) detail endpoint returns single medication, (4) deactivation sets `active=false`, (5) DELETE method returns 405, (6) frequency enum validation, (7) timezone can be updated via PUT, (8) `updated_by` is set on update. Write store + handlers.

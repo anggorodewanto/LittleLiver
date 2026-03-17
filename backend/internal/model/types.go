@@ -224,6 +224,22 @@ type Invite struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+// Medication represents a medication definition/schedule for a baby.
+type Medication struct {
+	ID        string    `json:"id"`
+	BabyID    string    `json:"baby_id"`
+	LoggedBy  string    `json:"logged_by"`
+	UpdatedBy *string   `json:"updated_by,omitempty"`
+	Name      string    `json:"name"`
+	Dose      string    `json:"dose"`
+	Frequency string    `json:"frequency"`
+	Schedule  *string   `json:"schedule,omitempty"`
+	Timezone  *string   `json:"timezone,omitempty"`
+	Active    bool      `json:"active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // PhotoUpload represents a photo upload staging row.
 type PhotoUpload struct {
 	ID           string     `json:"id"`

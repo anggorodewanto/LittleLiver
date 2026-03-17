@@ -113,6 +113,13 @@ func NewMux(opts ...Option) *http.ServeMux {
 				CreateGeneralNoteHandler(cfg.db, cfg.objStore), ListGeneralNotesHandler(cfg.db, cfg.objStore),
 				GetGeneralNoteHandler(cfg.db, cfg.objStore), UpdateGeneralNoteHandler(cfg.db, cfg.objStore), DeleteGeneralNoteHandler(cfg.db))
 
+			// Medication CRUD endpoints (no DELETE — only deactivation via PUT)
+			mux.Handle("POST /api/babies/{id}/medications", rateMw(authMw(csrfMw(http.HandlerFunc(CreateMedicationHandler(cfg.db))))))
+			mux.Handle("GET /api/babies/{id}/medications", rateMw(authMw(http.HandlerFunc(ListMedicationsHandler(cfg.db)))))
+			mux.Handle("GET /api/babies/{id}/medications/{medId}", rateMw(authMw(http.HandlerFunc(GetMedicationHandler(cfg.db)))))
+			mux.Handle("PUT /api/babies/{id}/medications/{medId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateMedicationHandler(cfg.db))))))
+			mux.Handle("DELETE /api/babies/{id}/medications/{medId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteMedicationHandler(cfg.db))))))
+
 			// Invite endpoints
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))
 			mux.Handle("POST /api/babies/join", rateMw(authMw(csrfMw(http.HandlerFunc(JoinBabyHandler(cfg.db))))))
