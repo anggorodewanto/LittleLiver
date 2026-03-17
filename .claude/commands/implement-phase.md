@@ -94,7 +94,7 @@ Spawn a **reviewer** subagent (subagent_type: "code-reviewer") with this prompt:
 
 ## Step 3: Check approval
 
-If the reviewer returned `PHASE_APPROVED`, proceed to **Step 5**.
+If the reviewer returned `PHASE_APPROVED`, proceed to **Step 5** (skip Step 4).
 
 ## Step 4: Fix and re-review
 
@@ -111,13 +111,10 @@ Spawn an **implementor** subagent with this prompt:
 
 Then go back to **Step 2** (Review). Continue the loop until the reviewer returns `PHASE_APPROVED`. If 3 review rounds pass without approval, surface the remaining issues to the user via AskUserQuestion and ask how to proceed.
 
-## Step 5: Simplify
-
-Run the `/simplify` skill to review and clean up the code written in this phase. This is the REFACTOR step of Red-Green-Refactor.
-
-## Step 6: Final test run
+## Step 5: Final test run
 
 Spawn a **test runner** subagent (subagent_type: "general-purpose") with this prompt:
+
 
 > Run the FULL test suite for the LittleLiver project. This is the final verification before committing.
 >
@@ -148,9 +145,9 @@ Spawn a **test runner** subagent (subagent_type: "general-purpose") with this pr
 
 If the test runner reports failures:
 1. Spawn a fix agent to address the failures (write failing test if it's a bug, then fix).
-2. Re-run **Step 6**. If 2 fix attempts fail, surface to the user.
+2. Re-run **Step 5**. If 2 fix attempts fail, surface to the user.
 
-## Step 7: Commit and push
+## Step 6: Commit and push
 
 Spawn a **commit** subagent (subagent_type: "general-purpose") with this prompt:
 
@@ -187,7 +184,7 @@ Spawn a **commit** subagent (subagent_type: "general-purpose") with this prompt:
 >
 > Output the commit hash and message.
 
-## Step 8: Report to user
+## Step 7: Report to user
 
 Tell the user:
 - Which phase was completed (number and title)
@@ -195,7 +192,7 @@ Tell the user:
 - Test results summary (pass count, coverage)
 - Any decisions or notes from the implementation
 
-## Step 9: Continue to next phase (auto-continue mode)
+## Step 8: Continue to next phase (auto-continue mode)
 
 If `$ARGUMENTS` is `all`, automatically continue to the next unchecked phase:
 
@@ -203,14 +200,18 @@ If `$ARGUMENTS` is `all`, automatically continue to the next unchecked phase:
 
 2. **If 2 or fewer phases completed this session:** Go back to **Step 0** with no arguments (picks next unchecked phase). Before starting, briefly tell the user: `Starting Phase N: <title>...`
 
-3. **If 3 phases completed this session:** Context is getting heavy. Tell the user:
-   > Completed 3 phases this session. Context is getting large — recommend clearing context to keep subagents effective.
+3. **If 3 phases completed this session:** Run the REFACTOR step before stopping:
+   - Run the `/simplify` skill to review and clean up the code written across the last 3 phases. This is the batched REFACTOR step of Red-Green-Refactor.
+   - After simplify completes, run the full test suite one final time to ensure nothing broke.
+   - If tests pass, commit any simplify changes (use `refactor: simplify code from phases N-M` as the commit message).
+   - Then tell the user:
+   > Completed 3 phases this session. Ran `/simplify` across all 3 phases and committed cleanup. Context is getting large — recommend clearing context to keep subagents effective.
    >
    > Run `/implement-phase all` again to continue from where we left off (it auto-detects the next unchecked phase).
 
    Then **stop**. Do NOT continue. The user will re-invoke the command in a fresh context.
 
-4. **If no more unchecked phases remain:** Tell the user all phases are complete. Stop.
+4. **If no more unchecked phases remain:** Run `/simplify` first (same as step 3), then tell the user all phases are complete. Stop.
 
 **Important:** The phase counter is per-conversation only. Each fresh invocation of `/implement-phase all` starts the counter at 0. The state of which phases are done lives in `docs/PHASES.md` (checked boxes), so re-invocation always picks up where it left off.
 

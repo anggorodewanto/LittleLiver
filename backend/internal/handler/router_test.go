@@ -210,3 +210,149 @@ func TestNewMux_AuthRoutes_RegisteredWhenConfigured(t *testing.T) {
 		t.Fatal("expected Location header")
 	}
 }
+
+func TestNewMux_APIRoutes_CSRFTokenAndMe(t *testing.T) {
+	db, err := store.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	defer db.Close()
+
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd failed: %v", err)
+	}
+	migDir := filepath.Join(dir, "..", "..", "migrations")
+	if err := store.RunMigrations(db, migDir); err != nil {
+		t.Fatalf("RunMigrations failed: %v", err)
+	}
+
+	t.Setenv("GOOGLE_CLIENT_ID", "test-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "test-secret")
+	t.Setenv("SESSION_SECRET", "test-session-secret")
+	t.Setenv("BASE_URL", "http://localhost:8080")
+
+	// Create a user and session
+	_, err = db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+	sess, err := store.CreateSession(db, "u1")
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	mux := handler.NewMux(handler.WithDB(db))
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	// GET /api/csrf-token with valid session should return token
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/csrf-token", nil)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: sess.ID})
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("csrf-token request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 for csrf-token, got %d. Body: %s", resp.StatusCode, body)
+	}
+
+	var csrfBody map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&csrfBody); err != nil {
+		t.Fatalf("decode csrf response failed: %v", err)
+	}
+	if csrfBody["csrf_token"] == "" {
+		t.Fatal("expected non-empty csrf_token")
+	}
+
+	// GET /api/me with valid session should return user info
+	req, _ = http.NewRequest(http.MethodGet, srv.URL+"/api/me", nil)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: sess.ID})
+	resp2, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("me request failed: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp2.Body)
+		t.Fatalf("expected 200 for /api/me, got %d. Body: %s", resp2.StatusCode, body)
+	}
+
+	// GET /api/me without session should return 401
+	req, _ = http.NewRequest(http.MethodGet, srv.URL+"/api/me", nil)
+	resp3, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("me request failed: %v", err)
+	}
+	defer resp3.Body.Close()
+
+	if resp3.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for /api/me without session, got %d", resp3.StatusCode)
+	}
+}
+
+func TestNewMux_Logout_ClearsSession_Integration(t *testing.T) {
+	db, err := store.OpenDB(":memory:")
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	defer db.Close()
+
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd failed: %v", err)
+	}
+	migDir := filepath.Join(dir, "..", "..", "migrations")
+	if err := store.RunMigrations(db, migDir); err != nil {
+		t.Fatalf("RunMigrations failed: %v", err)
+	}
+
+	t.Setenv("GOOGLE_CLIENT_ID", "test-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "test-secret")
+	t.Setenv("SESSION_SECRET", "test-session-secret")
+
+	_, err = db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+	sess, err := store.CreateSession(db, "u1")
+	if err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+
+	mux := handler.NewMux(handler.WithDB(db))
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+
+	// POST /auth/logout with valid session
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: sess.ID})
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("logout request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 204 for logout, got %d. Body: %s", resp.StatusCode, body)
+	}
+
+	// Verify session is deleted
+	_, err = store.GetSessionByID(db, sess.ID)
+	if err == nil {
+		t.Fatal("expected session to be deleted after logout")
+	}
+}

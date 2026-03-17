@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"testing"
 )
 
@@ -62,5 +63,306 @@ func TestUpsertUser_Update(t *testing.T) {
 	}
 	if second.Name != "New Name" {
 		t.Errorf("expected updated name=New Name, got %q", second.Name)
+	}
+}
+
+func TestGetUserByID_Found(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	// Insert a user
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+
+	user, err := GetUserByID(db, "u1")
+	if err != nil {
+		t.Fatalf("GetUserByID failed: %v", err)
+	}
+	if user.ID != "u1" {
+		t.Errorf("expected ID=u1, got %q", user.ID)
+	}
+	if user.Email != "a@b.com" {
+		t.Errorf("expected email=a@b.com, got %q", user.Email)
+	}
+	if user.Name != "Test" {
+		t.Errorf("expected name=Test, got %q", user.Name)
+	}
+}
+
+func TestGetUserByID_NotFound(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := GetUserByID(db, "nonexistent")
+	if err != sql.ErrNoRows {
+		t.Fatalf("expected sql.ErrNoRows, got %v", err)
+	}
+}
+
+func TestGetUserByID_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	db.Close()
+
+	_, err := GetUserByID(db, "u1")
+	if err == nil {
+		t.Fatal("expected error for closed DB, got nil")
+	}
+}
+
+func TestGetUserByID_WithTimezone(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name, timezone) VALUES ('u1', 'g1', 'a@b.com', 'Test', 'America/New_York')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+
+	user, err := GetUserByID(db, "u1")
+	if err != nil {
+		t.Fatalf("GetUserByID failed: %v", err)
+	}
+	if user.Timezone == nil || *user.Timezone != "America/New_York" {
+		t.Errorf("expected timezone=America/New_York, got %v", user.Timezone)
+	}
+}
+
+func TestUpdateUserTimezone(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+
+	err = UpdateUserTimezone(db, "u1", "Europe/London")
+	if err != nil {
+		t.Fatalf("UpdateUserTimezone failed: %v", err)
+	}
+
+	user, err := GetUserByID(db, "u1")
+	if err != nil {
+		t.Fatalf("GetUserByID failed: %v", err)
+	}
+	if user.Timezone == nil || *user.Timezone != "Europe/London" {
+		t.Errorf("expected timezone=Europe/London, got %v", user.Timezone)
+	}
+}
+
+func TestUpdateUserTimezone_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	db.Close()
+
+	err := UpdateUserTimezone(db, "u1", "Europe/London")
+	if err == nil {
+		t.Fatal("expected error for closed DB, got nil")
+	}
+}
+
+func TestGetBabiesByUserID_NoBabies(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+
+	babies, err := GetBabiesByUserID(db, "u1")
+	if err != nil {
+		t.Fatalf("GetBabiesByUserID failed: %v", err)
+	}
+	if len(babies) != 0 {
+		t.Errorf("expected 0 babies, got %d", len(babies))
+	}
+}
+
+func TestGetBabiesByUserID_WithBabies(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO babies (id, name, sex, date_of_birth) VALUES ('b1', 'Baby1', 'male', '2025-01-01')")
+	if err != nil {
+		t.Fatalf("insert baby failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO babies (id, name, sex, date_of_birth) VALUES ('b2', 'Baby2', 'female', '2025-06-01')")
+	if err != nil {
+		t.Fatalf("insert baby2 failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO baby_parents (baby_id, user_id) VALUES ('b1', 'u1')")
+	if err != nil {
+		t.Fatalf("insert baby_parents failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO baby_parents (baby_id, user_id) VALUES ('b2', 'u1')")
+	if err != nil {
+		t.Fatalf("insert baby_parents2 failed: %v", err)
+	}
+
+	babies, err := GetBabiesByUserID(db, "u1")
+	if err != nil {
+		t.Fatalf("GetBabiesByUserID failed: %v", err)
+	}
+	if len(babies) != 2 {
+		t.Fatalf("expected 2 babies, got %d", len(babies))
+	}
+}
+
+func TestGetBabiesByUserID_ClosedDB(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	db.Close()
+
+	_, err := GetBabiesByUserID(db, "u1")
+	if err == nil {
+		t.Fatal("expected error for closed DB, got nil")
+	}
+}
+
+func TestGetBabiesByUserID_WithOptionalFields(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO babies (id, name, sex, date_of_birth, diagnosis_date, kasai_date, notes) VALUES ('b1', 'Baby1', 'male', '2025-01-01', '2025-01-15', '2025-02-01', 'some notes')")
+	if err != nil {
+		t.Fatalf("insert baby failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO baby_parents (baby_id, user_id) VALUES ('b1', 'u1')")
+	if err != nil {
+		t.Fatalf("insert baby_parents failed: %v", err)
+	}
+
+	babies, err := GetBabiesByUserID(db, "u1")
+	if err != nil {
+		t.Fatalf("GetBabiesByUserID failed: %v", err)
+	}
+	if len(babies) != 1 {
+		t.Fatalf("expected 1 baby, got %d", len(babies))
+	}
+	b := babies[0]
+	if b.DiagnosisDate == nil {
+		t.Error("expected non-nil diagnosis_date")
+	}
+	if b.KasaiDate == nil {
+		t.Error("expected non-nil kasai_date")
+	}
+	if b.Notes == nil || *b.Notes != "some notes" {
+		t.Errorf("expected notes='some notes', got %v", b.Notes)
+	}
+}
+
+func TestGetBabiesByUserID_UnparseableDOB(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+	// Insert baby with unparseable date_of_birth
+	_, err = db.Exec("INSERT INTO babies (id, name, sex, date_of_birth) VALUES ('b1', 'Baby1', 'male', 'not-a-date')")
+	if err != nil {
+		t.Fatalf("insert baby failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO baby_parents (baby_id, user_id) VALUES ('b1', 'u1')")
+	if err != nil {
+		t.Fatalf("insert baby_parents failed: %v", err)
+	}
+
+	_, err = GetBabiesByUserID(db, "u1")
+	if err == nil {
+		t.Fatal("expected error for unparseable date_of_birth, got nil")
+	}
+}
+
+func TestGetBabiesByUserID_UnparseableDiagnosisDate(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO babies (id, name, sex, date_of_birth, diagnosis_date) VALUES ('b1', 'Baby1', 'male', '2025-01-01', 'not-a-date')")
+	if err != nil {
+		t.Fatalf("insert baby failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO baby_parents (baby_id, user_id) VALUES ('b1', 'u1')")
+	if err != nil {
+		t.Fatalf("insert baby_parents failed: %v", err)
+	}
+
+	_, err = GetBabiesByUserID(db, "u1")
+	if err == nil {
+		t.Fatal("expected error for unparseable diagnosis_date, got nil")
+	}
+}
+
+func TestGetBabiesByUserID_UnparseableKasaiDate(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO babies (id, name, sex, date_of_birth, kasai_date) VALUES ('b1', 'Baby1', 'male', '2025-01-01', 'not-a-date')")
+	if err != nil {
+		t.Fatalf("insert baby failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO baby_parents (baby_id, user_id) VALUES ('b1', 'u1')")
+	if err != nil {
+		t.Fatalf("insert baby_parents failed: %v", err)
+	}
+
+	_, err = GetBabiesByUserID(db, "u1")
+	if err == nil {
+		t.Fatal("expected error for unparseable kasai_date, got nil")
+	}
+}
+
+func TestGetBabiesByUserID_UnparseableCreatedAt(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
+	if err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO babies (id, name, sex, date_of_birth, created_at) VALUES ('b1', 'Baby1', 'male', '2025-01-01', 'not-a-date')")
+	if err != nil {
+		t.Fatalf("insert baby failed: %v", err)
+	}
+	_, err = db.Exec("INSERT INTO baby_parents (baby_id, user_id) VALUES ('b1', 'u1')")
+	if err != nil {
+		t.Fatalf("insert baby_parents failed: %v", err)
+	}
+
+	_, err = GetBabiesByUserID(db, "u1")
+	if err == nil {
+		t.Fatal("expected error for unparseable created_at, got nil")
 	}
 }

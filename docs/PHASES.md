@@ -63,7 +63,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) login endpoint returns a redirect to Google with correct params, (2) callback handler with a mocked Google token exchange creates a user and session, (3) session cookie is set correctly, (4) expired sessions are rejected with 401. Mock the Google HTTP client. Write handlers to pass.
   **Proof of progress:** Auth flow tests pass end-to-end with mocked Google; session creation and cookie setting verified.
 
-- [ ] **Phase 7: Auth middleware, CSRF, and `/api/me`**
+- [x] **Phase 7: Auth middleware, CSRF, and `/api/me`**
   **Depends on:** Phase 6
   **What to build:** Auth middleware that validates session cookie, extends sliding window, extracts user into context, and updates user timezone from `X-Timezone` header. CSRF token endpoint (`GET /api/csrf-token`) using HMAC-SHA256 derivation from session token. CSRF validation middleware for state-changing requests. `GET /api/me` returning current user info + linked babies. `POST /auth/logout` clearing session.
   **TDD approach:** Write tests that (1) requests without session cookie get 401, (2) valid session extends expiry, (3) CSRF token is deterministic per session, (4) state-changing requests without valid CSRF get 403, (5) `/api/me` returns correct user data, (6) logout clears session. Write middleware and handlers to pass.
