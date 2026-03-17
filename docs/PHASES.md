@@ -152,7 +152,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests for (1) skin creation with jaundice_level enum, rashes and bruising text fields, (2) bruising with size_estimate validation and color field, (3) lab result creation with arbitrary test_name, (4) CRUD including detail endpoints for all. Write handlers.
   **Proof of progress:** All three metric types tested; lab results working with EAV pattern.
 
-- [ ] **Phase 20: General notes endpoint and `logged_by`/`updated_by` handling**
+- [x] **Phase 20: General notes endpoint and `logged_by`/`updated_by` handling**
   **Depends on:** Phase 15
   **What to build:** Migration for `general_notes` table (with `(baby_id, timestamp)` index). Notes endpoint: content required, category enum. Cross-cutting: verify `logged_by` is immutable on update, `updated_by` is set to editing user on PUT, any linked parent can edit/delete any entry.
   **TDD approach:** Write tests for (1) note creation with required content, (2) category enum validation, (3) `logged_by` unchanged after edit by different parent, (4) `updated_by` set correctly, (5) cross-parent edit authorization. Write handlers.

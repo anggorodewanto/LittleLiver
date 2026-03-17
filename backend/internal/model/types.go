@@ -199,6 +199,20 @@ type LabResult struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// GeneralNote represents a general note entry for a baby.
+type GeneralNote struct {
+	ID        string    `json:"id"`
+	BabyID    string    `json:"baby_id"`
+	LoggedBy  string    `json:"logged_by"`
+	UpdatedBy *string   `json:"updated_by,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+	Content   string    `json:"content"`
+	PhotoKeys *string   `json:"photo_keys,omitempty"`
+	Category  *string   `json:"category,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Invite represents an invite code for linking a parent to a baby.
 type Invite struct {
 	Code      string     `json:"code"`
