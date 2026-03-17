@@ -101,7 +101,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) creating a baby returns it with a ULID and links the creator, (2) listing babies returns only the user's babies, (3) getting a baby the user is not linked to returns 403, (4) updating baby fields persists correctly, (5) notes field is stored and returned correctly. Write store + handlers to pass.
   **Proof of progress:** All baby CRUD tests pass; baby creation flow works end-to-end in tests.
 
-- [ ] **Phase 12: Invite code generation and join flow**
+- [x] **Phase 12: Invite code generation and join flow**
   **Depends on:** Phase 11
   **What to build:** `POST /api/babies/:id/invite` — generates 6-digit code, hard-deletes prior codes for that baby, handles collision retry (up to 5 times). `POST /api/babies/join` — redeems code, links parent to baby. Edge cases: expired code, used code, already-linked parent (friendly message), last retry failure. Invite store in `internal/store/invites.go`.
   **TDD approach:** Write tests that (1) generating invite returns 6-digit code with 24h expiry, (2) prior codes are deleted on new generation, (3) join with valid code links parent, (4) join with expired/used/invalid code returns generic error, (5) already-linked parent gets friendly response, (6) collision retry works. Write store + handlers to pass.
