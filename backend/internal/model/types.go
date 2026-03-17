@@ -75,6 +75,36 @@ type MetricPage[T any] struct {
 	NextCursor *string `json:"next_cursor"`
 }
 
+// Stool represents a single stool entry for a baby.
+type Stool struct {
+	ID             string    `json:"id"`
+	BabyID         string    `json:"baby_id"`
+	LoggedBy       string    `json:"logged_by"`
+	UpdatedBy      *string   `json:"updated_by,omitempty"`
+	Timestamp      time.Time `json:"timestamp"`
+	ColorRating    int       `json:"color_rating"`
+	ColorLabel     *string   `json:"color_label,omitempty"`
+	Consistency    *string   `json:"consistency,omitempty"`
+	VolumeEstimate *string   `json:"volume_estimate,omitempty"`
+	PhotoKeys      *string   `json:"photo_keys,omitempty"`
+	Notes          *string   `json:"notes,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// Urine represents a single urine entry for a baby.
+type Urine struct {
+	ID        string    `json:"id"`
+	BabyID    string    `json:"baby_id"`
+	LoggedBy  string    `json:"logged_by"`
+	UpdatedBy *string   `json:"updated_by,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+	Color     *string   `json:"color,omitempty"`
+	Notes     *string   `json:"notes,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Invite represents an invite code for linking a parent to a baby.
 type Invite struct {
 	Code      string     `json:"code"`

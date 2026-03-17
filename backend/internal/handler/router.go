@@ -87,6 +87,20 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("PUT /api/babies/{id}/feedings/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateFeedingHandler(cfg.db))))))
 			mux.Handle("DELETE /api/babies/{id}/feedings/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteFeedingHandler(cfg.db))))))
 
+			// Stool CRUD endpoints
+			mux.Handle("POST /api/babies/{id}/stools", rateMw(authMw(csrfMw(http.HandlerFunc(CreateStoolHandler(cfg.db))))))
+			mux.Handle("GET /api/babies/{id}/stools", rateMw(authMw(http.HandlerFunc(ListStoolsHandler(cfg.db)))))
+			mux.Handle("GET /api/babies/{id}/stools/{entryId}", rateMw(authMw(http.HandlerFunc(GetStoolHandler(cfg.db)))))
+			mux.Handle("PUT /api/babies/{id}/stools/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateStoolHandler(cfg.db))))))
+			mux.Handle("DELETE /api/babies/{id}/stools/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteStoolHandler(cfg.db))))))
+
+			// Urine CRUD endpoints
+			mux.Handle("POST /api/babies/{id}/urine", rateMw(authMw(csrfMw(http.HandlerFunc(CreateUrineHandler(cfg.db))))))
+			mux.Handle("GET /api/babies/{id}/urine", rateMw(authMw(http.HandlerFunc(ListUrineHandler(cfg.db)))))
+			mux.Handle("GET /api/babies/{id}/urine/{entryId}", rateMw(authMw(http.HandlerFunc(GetUrineHandler(cfg.db)))))
+			mux.Handle("PUT /api/babies/{id}/urine/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateUrineHandler(cfg.db))))))
+			mux.Handle("DELETE /api/babies/{id}/urine/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteUrineHandler(cfg.db))))))
+
 			// Invite endpoints
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))
 			mux.Handle("POST /api/babies/join", rateMw(authMw(csrfMw(http.HandlerFunc(JoinBabyHandler(cfg.db))))))

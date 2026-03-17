@@ -134,7 +134,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests for (1) formula feeding with cal_density calculates calories correctly, (2) breast_milk defaults to 20 kcal/oz, (3) breast-direct uses default_cal_per_feed, (4) `used_default_cal` flag set correctly, (5) breast-direct with cal_density returns 400, (6) recalculate endpoint updates all affected entries, (7) normal `PUT /api/babies/:id` returns just the baby object, while PUT with `recalculate_calories=true` returns `{ "baby": {...}, "recalculated_count": N }`. Write calculation logic.
   **Proof of progress:** Calorie computation tested for all scenarios; recalculate endpoint working.
 
-- [ ] **Phase 17: Stool and urine entry endpoints**
+- [x] **Phase 17: Stool and urine entry endpoints**
   **Depends on:** Phase 15 (reuses metric pattern)
   **What to build:** Migration for `stools` and `urine` tables (both with `(baby_id, timestamp)` indexes). Stool endpoints with color_rating validation (1-7), color_label enum, consistency/volume_estimate enums. Urine endpoints with color enum. Both follow the same CRUD pattern established in Phase 15 (including single-entry detail endpoint).
   **TDD approach:** Write tests for (1) stool creation with valid/invalid color_rating, (2) urine creation with color enum validation, (3) list/get-detail/update/delete for both. Reuse pagination tests. Write handlers.
