@@ -80,47 +80,25 @@ func NewMux(opts ...Option) *http.ServeMux {
 			// Account deletion
 			mux.Handle("DELETE /api/users/me", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteAccountHandler(cfg.db))))))
 
-			// Feeding CRUD endpoints
-			mux.Handle("POST /api/babies/{id}/feedings", rateMw(authMw(csrfMw(http.HandlerFunc(CreateFeedingHandler(cfg.db))))))
-			mux.Handle("GET /api/babies/{id}/feedings", rateMw(authMw(http.HandlerFunc(ListFeedingsHandler(cfg.db)))))
-			mux.Handle("GET /api/babies/{id}/feedings/{entryId}", rateMw(authMw(http.HandlerFunc(GetFeedingHandler(cfg.db)))))
-			mux.Handle("PUT /api/babies/{id}/feedings/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateFeedingHandler(cfg.db))))))
-			mux.Handle("DELETE /api/babies/{id}/feedings/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteFeedingHandler(cfg.db))))))
-
-			// Stool CRUD endpoints
-			mux.Handle("POST /api/babies/{id}/stools", rateMw(authMw(csrfMw(http.HandlerFunc(CreateStoolHandler(cfg.db))))))
-			mux.Handle("GET /api/babies/{id}/stools", rateMw(authMw(http.HandlerFunc(ListStoolsHandler(cfg.db)))))
-			mux.Handle("GET /api/babies/{id}/stools/{entryId}", rateMw(authMw(http.HandlerFunc(GetStoolHandler(cfg.db)))))
-			mux.Handle("PUT /api/babies/{id}/stools/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateStoolHandler(cfg.db))))))
-			mux.Handle("DELETE /api/babies/{id}/stools/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteStoolHandler(cfg.db))))))
-
-			// Urine CRUD endpoints
-			mux.Handle("POST /api/babies/{id}/urine", rateMw(authMw(csrfMw(http.HandlerFunc(CreateUrineHandler(cfg.db))))))
-			mux.Handle("GET /api/babies/{id}/urine", rateMw(authMw(http.HandlerFunc(ListUrineHandler(cfg.db)))))
-			mux.Handle("GET /api/babies/{id}/urine/{entryId}", rateMw(authMw(http.HandlerFunc(GetUrineHandler(cfg.db)))))
-			mux.Handle("PUT /api/babies/{id}/urine/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateUrineHandler(cfg.db))))))
-			mux.Handle("DELETE /api/babies/{id}/urine/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteUrineHandler(cfg.db))))))
-
-			// Weight CRUD endpoints
-			mux.Handle("POST /api/babies/{id}/weights", rateMw(authMw(csrfMw(http.HandlerFunc(CreateWeightHandler(cfg.db))))))
-			mux.Handle("GET /api/babies/{id}/weights", rateMw(authMw(http.HandlerFunc(ListWeightsHandler(cfg.db)))))
-			mux.Handle("GET /api/babies/{id}/weights/{entryId}", rateMw(authMw(http.HandlerFunc(GetWeightHandler(cfg.db)))))
-			mux.Handle("PUT /api/babies/{id}/weights/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateWeightHandler(cfg.db))))))
-			mux.Handle("DELETE /api/babies/{id}/weights/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteWeightHandler(cfg.db))))))
-
-			// Temperature CRUD endpoints
-			mux.Handle("POST /api/babies/{id}/temperatures", rateMw(authMw(csrfMw(http.HandlerFunc(CreateTemperatureHandler(cfg.db))))))
-			mux.Handle("GET /api/babies/{id}/temperatures", rateMw(authMw(http.HandlerFunc(ListTemperaturesHandler(cfg.db)))))
-			mux.Handle("GET /api/babies/{id}/temperatures/{entryId}", rateMw(authMw(http.HandlerFunc(GetTemperatureHandler(cfg.db)))))
-			mux.Handle("PUT /api/babies/{id}/temperatures/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateTemperatureHandler(cfg.db))))))
-			mux.Handle("DELETE /api/babies/{id}/temperatures/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteTemperatureHandler(cfg.db))))))
-
-			// Abdomen CRUD endpoints
-			mux.Handle("POST /api/babies/{id}/abdomen", rateMw(authMw(csrfMw(http.HandlerFunc(CreateAbdomenHandler(cfg.db))))))
-			mux.Handle("GET /api/babies/{id}/abdomen", rateMw(authMw(http.HandlerFunc(ListAbdomenHandler(cfg.db)))))
-			mux.Handle("GET /api/babies/{id}/abdomen/{entryId}", rateMw(authMw(http.HandlerFunc(GetAbdomenHandler(cfg.db)))))
-			mux.Handle("PUT /api/babies/{id}/abdomen/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateAbdomenHandler(cfg.db))))))
-			mux.Handle("DELETE /api/babies/{id}/abdomen/{entryId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteAbdomenHandler(cfg.db))))))
+			// Metric CRUD endpoints
+			registerMetricCRUD(mux, "/api/babies/{id}/feedings", rateMw, authMw, csrfMw,
+				CreateFeedingHandler(cfg.db), ListFeedingsHandler(cfg.db),
+				GetFeedingHandler(cfg.db), UpdateFeedingHandler(cfg.db), DeleteFeedingHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/stools", rateMw, authMw, csrfMw,
+				CreateStoolHandler(cfg.db), ListStoolsHandler(cfg.db),
+				GetStoolHandler(cfg.db), UpdateStoolHandler(cfg.db), DeleteStoolHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/urine", rateMw, authMw, csrfMw,
+				CreateUrineHandler(cfg.db), ListUrineHandler(cfg.db),
+				GetUrineHandler(cfg.db), UpdateUrineHandler(cfg.db), DeleteUrineHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/weights", rateMw, authMw, csrfMw,
+				CreateWeightHandler(cfg.db), ListWeightsHandler(cfg.db),
+				GetWeightHandler(cfg.db), UpdateWeightHandler(cfg.db), DeleteWeightHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/temperatures", rateMw, authMw, csrfMw,
+				CreateTemperatureHandler(cfg.db), ListTemperaturesHandler(cfg.db),
+				GetTemperatureHandler(cfg.db), UpdateTemperatureHandler(cfg.db), DeleteTemperatureHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/abdomen", rateMw, authMw, csrfMw,
+				CreateAbdomenHandler(cfg.db), ListAbdomenHandler(cfg.db),
+				GetAbdomenHandler(cfg.db), UpdateAbdomenHandler(cfg.db), DeleteAbdomenHandler(cfg.db))
 
 			// Invite endpoints
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))
@@ -160,4 +138,15 @@ func WithAuthConfig(cfg auth.Config) Option {
 	return func(o *options) {
 		o.authConfig = &cfg
 	}
+}
+
+// registerMetricCRUD registers the standard 5-route CRUD pattern for a metric resource.
+func registerMetricCRUD(mux *http.ServeMux, path string,
+	rateMw, authMw, csrfMw func(http.Handler) http.Handler,
+	create, list, get, update, del http.HandlerFunc) {
+	mux.Handle("POST "+path, rateMw(authMw(csrfMw(create))))
+	mux.Handle("GET "+path, rateMw(authMw(list)))
+	mux.Handle("GET "+path+"/{entryId}", rateMw(authMw(get)))
+	mux.Handle("PUT "+path+"/{entryId}", rateMw(authMw(csrfMw(update))))
+	mux.Handle("DELETE "+path+"/{entryId}", rateMw(authMw(csrfMw(del))))
 }

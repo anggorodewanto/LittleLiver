@@ -29,7 +29,7 @@ func TestCreateFeeding_StoresFieldsCorrectly(t *testing.T) {
 	durMin := 15
 	notes := "tolerated well"
 
-	feeding, err := CreateFeeding(db, baby.ID, user.ID, ts, "breast_milk", &volMl, &calDensity, &durMin, &notes)
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, ts, "breast_milk", &volMl, &calDensity, &durMin, &notes, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestCreateFeeding_NilOptionalFields(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestListFeedings_CursorPagination(t *testing.T) {
 	// Create 5 feedings
 	var ids []string
 	for i := 0; i < 5; i++ {
-		f, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+		f, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 		if err != nil {
 			t.Fatalf("CreateFeeding %d failed: %v", i, err)
 		}
@@ -195,15 +195,15 @@ func TestListFeedings_DateFiltering(t *testing.T) {
 	}
 
 	// Feedings on different dates
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-02T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-02T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestListFeedings_DateFilteringWithTimezone(t *testing.T) {
 	}
 
 	// A feeding at 2025-07-02 03:00 UTC = 2025-07-01 23:00 EDT (America/New_York is UTC-4 in summer)
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-02T03:00:00Z", "formula", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-02T03:00:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestGetFeedingByID_ReturnsSingleEntry(t *testing.T) {
 	}
 
 	vol := 120.0
-	created, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", &vol, nil, nil, nil)
+	created, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", &vol, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestGetFeedingByID_WrongBaby(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	feeding, err := CreateFeeding(db, baby1.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := CreateFeeding(db, baby1.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestUpdateFeeding_SetsUpdatedAt(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	created, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	created, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -365,7 +365,7 @@ func TestUpdateFeeding_SetsUpdatedAt(t *testing.T) {
 	// Update with new values
 	newVol := 150.0
 	newNotes := "updated notes"
-	updated, err := UpdateFeeding(db, baby.ID, created.ID, user.ID, "2025-07-01T11:00:00Z", "breast_milk", &newVol, nil, nil, &newNotes)
+	updated, err := UpdateFeeding(db, baby.ID, created.ID, user.ID, "2025-07-01T11:00:00Z", "breast_milk", &newVol, nil, nil, &newNotes, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("UpdateFeeding failed: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestUpdateFeeding_NotFound(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	_, err = UpdateFeeding(db, baby.ID, "nonexistent", user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err = UpdateFeeding(db, baby.ID, "nonexistent", user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err == nil {
 		t.Fatal("expected error for nonexistent feeding, got nil")
 	}
@@ -423,7 +423,7 @@ func TestDeleteFeeding_RemovesEntry(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -494,7 +494,7 @@ func TestCreateFeeding_ClosedDB(t *testing.T) {
 	db := setupTestDB(t)
 	db.Close()
 
-	_, err := CreateFeeding(db, "b1", "u1", "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err := CreateFeeding(db, "b1", "u1", "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err == nil {
 		t.Fatal("expected error for closed DB, got nil")
 	}
@@ -516,7 +516,7 @@ func TestUpdateFeeding_ClosedDB(t *testing.T) {
 	db := setupTestDB(t)
 	db.Close()
 
-	_, err := UpdateFeeding(db, "b1", "f1", "u1", "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err := UpdateFeeding(db, "b1", "f1", "u1", "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err == nil {
 		t.Fatal("expected error for closed DB, got nil")
 	}
@@ -558,11 +558,11 @@ func TestListFeedings_WithFromOnly(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -591,11 +591,11 @@ func TestListFeedings_WithToOnly(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", "formula", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestCreateFeeding_FormulaWithCalDensity_CalculatesCalories(t *testing.T) {
 
 	vol := 120.0
 	calDen := 24.0
-	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil)
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -686,7 +686,7 @@ func TestCreateFeeding_BreastMilkNoCalDensity_DefaultsTo20(t *testing.T) {
 	}
 
 	vol := 100.0
-	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", &vol, nil, nil, nil)
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", &vol, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -720,7 +720,7 @@ func TestCreateFeeding_BreastDirect_UsesDefaultCalPerFeed(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, nil, nil, nil)
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -751,7 +751,7 @@ func TestCreateFeeding_BreastDirectWithCalDensity_ReturnsError(t *testing.T) {
 	}
 
 	calDen := 24.0
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, &calDen, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, &calDen, nil, nil, model.DefaultCalPerFeed)
 	if err == nil {
 		t.Fatal("expected error for breast-direct with cal_density, got nil")
 	}
@@ -773,14 +773,14 @@ func TestUpdateFeeding_RecalculatesCalories(t *testing.T) {
 
 	vol := 120.0
 	calDen := 20.0
-	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil)
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
 
 	// Update with different cal_density
 	newCalDen := 24.0
-	updated, err := UpdateFeeding(db, baby.ID, feeding.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &newCalDen, nil, nil)
+	updated, err := UpdateFeeding(db, baby.ID, feeding.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &newCalDen, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("UpdateFeeding failed: %v", err)
 	}
@@ -809,11 +809,11 @@ func TestRecalculateFeedingCalories_UpdatesAffectedEntries(t *testing.T) {
 	}
 
 	// Create 2 breast-direct feedings (used_default_cal=true)
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding 1 failed: %v", err)
 	}
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T14:30:00Z", "breast_milk", nil, nil, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T14:30:00Z", "breast_milk", nil, nil, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding 2 failed: %v", err)
 	}
@@ -821,7 +821,7 @@ func TestRecalculateFeedingCalories_UpdatesAffectedEntries(t *testing.T) {
 	// Create 1 formula feeding (used_default_cal=false) — should NOT be affected
 	vol := 120.0
 	calDen := 24.0
-	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T18:30:00Z", "formula", &vol, &calDen, nil, nil)
+	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T18:30:00Z", "formula", &vol, &calDen, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding 3 failed: %v", err)
 	}

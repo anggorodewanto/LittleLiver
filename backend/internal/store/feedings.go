@@ -26,38 +26,17 @@ func scanFeeding(s scanner) (*model.Feeding, error) {
 		return nil, err
 	}
 
-	f.Timestamp, err = parseTime(tsStr)
+	f.Timestamp, f.CreatedAt, f.UpdatedAt, err = parseMetricTimes(tsStr, createdStr, updatedStr)
 	if err != nil {
-		return nil, fmt.Errorf("parse timestamp: %w", err)
-	}
-	f.CreatedAt, err = parseTime(createdStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
-	}
-	f.UpdatedAt, err = parseTime(updatedStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse updated_at: %w", err)
+		return nil, err
 	}
 
-	if updatedBy.Valid {
-		f.UpdatedBy = &updatedBy.String
-	}
-	if volMl.Valid {
-		f.VolumeMl = &volMl.Float64
-	}
-	if calDensity.Valid {
-		f.CalDensity = &calDensity.Float64
-	}
-	if calories.Valid {
-		f.Calories = &calories.Float64
-	}
-	if durMin.Valid {
-		v := int(durMin.Int64)
-		f.DurationMin = &v
-	}
-	if notes.Valid {
-		f.Notes = &notes.String
-	}
+	f.UpdatedBy = nullStr(updatedBy)
+	f.VolumeMl = nullFloat(volMl)
+	f.CalDensity = nullFloat(calDensity)
+	f.Calories = nullFloat(calories)
+	f.DurationMin = nullInt(durMin)
+	f.Notes = nullStr(notes)
 
 	return &f, nil
 }
@@ -66,24 +45,9 @@ const feedingColumns = `id, baby_id, logged_by, updated_by, timestamp,
 	feed_type, volume_ml, cal_density, calories,
 	used_default_cal, duration_min, notes, created_at, updated_at`
 
-// getDefaultCalPerFeed retrieves the baby's default_cal_per_feed.
-func getDefaultCalPerFeed(db *sql.DB, babyID string) (float64, error) {
-	var val float64
-	err := db.QueryRow("SELECT default_cal_per_feed FROM babies WHERE id = ?", babyID).Scan(&val)
-	if err != nil {
-		return 0, fmt.Errorf("get default_cal_per_feed: %w", err)
-	}
-	return val, nil
-}
-
 // CreateFeeding inserts a new feeding entry with calorie calculation and returns it.
-func CreateFeeding(db *sql.DB, babyID, loggedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string) (*model.Feeding, error) {
-	defaultCal, err := getDefaultCalPerFeed(db, babyID)
-	if err != nil {
-		return nil, fmt.Errorf("create feeding: %w", err)
-	}
-
-	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCal)
+func CreateFeeding(db *sql.DB, babyID, loggedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string, defaultCalPerFeed float64) (*model.Feeding, error) {
+	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCalPerFeed)
 	if err != nil {
 		return nil, fmt.Errorf("create feeding: %w", err)
 	}
@@ -141,9 +105,8 @@ func ListFeedingsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, lim
 		if err != nil {
 			return nil, fmt.Errorf("parse to date: %w", err)
 		}
-		// End of day: 23:59:59
-		utcTo := t.Add(24*time.Hour - time.Second).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp <= ?")
+		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
+		conditions = append(conditions, "timestamp < ?")
 		args = append(args, utcTo)
 	}
 
@@ -178,9 +141,7 @@ func ListFeedingsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, lim
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	page := &model.MetricPage[model.Feeding]{
-		Data: make([]model.Feeding, 0),
-	}
+	page := &model.MetricPage[model.Feeding]{}
 
 	if len(feedings) > limit {
 		page.Data = feedings[:limit]
@@ -201,13 +162,8 @@ func ListFeedingsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, lim
 // UpdateFeeding updates a feeding entry with calorie recalculation.
 // Sets updated_at = CURRENT_TIMESTAMP.
 // Returns sql.ErrNoRows if the feeding doesn't exist for the given baby.
-func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string) (*model.Feeding, error) {
-	defaultCal, err := getDefaultCalPerFeed(db, babyID)
-	if err != nil {
-		return nil, fmt.Errorf("update feeding: %w", err)
-	}
-
-	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCal)
+func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string, defaultCalPerFeed float64) (*model.Feeding, error) {
+	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCalPerFeed)
 	if err != nil {
 		return nil, fmt.Errorf("update feeding: %w", err)
 	}
@@ -228,12 +184,8 @@ func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType
 		return nil, fmt.Errorf("update feeding: %w", err)
 	}
 
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("update feeding: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return nil, fmt.Errorf("update feeding: %w", sql.ErrNoRows)
+	if err := checkRowsAffected(res, "update feeding"); err != nil {
+		return nil, err
 	}
 
 	return GetFeedingByID(db, babyID, feedingID)
@@ -263,21 +215,5 @@ func RecalculateFeedingCalories(db *sql.DB, babyID string, newDefault float64) (
 // DeleteFeeding hard-deletes a feeding entry.
 // Returns an error wrapping sql.ErrNoRows if the feeding doesn't exist for the given baby.
 func DeleteFeeding(db *sql.DB, babyID, feedingID string) error {
-	res, err := db.Exec(
-		"DELETE FROM feedings WHERE id = ? AND baby_id = ?",
-		feedingID, babyID,
-	)
-	if err != nil {
-		return fmt.Errorf("delete feeding: %w", err)
-	}
-
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("delete feeding: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("delete feeding: %w", sql.ErrNoRows)
-	}
-
-	return nil
+	return deleteByID(db, "feedings", babyID, feedingID)
 }

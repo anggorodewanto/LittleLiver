@@ -1006,11 +1006,11 @@ func TestUpdateBabyHandler_RecalculateCalories_ReturnsEnvelope(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	// Create breast-direct feedings (used_default_cal=true)
-	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, nil, nil, nil)
+	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding 1 failed: %v", err)
 	}
-	_, err = store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T14:30:00Z", "breast_milk", nil, nil, nil, nil)
+	_, err = store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T14:30:00Z", "breast_milk", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding 2 failed: %v", err)
 	}
@@ -1018,7 +1018,7 @@ func TestUpdateBabyHandler_RecalculateCalories_ReturnsEnvelope(t *testing.T) {
 	// Create a formula feeding (should NOT be recalculated)
 	vol := 120.0
 	calDen := 24.0
-	_, err = store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T18:30:00Z", "formula", &vol, &calDen, nil, nil)
+	_, err = store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T18:30:00Z", "formula", &vol, &calDen, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding 3 failed: %v", err)
 	}
@@ -1075,7 +1075,7 @@ func TestUpdateBabyHandler_RecalculateCalories_NoAffectedEntries(t *testing.T) {
 	// No breast-direct feedings
 	vol := 120.0
 	calDen := 24.0
-	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil)
+	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}

@@ -3,11 +3,9 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"log"
 	"math"
 	"net/http"
-	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
@@ -23,11 +21,8 @@ type temperatureRequest struct {
 
 // validate checks required fields for a temperature request.
 func (req *temperatureRequest) validate() (string, bool) {
-	if req.Timestamp == "" {
-		return "timestamp is required", false
-	}
-	if _, err := time.Parse(model.DateTimeFormat, req.Timestamp); err != nil {
-		return "timestamp must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)", false
+	if msg, ok := validateTimestamp(req.Timestamp); !ok {
+		return msg, false
 	}
 	if req.Value == nil {
 		return "value is required", false
@@ -121,33 +116,16 @@ func ListTemperaturesHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		from := optionalQuery(r, "from")
-		to := optionalQuery(r, "to")
-		cursor := optionalQuery(r, "cursor")
+		lp := parseListParams(r)
 
-		loc := time.UTC
-		if tz := r.Header.Get("X-Timezone"); tz != "" {
-			if parsed, err := time.LoadLocation(tz); err == nil {
-				loc = parsed
-			}
-		}
-
-		page, err := store.ListTemperaturesWithTZ(db, baby.ID, from, to, cursor, defaultPageSize, loc)
+		page, err := store.ListTemperaturesWithTZ(db, baby.ID, lp.From, lp.To, lp.Cursor, defaultPageSize, lp.Loc)
 		if err != nil {
 			log.Printf("list temperatures: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		resp := model.MetricPage[temperatureResponse]{
-			Data:       make([]temperatureResponse, 0, len(page.Data)),
-			NextCursor: page.NextCursor,
-		}
-		for i := range page.Data {
-			resp.Data = append(resp.Data, toTemperatureResponse(&page.Data[i]))
-		}
-
-		writeJSON(w, http.StatusOK, resp)
+		writeJSON(w, http.StatusOK, mapMetricPage(page, toTemperatureResponse))
 	}
 }
 
@@ -171,12 +149,7 @@ func GetTemperatureHandler(db *sql.DB) http.HandlerFunc {
 
 		temp, err := store.GetTemperatureByID(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "temperature not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("get temperature: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "temperature not found")
 			return
 		}
 
@@ -215,12 +188,7 @@ func UpdateTemperatureHandler(db *sql.DB) http.HandlerFunc {
 
 		temp, err := store.UpdateTemperature(db, baby.ID, entryID, user.ID, req.Timestamp, *req.Value, *req.Method, req.Notes)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "temperature not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("update temperature: %v", err)
-			http.Error(w, "failed to update temperature", http.StatusInternalServerError)
+			handleStoreError(w, err, "temperature not found")
 			return
 		}
 
@@ -248,12 +216,7 @@ func DeleteTemperatureHandler(db *sql.DB) http.HandlerFunc {
 
 		err := store.DeleteTemperature(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "temperature not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("delete temperature: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "temperature not found")
 			return
 		}
 

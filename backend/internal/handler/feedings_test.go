@@ -151,7 +151,7 @@ func TestListFeedingsHandler_Success(t *testing.T) {
 
 	// Create a few feedings
 	for i := 0; i < 3; i++ {
-		_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+		_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 		if err != nil {
 			t.Fatalf("CreateFeeding failed: %v", err)
 		}
@@ -213,11 +213,11 @@ func TestListFeedingsHandler_WithDateFilter(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
-	_, err = store.CreateFeeding(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", "formula", nil, nil, nil, nil)
+	_, err = store.CreateFeeding(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestGetFeedingHandler_Success(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	vol := 120.0
-	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", &vol, nil, nil, nil)
+	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", &vol, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestUpdateFeedingHandler_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestUpdateFeedingHandler_Unauthorized(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	otherUser := testutil.CreateTestUser(t, db)
 
-	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestDeleteFeedingHandler_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -506,7 +506,7 @@ func TestUpdateFeedingHandler_InvalidJSON(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -564,7 +564,7 @@ func TestUpdateFeedingHandler_InvalidFeedType(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -597,7 +597,7 @@ func TestListFeedingsHandler_WithTimezoneHeader(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	// A feeding at 2025-07-02 03:00 UTC = 2025-07-01 23:00 EDT
-	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-02T03:00:00Z", "formula", nil, nil, nil, nil)
+	_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-02T03:00:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -637,7 +637,7 @@ func TestListFeedingsHandler_WithCursor(t *testing.T) {
 
 	// Create enough feedings to test cursor pagination
 	for i := 0; i < 3; i++ {
-		_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+		_, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 		if err != nil {
 			t.Fatalf("CreateFeeding failed: %v", err)
 		}
@@ -680,7 +680,7 @@ func TestDeleteFeedingHandler_Unauthorized(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	otherUser := testutil.CreateTestUser(t, db)
 
-	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
@@ -710,7 +710,7 @@ func TestGetFeedingHandler_Unauthorized(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	otherUser := testutil.CreateTestUser(t, db)
 
-	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil)
+	feeding, err := store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}

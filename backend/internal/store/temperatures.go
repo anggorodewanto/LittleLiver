@@ -26,25 +26,13 @@ func scanTemperature(s scanner) (*model.Temperature, error) {
 		return nil, err
 	}
 
-	t.Timestamp, err = parseTime(tsStr)
+	t.Timestamp, t.CreatedAt, t.UpdatedAt, err = parseMetricTimes(tsStr, createdStr, updatedStr)
 	if err != nil {
-		return nil, fmt.Errorf("parse timestamp: %w", err)
-	}
-	t.CreatedAt, err = parseTime(createdStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
-	}
-	t.UpdatedAt, err = parseTime(updatedStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse updated_at: %w", err)
+		return nil, err
 	}
 
-	if updatedBy.Valid {
-		t.UpdatedBy = &updatedBy.String
-	}
-	if notes.Valid {
-		t.Notes = &notes.String
-	}
+	t.UpdatedBy = nullStr(updatedBy)
+	t.Notes = nullStr(notes)
 
 	return &t, nil
 }
@@ -102,8 +90,8 @@ func ListTemperaturesWithTZ(db *sql.DB, babyID string, from, to, cursor *string,
 		if err != nil {
 			return nil, fmt.Errorf("parse to date: %w", err)
 		}
-		utcTo := t.Add(24*time.Hour - time.Second).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp <= ?")
+		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
+		conditions = append(conditions, "timestamp < ?")
 		args = append(args, utcTo)
 	}
 
@@ -137,9 +125,7 @@ func ListTemperaturesWithTZ(db *sql.DB, babyID string, from, to, cursor *string,
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	page := &model.MetricPage[model.Temperature]{
-		Data: make([]model.Temperature, 0),
-	}
+	page := &model.MetricPage[model.Temperature]{}
 
 	if len(temps) > limit {
 		page.Data = temps[:limit]
@@ -171,12 +157,8 @@ func UpdateTemperature(db *sql.DB, babyID, tempID, updatedBy, timestamp string, 
 		return nil, fmt.Errorf("update temperature: %w", err)
 	}
 
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("update temperature: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return nil, fmt.Errorf("update temperature: %w", sql.ErrNoRows)
+	if err := checkRowsAffected(res, "update temperature"); err != nil {
+		return nil, err
 	}
 
 	return GetTemperatureByID(db, babyID, tempID)
@@ -184,21 +166,5 @@ func UpdateTemperature(db *sql.DB, babyID, tempID, updatedBy, timestamp string, 
 
 // DeleteTemperature hard-deletes a temperature entry.
 func DeleteTemperature(db *sql.DB, babyID, tempID string) error {
-	res, err := db.Exec(
-		"DELETE FROM temperatures WHERE id = ? AND baby_id = ?",
-		tempID, babyID,
-	)
-	if err != nil {
-		return fmt.Errorf("delete temperature: %w", err)
-	}
-
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("delete temperature: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("delete temperature: %w", sql.ErrNoRows)
-	}
-
-	return nil
+	return deleteByID(db, "temperatures", babyID, tempID)
 }

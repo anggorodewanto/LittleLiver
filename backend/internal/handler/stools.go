@@ -3,10 +3,8 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
@@ -24,11 +22,8 @@ type stoolRequest struct {
 
 // validate checks required fields for a stool request.
 func (req *stoolRequest) validate() (string, bool) {
-	if req.Timestamp == "" {
-		return "timestamp is required", false
-	}
-	if _, err := time.Parse(model.DateTimeFormat, req.Timestamp); err != nil {
-		return "timestamp must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)", false
+	if msg, ok := validateTimestamp(req.Timestamp); !ok {
+		return msg, false
 	}
 	if req.ColorRating == nil {
 		return "color_rating is required", false
@@ -131,33 +126,16 @@ func ListStoolsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		from := optionalQuery(r, "from")
-		to := optionalQuery(r, "to")
-		cursor := optionalQuery(r, "cursor")
+		lp := parseListParams(r)
 
-		loc := time.UTC
-		if tz := r.Header.Get("X-Timezone"); tz != "" {
-			if parsed, err := time.LoadLocation(tz); err == nil {
-				loc = parsed
-			}
-		}
-
-		page, err := store.ListStoolsWithTZ(db, baby.ID, from, to, cursor, defaultPageSize, loc)
+		page, err := store.ListStoolsWithTZ(db, baby.ID, lp.From, lp.To, lp.Cursor, defaultPageSize, lp.Loc)
 		if err != nil {
 			log.Printf("list stools: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		resp := model.MetricPage[stoolResponse]{
-			Data:       make([]stoolResponse, 0, len(page.Data)),
-			NextCursor: page.NextCursor,
-		}
-		for i := range page.Data {
-			resp.Data = append(resp.Data, toStoolResponse(&page.Data[i]))
-		}
-
-		writeJSON(w, http.StatusOK, resp)
+		writeJSON(w, http.StatusOK, mapMetricPage(page, toStoolResponse))
 	}
 }
 
@@ -181,12 +159,7 @@ func GetStoolHandler(db *sql.DB) http.HandlerFunc {
 
 		stool, err := store.GetStoolByID(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "stool not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("get stool: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "stool not found")
 			return
 		}
 
@@ -225,12 +198,7 @@ func UpdateStoolHandler(db *sql.DB) http.HandlerFunc {
 
 		stool, err := store.UpdateStool(db, baby.ID, entryID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, req.Notes)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "stool not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("update stool: %v", err)
-			http.Error(w, "failed to update stool", http.StatusInternalServerError)
+			handleStoreError(w, err, "stool not found")
 			return
 		}
 
@@ -258,12 +226,7 @@ func DeleteStoolHandler(db *sql.DB) http.HandlerFunc {
 
 		err := store.DeleteStool(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "stool not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("delete stool: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "stool not found")
 			return
 		}
 

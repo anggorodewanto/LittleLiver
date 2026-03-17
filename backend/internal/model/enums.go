@@ -1,5 +1,12 @@
 package model
 
+const (
+	// FeedTypeBreastMilk is the feed type for breast milk.
+	FeedTypeBreastMilk = "breast_milk"
+	// FeedTypeFormula is the feed type for formula.
+	FeedTypeFormula = "formula"
+)
+
 // validSet is a helper that builds a set lookup for enum validation.
 func validSet(values ...string) map[string]bool {
 	m := make(map[string]bool, len(values))

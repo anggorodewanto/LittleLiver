@@ -28,37 +28,17 @@ func scanStool(s scanner) (*model.Stool, error) {
 		return nil, err
 	}
 
-	st.Timestamp, err = parseTime(tsStr)
+	st.Timestamp, st.CreatedAt, st.UpdatedAt, err = parseMetricTimes(tsStr, createdStr, updatedStr)
 	if err != nil {
-		return nil, fmt.Errorf("parse timestamp: %w", err)
-	}
-	st.CreatedAt, err = parseTime(createdStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
-	}
-	st.UpdatedAt, err = parseTime(updatedStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse updated_at: %w", err)
+		return nil, err
 	}
 
-	if updatedBy.Valid {
-		st.UpdatedBy = &updatedBy.String
-	}
-	if colorLabel.Valid {
-		st.ColorLabel = &colorLabel.String
-	}
-	if consistency.Valid {
-		st.Consistency = &consistency.String
-	}
-	if volumeEstimate.Valid {
-		st.VolumeEstimate = &volumeEstimate.String
-	}
-	if photoKeys.Valid {
-		st.PhotoKeys = &photoKeys.String
-	}
-	if notes.Valid {
-		st.Notes = &notes.String
-	}
+	st.UpdatedBy = nullStr(updatedBy)
+	st.ColorLabel = nullStr(colorLabel)
+	st.Consistency = nullStr(consistency)
+	st.VolumeEstimate = nullStr(volumeEstimate)
+	st.PhotoKeys = nullStr(photoKeys)
+	st.Notes = nullStr(notes)
 
 	return &st, nil
 }
@@ -116,8 +96,8 @@ func ListStoolsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit
 		if err != nil {
 			return nil, fmt.Errorf("parse to date: %w", err)
 		}
-		utcTo := t.Add(24*time.Hour - time.Second).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp <= ?")
+		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
+		conditions = append(conditions, "timestamp < ?")
 		args = append(args, utcTo)
 	}
 
@@ -151,9 +131,7 @@ func ListStoolsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	page := &model.MetricPage[model.Stool]{
-		Data: make([]model.Stool, 0),
-	}
+	page := &model.MetricPage[model.Stool]{}
 
 	if len(stools) > limit {
 		page.Data = stools[:limit]
@@ -187,12 +165,8 @@ func UpdateStool(db *sql.DB, babyID, stoolID, updatedBy, timestamp string, color
 		return nil, fmt.Errorf("update stool: %w", err)
 	}
 
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("update stool: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return nil, fmt.Errorf("update stool: %w", sql.ErrNoRows)
+	if err := checkRowsAffected(res, "update stool"); err != nil {
+		return nil, err
 	}
 
 	return GetStoolByID(db, babyID, stoolID)
@@ -200,21 +174,5 @@ func UpdateStool(db *sql.DB, babyID, stoolID, updatedBy, timestamp string, color
 
 // DeleteStool hard-deletes a stool entry.
 func DeleteStool(db *sql.DB, babyID, stoolID string) error {
-	res, err := db.Exec(
-		"DELETE FROM stools WHERE id = ? AND baby_id = ?",
-		stoolID, babyID,
-	)
-	if err != nil {
-		return fmt.Errorf("delete stool: %w", err)
-	}
-
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("delete stool: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("delete stool: %w", sql.ErrNoRows)
-	}
-
-	return nil
+	return deleteByID(db, "stools", babyID, stoolID)
 }

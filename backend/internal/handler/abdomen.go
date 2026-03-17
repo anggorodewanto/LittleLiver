@@ -3,10 +3,8 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
@@ -23,11 +21,8 @@ type abdomenRequest struct {
 
 // validate checks required fields for an abdomen request.
 func (req *abdomenRequest) validate() (string, bool) {
-	if req.Timestamp == "" {
-		return "timestamp is required", false
-	}
-	if _, err := time.Parse(model.DateTimeFormat, req.Timestamp); err != nil {
-		return "timestamp must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)", false
+	if msg, ok := validateTimestamp(req.Timestamp); !ok {
+		return msg, false
 	}
 	if req.Firmness == nil {
 		return "firmness is required", false
@@ -127,33 +122,16 @@ func ListAbdomenHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		from := optionalQuery(r, "from")
-		to := optionalQuery(r, "to")
-		cursor := optionalQuery(r, "cursor")
+		lp := parseListParams(r)
 
-		loc := time.UTC
-		if tz := r.Header.Get("X-Timezone"); tz != "" {
-			if parsed, err := time.LoadLocation(tz); err == nil {
-				loc = parsed
-			}
-		}
-
-		page, err := store.ListAbdomenWithTZ(db, baby.ID, from, to, cursor, defaultPageSize, loc)
+		page, err := store.ListAbdomenWithTZ(db, baby.ID, lp.From, lp.To, lp.Cursor, defaultPageSize, lp.Loc)
 		if err != nil {
 			log.Printf("list abdomen: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		resp := model.MetricPage[abdomenResponse]{
-			Data:       make([]abdomenResponse, 0, len(page.Data)),
-			NextCursor: page.NextCursor,
-		}
-		for i := range page.Data {
-			resp.Data = append(resp.Data, toAbdomenResponse(&page.Data[i]))
-		}
-
-		writeJSON(w, http.StatusOK, resp)
+		writeJSON(w, http.StatusOK, mapMetricPage(page, toAbdomenResponse))
 	}
 }
 
@@ -177,12 +155,7 @@ func GetAbdomenHandler(db *sql.DB) http.HandlerFunc {
 
 		abdomen, err := store.GetAbdomenByID(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "abdomen observation not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("get abdomen: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "abdomen observation not found")
 			return
 		}
 
@@ -226,12 +199,7 @@ func UpdateAbdomenHandler(db *sql.DB) http.HandlerFunc {
 
 		abdomen, err := store.UpdateAbdomen(db, baby.ID, entryID, user.ID, req.Timestamp, *req.Firmness, tenderness, req.GirthCm, req.Notes)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "abdomen observation not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("update abdomen: %v", err)
-			http.Error(w, "failed to update abdomen observation", http.StatusInternalServerError)
+			handleStoreError(w, err, "abdomen observation not found")
 			return
 		}
 
@@ -259,12 +227,7 @@ func DeleteAbdomenHandler(db *sql.DB) http.HandlerFunc {
 
 		err := store.DeleteAbdomen(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "abdomen observation not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("delete abdomen: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "abdomen observation not found")
 			return
 		}
 

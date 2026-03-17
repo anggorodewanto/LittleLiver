@@ -26,28 +26,14 @@ func scanUrine(s scanner) (*model.Urine, error) {
 		return nil, err
 	}
 
-	u.Timestamp, err = parseTime(tsStr)
+	u.Timestamp, u.CreatedAt, u.UpdatedAt, err = parseMetricTimes(tsStr, createdStr, updatedStr)
 	if err != nil {
-		return nil, fmt.Errorf("parse timestamp: %w", err)
-	}
-	u.CreatedAt, err = parseTime(createdStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
-	}
-	u.UpdatedAt, err = parseTime(updatedStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse updated_at: %w", err)
+		return nil, err
 	}
 
-	if updatedBy.Valid {
-		u.UpdatedBy = &updatedBy.String
-	}
-	if color.Valid {
-		u.Color = &color.String
-	}
-	if notes.Valid {
-		u.Notes = &notes.String
-	}
+	u.UpdatedBy = nullStr(updatedBy)
+	u.Color = nullStr(color)
+	u.Notes = nullStr(notes)
 
 	return &u, nil
 }
@@ -105,8 +91,8 @@ func ListUrineWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit 
 		if err != nil {
 			return nil, fmt.Errorf("parse to date: %w", err)
 		}
-		utcTo := t.Add(24*time.Hour - time.Second).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp <= ?")
+		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
+		conditions = append(conditions, "timestamp < ?")
 		args = append(args, utcTo)
 	}
 
@@ -140,9 +126,7 @@ func ListUrineWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit 
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	page := &model.MetricPage[model.Urine]{
-		Data: make([]model.Urine, 0),
-	}
+	page := &model.MetricPage[model.Urine]{}
 
 	if len(entries) > limit {
 		page.Data = entries[:limit]
@@ -175,12 +159,8 @@ func UpdateUrine(db *sql.DB, babyID, urineID, updatedBy, timestamp string, color
 		return nil, fmt.Errorf("update urine: %w", err)
 	}
 
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("update urine: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return nil, fmt.Errorf("update urine: %w", sql.ErrNoRows)
+	if err := checkRowsAffected(res, "update urine"); err != nil {
+		return nil, err
 	}
 
 	return GetUrineByID(db, babyID, urineID)
@@ -188,21 +168,5 @@ func UpdateUrine(db *sql.DB, babyID, urineID, updatedBy, timestamp string, color
 
 // DeleteUrine hard-deletes a urine entry.
 func DeleteUrine(db *sql.DB, babyID, urineID string) error {
-	res, err := db.Exec(
-		"DELETE FROM urine WHERE id = ? AND baby_id = ?",
-		urineID, babyID,
-	)
-	if err != nil {
-		return fmt.Errorf("delete urine: %w", err)
-	}
-
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("delete urine: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("delete urine: %w", sql.ErrNoRows)
-	}
-
-	return nil
+	return deleteByID(db, "urine", babyID, urineID)
 }

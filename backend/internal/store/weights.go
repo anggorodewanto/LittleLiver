@@ -26,28 +26,14 @@ func scanWeight(s scanner) (*model.Weight, error) {
 		return nil, err
 	}
 
-	w.Timestamp, err = parseTime(tsStr)
+	w.Timestamp, w.CreatedAt, w.UpdatedAt, err = parseMetricTimes(tsStr, createdStr, updatedStr)
 	if err != nil {
-		return nil, fmt.Errorf("parse timestamp: %w", err)
-	}
-	w.CreatedAt, err = parseTime(createdStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
-	}
-	w.UpdatedAt, err = parseTime(updatedStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse updated_at: %w", err)
+		return nil, err
 	}
 
-	if updatedBy.Valid {
-		w.UpdatedBy = &updatedBy.String
-	}
-	if measurementSource.Valid {
-		w.MeasurementSource = &measurementSource.String
-	}
-	if notes.Valid {
-		w.Notes = &notes.String
-	}
+	w.UpdatedBy = nullStr(updatedBy)
+	w.MeasurementSource = nullStr(measurementSource)
+	w.Notes = nullStr(notes)
 
 	return &w, nil
 }
@@ -105,8 +91,8 @@ func ListWeightsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limi
 		if err != nil {
 			return nil, fmt.Errorf("parse to date: %w", err)
 		}
-		utcTo := t.Add(24*time.Hour - time.Second).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp <= ?")
+		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
+		conditions = append(conditions, "timestamp < ?")
 		args = append(args, utcTo)
 	}
 
@@ -140,9 +126,7 @@ func ListWeightsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limi
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	page := &model.MetricPage[model.Weight]{
-		Data: make([]model.Weight, 0),
-	}
+	page := &model.MetricPage[model.Weight]{}
 
 	if len(weights) > limit {
 		page.Data = weights[:limit]
@@ -174,12 +158,8 @@ func UpdateWeight(db *sql.DB, babyID, weightID, updatedBy, timestamp string, wei
 		return nil, fmt.Errorf("update weight: %w", err)
 	}
 
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("update weight: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return nil, fmt.Errorf("update weight: %w", sql.ErrNoRows)
+	if err := checkRowsAffected(res, "update weight"); err != nil {
+		return nil, err
 	}
 
 	return GetWeightByID(db, babyID, weightID)
@@ -187,21 +167,5 @@ func UpdateWeight(db *sql.DB, babyID, weightID, updatedBy, timestamp string, wei
 
 // DeleteWeight hard-deletes a weight entry.
 func DeleteWeight(db *sql.DB, babyID, weightID string) error {
-	res, err := db.Exec(
-		"DELETE FROM weights WHERE id = ? AND baby_id = ?",
-		weightID, babyID,
-	)
-	if err != nil {
-		return fmt.Errorf("delete weight: %w", err)
-	}
-
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("delete weight: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("delete weight: %w", sql.ErrNoRows)
-	}
-
-	return nil
+	return deleteByID(db, "weights", babyID, weightID)
 }

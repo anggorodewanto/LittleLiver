@@ -28,31 +28,15 @@ func scanAbdomen(s scanner) (*model.AbdomenObservation, error) {
 		return nil, err
 	}
 
-	a.Timestamp, err = parseTime(tsStr)
+	a.Timestamp, a.CreatedAt, a.UpdatedAt, err = parseMetricTimes(tsStr, createdStr, updatedStr)
 	if err != nil {
-		return nil, fmt.Errorf("parse timestamp: %w", err)
-	}
-	a.CreatedAt, err = parseTime(createdStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
-	}
-	a.UpdatedAt, err = parseTime(updatedStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse updated_at: %w", err)
+		return nil, err
 	}
 
-	if updatedBy.Valid {
-		a.UpdatedBy = &updatedBy.String
-	}
-	if girthCm.Valid {
-		a.GirthCm = &girthCm.Float64
-	}
-	if photoKeys.Valid {
-		a.PhotoKeys = &photoKeys.String
-	}
-	if notes.Valid {
-		a.Notes = &notes.String
-	}
+	a.UpdatedBy = nullStr(updatedBy)
+	a.GirthCm = nullFloat(girthCm)
+	a.PhotoKeys = nullStr(photoKeys)
+	a.Notes = nullStr(notes)
 
 	return &a, nil
 }
@@ -110,8 +94,8 @@ func ListAbdomenWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limi
 		if err != nil {
 			return nil, fmt.Errorf("parse to date: %w", err)
 		}
-		utcTo := t.Add(24*time.Hour - time.Second).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "timestamp <= ?")
+		utcTo := t.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
+		conditions = append(conditions, "timestamp < ?")
 		args = append(args, utcTo)
 	}
 
@@ -145,9 +129,7 @@ func ListAbdomenWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limi
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 
-	page := &model.MetricPage[model.AbdomenObservation]{
-		Data: make([]model.AbdomenObservation, 0),
-	}
+	page := &model.MetricPage[model.AbdomenObservation]{}
 
 	if len(observations) > limit {
 		page.Data = observations[:limit]
@@ -180,12 +162,8 @@ func UpdateAbdomen(db *sql.DB, babyID, abdomenID, updatedBy, timestamp, firmness
 		return nil, fmt.Errorf("update abdomen: %w", err)
 	}
 
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("update abdomen: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return nil, fmt.Errorf("update abdomen: %w", sql.ErrNoRows)
+	if err := checkRowsAffected(res, "update abdomen"); err != nil {
+		return nil, err
 	}
 
 	return GetAbdomenByID(db, babyID, abdomenID)
@@ -193,21 +171,5 @@ func UpdateAbdomen(db *sql.DB, babyID, abdomenID, updatedBy, timestamp, firmness
 
 // DeleteAbdomen hard-deletes an abdomen observation.
 func DeleteAbdomen(db *sql.DB, babyID, abdomenID string) error {
-	res, err := db.Exec(
-		"DELETE FROM abdomen_observations WHERE id = ? AND baby_id = ?",
-		abdomenID, babyID,
-	)
-	if err != nil {
-		return fmt.Errorf("delete abdomen: %w", err)
-	}
-
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("delete abdomen: rows affected: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("delete abdomen: %w", sql.ErrNoRows)
-	}
-
-	return nil
+	return deleteByID(db, "abdomen_observations", babyID, abdomenID)
 }

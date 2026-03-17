@@ -3,10 +3,8 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
@@ -26,17 +24,14 @@ type feedingRequest struct {
 
 // validate checks required fields for a feeding request.
 func (req *feedingRequest) validate() (string, bool) {
-	if req.Timestamp == "" {
-		return "timestamp is required", false
+	if msg, ok := validateTimestamp(req.Timestamp); !ok {
+		return msg, false
 	}
 	if req.FeedType == "" {
 		return "feed_type is required", false
 	}
 	if !model.ValidFeedType(req.FeedType) {
 		return "invalid feed_type", false
-	}
-	if _, err := time.Parse(model.DateTimeFormat, req.Timestamp); err != nil {
-		return "timestamp must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)", false
 	}
 	// cal_density without volume is invalid
 	if req.CalDensity != nil && req.VolumeMl == nil {
@@ -107,7 +102,7 @@ func CreateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		feeding, err := store.CreateFeeding(db, baby.ID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes)
+		feeding, err := store.CreateFeeding(db, baby.ID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes, baby.DefaultCalPerFeed)
 		if err != nil {
 			log.Printf("create feeding: %v", err)
 			http.Error(w, "failed to create feeding", http.StatusInternalServerError)
@@ -131,34 +126,16 @@ func ListFeedingsHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		from := optionalQuery(r, "from")
-		to := optionalQuery(r, "to")
-		cursor := optionalQuery(r, "cursor")
+		lp := parseListParams(r)
 
-		// Determine user timezone for date filtering
-		loc := time.UTC
-		if tz := r.Header.Get("X-Timezone"); tz != "" {
-			if parsed, err := time.LoadLocation(tz); err == nil {
-				loc = parsed
-			}
-		}
-
-		page, err := store.ListFeedingsWithTZ(db, baby.ID, from, to, cursor, defaultPageSize, loc)
+		page, err := store.ListFeedingsWithTZ(db, baby.ID, lp.From, lp.To, lp.Cursor, defaultPageSize, lp.Loc)
 		if err != nil {
 			log.Printf("list feedings: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		resp := model.MetricPage[feedingResponse]{
-			Data:       make([]feedingResponse, 0, len(page.Data)),
-			NextCursor: page.NextCursor,
-		}
-		for i := range page.Data {
-			resp.Data = append(resp.Data, toFeedingResponse(&page.Data[i]))
-		}
-
-		writeJSON(w, http.StatusOK, resp)
+		writeJSON(w, http.StatusOK, mapMetricPage(page, toFeedingResponse))
 	}
 }
 
@@ -182,12 +159,7 @@ func GetFeedingHandler(db *sql.DB) http.HandlerFunc {
 
 		feeding, err := store.GetFeedingByID(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "feeding not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("get feeding: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "feeding not found")
 			return
 		}
 
@@ -224,14 +196,9 @@ func UpdateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		feeding, err := store.UpdateFeeding(db, baby.ID, entryID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes)
+		feeding, err := store.UpdateFeeding(db, baby.ID, entryID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes, baby.DefaultCalPerFeed)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "feeding not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("update feeding: %v", err)
-			http.Error(w, "failed to update feeding", http.StatusInternalServerError)
+			handleStoreError(w, err, "feeding not found")
 			return
 		}
 
@@ -259,12 +226,7 @@ func DeleteFeedingHandler(db *sql.DB) http.HandlerFunc {
 
 		err := store.DeleteFeeding(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "feeding not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("delete feeding: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "feeding not found")
 			return
 		}
 

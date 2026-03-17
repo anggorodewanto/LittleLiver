@@ -3,10 +3,8 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
@@ -21,11 +19,8 @@ type urineRequest struct {
 
 // validate checks required fields for a urine request.
 func (req *urineRequest) validate() (string, bool) {
-	if req.Timestamp == "" {
-		return "timestamp is required", false
-	}
-	if _, err := time.Parse(model.DateTimeFormat, req.Timestamp); err != nil {
-		return "timestamp must be in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)", false
+	if msg, ok := validateTimestamp(req.Timestamp); !ok {
+		return msg, false
 	}
 	if req.Color != nil && !model.ValidUrineColor(*req.Color) {
 		return "invalid color", false
@@ -108,33 +103,16 @@ func ListUrineHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		from := optionalQuery(r, "from")
-		to := optionalQuery(r, "to")
-		cursor := optionalQuery(r, "cursor")
+		lp := parseListParams(r)
 
-		loc := time.UTC
-		if tz := r.Header.Get("X-Timezone"); tz != "" {
-			if parsed, err := time.LoadLocation(tz); err == nil {
-				loc = parsed
-			}
-		}
-
-		page, err := store.ListUrineWithTZ(db, baby.ID, from, to, cursor, defaultPageSize, loc)
+		page, err := store.ListUrineWithTZ(db, baby.ID, lp.From, lp.To, lp.Cursor, defaultPageSize, lp.Loc)
 		if err != nil {
 			log.Printf("list urine: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		resp := model.MetricPage[urineResponse]{
-			Data:       make([]urineResponse, 0, len(page.Data)),
-			NextCursor: page.NextCursor,
-		}
-		for i := range page.Data {
-			resp.Data = append(resp.Data, toUrineResponse(&page.Data[i]))
-		}
-
-		writeJSON(w, http.StatusOK, resp)
+		writeJSON(w, http.StatusOK, mapMetricPage(page, toUrineResponse))
 	}
 }
 
@@ -158,12 +136,7 @@ func GetUrineHandler(db *sql.DB) http.HandlerFunc {
 
 		urine, err := store.GetUrineByID(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "urine entry not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("get urine: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "urine entry not found")
 			return
 		}
 
@@ -202,12 +175,7 @@ func UpdateUrineHandler(db *sql.DB) http.HandlerFunc {
 
 		urine, err := store.UpdateUrine(db, baby.ID, entryID, user.ID, req.Timestamp, req.Color, req.Notes)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "urine entry not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("update urine: %v", err)
-			http.Error(w, "failed to update urine entry", http.StatusInternalServerError)
+			handleStoreError(w, err, "urine entry not found")
 			return
 		}
 
@@ -235,12 +203,7 @@ func DeleteUrineHandler(db *sql.DB) http.HandlerFunc {
 
 		err := store.DeleteUrine(db, baby.ID, entryID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				http.Error(w, "urine entry not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("delete urine: %v", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			handleStoreError(w, err, "urine entry not found")
 			return
 		}
 

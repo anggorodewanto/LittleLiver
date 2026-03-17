@@ -30,7 +30,7 @@ func CalculateCalories(feedType string, volumeMl, calDensity *float64, defaultCa
 	}
 
 	// Breast-direct: breast_milk with no volume
-	if feedType == "breast_milk" && volumeMl == nil {
+	if feedType == FeedTypeBreastMilk && volumeMl == nil {
 		cal := defaultCalPerFeed
 		result.Calories = &cal
 		result.UsedDefaultCal = true
@@ -41,7 +41,7 @@ func CalculateCalories(feedType string, volumeMl, calDensity *float64, defaultCa
 	if volumeMl != nil {
 		density := calDensity
 		// Auto-apply default 20 kcal/oz for breast_milk and formula when cal_density not provided
-		if density == nil && (feedType == "breast_milk" || feedType == "formula") {
+		if density == nil && (feedType == FeedTypeBreastMilk || feedType == FeedTypeFormula) {
 			d := DefaultCalDensity
 			density = &d
 			result.CalDensity = &d
