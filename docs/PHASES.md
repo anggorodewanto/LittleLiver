@@ -113,7 +113,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) unlinking with other parents remaining keeps baby, (2) last parent unlinking deletes baby and all associated data, (3) both cases return 204. Write handler to pass.
   **Proof of progress:** Self-unlink tests pass with correct cascade behavior verified.
 
-- [ ] **Phase 14: Account deletion**
+- [x] **Phase 14: Account deletion**
   **Depends on:** Phase 12
   **What to build:** `DELETE /api/users/me` — full deletion cascade per spec: identify last-parent babies, delete them, delete invites created by the deleted user, anonymize `logged_by`/`updated_by` to `deleted_user`, anonymize `invites.used_by` to `deleted_user` for invites redeemed by the deleted user, delete user record. Returns 204. **Design note:** The deletion handler must iterate a configurable list of table names for `logged_by`/`updated_by` anonymization (table-driven design). Phase 25 (medications) and Phase 26 (med-logs) add their tables to this list when implemented.
   **TDD approach:** Write tests that (1) account deletion anonymizes correctly across all configured tables, (2) CASCADE cleanup works for sessions/baby_parents/push_subscriptions, (3) `invites.used_by` is anonymized to `deleted_user` on account deletion, (4) invites created by deleted user are hard-deleted, (5) table-driven anonymization iterates the configured table list, (6) returns 204. Write handler to pass.

@@ -77,6 +77,9 @@ func NewMux(opts ...Option) *http.ServeMux {
 			// Self-unlink endpoint
 			mux.Handle("DELETE /api/babies/{id}/parents/me", rateMw(authMw(csrfMw(http.HandlerFunc(UnlinkSelfHandler(cfg.db))))))
 
+			// Account deletion
+			mux.Handle("DELETE /api/users/me", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteAccountHandler(cfg.db))))))
+
 			// Invite endpoints
 			mux.Handle("POST /api/babies/{id}/invite", rateMw(authMw(csrfMw(http.HandlerFunc(CreateInviteHandler(cfg.db))))))
 			mux.Handle("POST /api/babies/join", rateMw(authMw(csrfMw(http.HandlerFunc(JoinBabyHandler(cfg.db))))))
