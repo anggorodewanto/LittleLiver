@@ -49,7 +49,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) ULID generation produces valid, sortable IDs, (2) enum validators accept valid values and reject invalid ones. Write minimal code to pass.
   **Proof of progress:** `go test ./internal/model/...` passes with model types and validation working.
 
-- [ ] **Phase 5: Dockerfile and local docker-compose**
+- [x] **Phase 5: Dockerfile and local docker-compose**
   **Depends on:** Phase 1, Phase 2
   **What to build:** Multi-stage `Dockerfile` per spec (frontend build, backend build, runtime stage). The runtime stage must explicitly install ImageMagick for HEIC→JPEG conversion. A `docker-compose.yml` for local development mounting a volume for SQLite. Verify the built image starts and serves the health endpoint.
   **TDD approach:** Build the image and run a smoke test (curl health endpoint from the container). This is an infrastructure phase — the "test" is a successful build + health check.

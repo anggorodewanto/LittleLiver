@@ -1,0 +1,11 @@
+*.md
+docs/
+.git/
+.github/
+.claude/
+frontend/node_modules/
+frontend/build/
+backend/tmp/
+*.db
+*.db-wal
+*.db-shm
