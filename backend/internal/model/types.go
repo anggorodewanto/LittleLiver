@@ -105,6 +105,50 @@ type Urine struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Weight represents a single weight measurement for a baby.
+type Weight struct {
+	ID                string    `json:"id"`
+	BabyID            string    `json:"baby_id"`
+	LoggedBy          string    `json:"logged_by"`
+	UpdatedBy         *string   `json:"updated_by,omitempty"`
+	Timestamp         time.Time `json:"timestamp"`
+	WeightKg          float64   `json:"weight_kg"`
+	MeasurementSource *string   `json:"measurement_source,omitempty"`
+	Notes             *string   `json:"notes,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// Temperature represents a single temperature reading for a baby.
+type Temperature struct {
+	ID        string    `json:"id"`
+	BabyID    string    `json:"baby_id"`
+	LoggedBy  string    `json:"logged_by"`
+	UpdatedBy *string   `json:"updated_by,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+	Value     float64   `json:"value"`
+	Method    string    `json:"method"`
+	Notes     *string   `json:"notes,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// AbdomenObservation represents a single abdomen observation for a baby.
+type AbdomenObservation struct {
+	ID         string    `json:"id"`
+	BabyID     string    `json:"baby_id"`
+	LoggedBy   string    `json:"logged_by"`
+	UpdatedBy  *string   `json:"updated_by,omitempty"`
+	Timestamp  time.Time `json:"timestamp"`
+	Firmness   string    `json:"firmness"`
+	Tenderness bool      `json:"tenderness"`
+	GirthCm    *float64  `json:"girth_cm,omitempty"`
+	PhotoKeys  *string   `json:"photo_keys,omitempty"`
+	Notes      *string   `json:"notes,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 // Invite represents an invite code for linking a parent to a baby.
 type Invite struct {
 	Code      string     `json:"code"`

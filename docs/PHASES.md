@@ -140,7 +140,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests for (1) stool creation with valid/invalid color_rating, (2) urine creation with color enum validation, (3) list/get-detail/update/delete for both. Reuse pagination tests. Write handlers.
   **Proof of progress:** Stool and urine CRUD tested; color rating validation working.
 
-- [ ] **Phase 18: Weight, temperature, and abdomen endpoints**
+- [x] **Phase 18: Weight, temperature, and abdomen endpoints**
   **Depends on:** Phase 15
   **What to build:** Migrations for `weights`, `temperatures`, `abdomen_observations` tables (all with `(baby_id, timestamp)` indexes). Endpoints for all three metric types. Weight: `weight_kg` to 2 decimals, `measurement_source` enum. Temperature: `value` to 1 decimal, `method` enum. Abdomen: `firmness` enum (required), `tenderness` boolean, `girth_cm` optional.
   **TDD approach:** Write tests for (1) weight creation with valid measurement_source, (2) temperature creation with method validation, (3) abdomen with required firmness validation, (4) CRUD operations including detail endpoints for all three. Write handlers.
