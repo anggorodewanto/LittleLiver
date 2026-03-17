@@ -160,7 +160,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Integration Tests — Baby Lifecycle
 
-- [ ] **Phase 21: Integration test — Multi-parent baby lifecycle**
+- [x] **Phase 21: Integration test — Multi-parent baby lifecycle**
   **Depends on:** Phase 13, Phase 15, Phase 16, Phase 20
   **What to build:** End-to-end test: User A creates baby → generates invite → User B joins with code → both users log entries (feedings, stools) → verify both can read all entries → User B unlinks → verify User B loses access → User A unlinks (last parent) → verify baby and all data deleted. Additionally, test the recalculate_calories flow: create baby, log breast-direct feedings, change default_cal_per_feed with `recalculate_calories=true`, verify all feeding calories updated.
   **TDD approach:** Write integration test with two test users, full HTTP request chain. Verify data isolation, cleanup, and calorie recalculation.
