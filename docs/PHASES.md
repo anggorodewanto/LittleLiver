@@ -283,7 +283,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## PDF Reports
 
-- [ ] **Phase 38: PDF report — text sections**
+- [x] **Phase 38: PDF report — text sections**
   **Depends on:** Phase 27, Phase 28
   **What to build:** `internal/report/` package. `GET /api/babies/:id/report?from=&to=` generates a PDF using maroto v2. This phase covers the text/table content: header (baby info, age, days post-Kasai), summary section, stool color log table, temperature log with fever flags, feeding summary (avg daily volume/calories), medication adherence ratio, notable observations section.
   **TDD approach:** Write tests that (1) PDF is generated without error for a baby with seeded data, (2) PDF contains expected text content (parse or check byte markers), (3) empty date range produces a valid but minimal PDF. Write the maroto v2 skeleton and text section generation.

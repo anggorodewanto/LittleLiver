@@ -134,6 +134,9 @@ func NewMux(opts ...Option) *http.ServeMux {
 			// Dashboard endpoint
 			mux.Handle("GET /api/babies/{id}/dashboard", rateMw(authMw(http.HandlerFunc(DashboardHandler(cfg.db)))))
 
+			// Report endpoint
+			mux.Handle("GET /api/babies/{id}/report", rateMw(authMw(http.HandlerFunc(ReportHandler(cfg.db)))))
+
 			// WHO percentile curves endpoint
 			mux.Handle("GET /api/who/percentiles", rateMw(authMw(http.HandlerFunc(WHOPercentilesHandler()))))
 
