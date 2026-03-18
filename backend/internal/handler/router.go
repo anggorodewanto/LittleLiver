@@ -137,6 +137,10 @@ func NewMux(opts ...Option) *http.ServeMux {
 			// WHO percentile curves endpoint
 			mux.Handle("GET /api/who/percentiles", rateMw(authMw(http.HandlerFunc(WHOPercentilesHandler()))))
 
+			// Push subscription endpoints
+			mux.Handle("POST /api/push/subscribe", rateMw(authMw(csrfMw(http.HandlerFunc(SubscribePushHandler(cfg.db))))))
+			mux.Handle("DELETE /api/push/subscribe", rateMw(authMw(csrfMw(http.HandlerFunc(UnsubscribePushHandler(cfg.db))))))
+
 			// Photo upload endpoint
 			if cfg.objStore != nil {
 				mux.Handle("POST /api/babies/{id}/upload", rateMw(authMw(csrfMw(http.HandlerFunc(UploadPhotoHandler(cfg.db, cfg.objStore))))))

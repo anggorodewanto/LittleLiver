@@ -245,7 +245,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Push Notifications
 
-- [ ] **Phase 33: Web Push subscription management**
+- [x] **Phase 33: Web Push subscription management**
   **Depends on:** Phase 7, Phase 8
   **What to build:** `POST /api/push/subscribe` — register push subscription (endpoint, p256dh, auth keys). Upsert on conflict (leveraging the `UNIQUE` constraint on `push_subscriptions.endpoint`). `DELETE /api/push/subscribe` — unregister. `internal/notify/` package with VAPID key management and Web Push sending (using a library or stdlib). Push subscription store.
   **TDD approach:** Write tests that (1) subscribe stores subscription with correct fields, (2) duplicate endpoint upserts existing subscription, (3) unsubscribe deletes, (4) sending a push notification calls the correct endpoint with VAPID auth (mock HTTP). Write store + notify package.

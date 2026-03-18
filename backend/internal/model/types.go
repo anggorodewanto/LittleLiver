@@ -265,3 +265,13 @@ type PhotoUpload struct {
 	UploadedAt   time.Time  `json:"uploaded_at"`
 	LinkedAt     *time.Time `json:"linked_at,omitempty"`
 }
+
+// PushSubscription represents a Web Push subscription for a user's device.
+type PushSubscription struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Endpoint  string    `json:"endpoint"`
+	P256dh    string    `json:"p256dh"`
+	Auth      string    `json:"auth"`
+	CreatedAt time.Time `json:"created_at"`
+}
