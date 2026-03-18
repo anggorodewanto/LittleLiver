@@ -275,7 +275,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Integration Test — Photo Flow
 
-- [ ] **Phase 37: Integration test — Photo flow**
+- [x] **Phase 37: Integration test — Photo flow**
   **Depends on:** Phase 36
   **What to build:** End-to-end test: Upload photo → receive R2 key → create stool entry with photo_key → verify linked_at set → read entry, verify signed URL returned (both `url` and `thumbnail_url`) → update entry removing photo → verify linked_at nulled → wait for cleanup window → run cleanup → verify R2 delete called. Also test: 5MB limit rejection, invalid MIME rejection, 4-photo limit.
   **TDD approach:** Write integration test with mock R2 client. Verify complete photo lifecycle including cleanup.
