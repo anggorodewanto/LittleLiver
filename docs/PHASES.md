@@ -237,7 +237,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) known weight/age/sex inputs produce expected z-scores (validated against WHO reference), (2) edge cases (day 0, day 730), (3) percentile curve generation returns correct number of points. Write the LMS calculation code.
   **Proof of progress:** WHO percentile calculations match reference values; percentile curves generated.
 
-- [ ] **Phase 32: WHO percentile endpoint**
+- [x] **Phase 32: WHO percentile endpoint**
   **Depends on:** Phase 31, Phase 8
   **What to build:** `GET /api/who/percentiles?sex=&from_days=&to_days=` endpoint returning the 5 percentile curves (3rd, 15th, 50th, 85th, 97th) as arrays of `{ age_days, weight_kg }` points. Uses the `internal/who/` package from Phase 31.
   **TDD approach:** Write tests that (1) male percentile curves return expected values at known age points, (2) female curves are different from male, (3) invalid sex param returns 400, (4) curves span the requested day range. Write the handler.

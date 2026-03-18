@@ -134,6 +134,9 @@ func NewMux(opts ...Option) *http.ServeMux {
 			// Dashboard endpoint
 			mux.Handle("GET /api/babies/{id}/dashboard", rateMw(authMw(http.HandlerFunc(DashboardHandler(cfg.db)))))
 
+			// WHO percentile curves endpoint
+			mux.Handle("GET /api/who/percentiles", rateMw(authMw(http.HandlerFunc(WHOPercentilesHandler()))))
+
 			// Photo upload endpoint
 			if cfg.objStore != nil {
 				mux.Handle("POST /api/babies/{id}/upload", rateMw(authMw(csrfMw(http.HandlerFunc(UploadPhotoHandler(cfg.db, cfg.objStore))))))
