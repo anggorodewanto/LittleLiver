@@ -181,7 +181,7 @@ func createBabyForIntegration(t *testing.T, db *sql.DB, userID string) string {
 func TestDashboardAggregation_Integration(t *testing.T) {
 	t.Parallel()
 
-	srv, db, cleanup := setupIntegrationServer(t)
+	srv, db, cleanup := setupOAuthIntegrationServer(t)
 	defer cleanup()
 
 	client, userID := loginAndGetAuthClient(t, srv)

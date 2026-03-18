@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/report"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
 )
@@ -32,11 +33,11 @@ func ReportHandler(db *sql.DB, objStore storage.ObjectStore) http.HandlerFunc {
 			return
 		}
 
-		if _, err := time.Parse("2006-01-02", from); err != nil {
+		if _, err := time.Parse(model.DateFormat, from); err != nil {
 			http.Error(w, "invalid from date format, expected YYYY-MM-DD", http.StatusBadRequest)
 			return
 		}
-		if _, err := time.Parse("2006-01-02", to); err != nil {
+		if _, err := time.Parse(model.DateFormat, to); err != nil {
 			http.Error(w, "invalid to date format, expected YYYY-MM-DD", http.StatusBadRequest)
 			return
 		}

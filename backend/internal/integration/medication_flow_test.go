@@ -1,17 +1,13 @@
 package integration_test
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ablankz/LittleLiver/backend/internal/auth"
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
 	"github.com/ablankz/LittleLiver/backend/internal/notify"
 	"github.com/ablankz/LittleLiver/backend/internal/testutil"
@@ -47,80 +43,6 @@ func (m *mockPusher) lastPayload() notify.Payload {
 	return m.sends[len(m.sends)-1].Payload
 }
 
-// doJSONWithHeaders performs an HTTP request with auth headers, optional JSON body,
-// and additional headers. Returns status and decoded body.
-func (tc *testClient) doJSONWithHeaders(method, path string, body any, headers map[string]string) (int, map[string]any) {
-	tc.t.Helper()
-	var bodyReader io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			tc.t.Fatalf("marshal body: %v", err)
-		}
-		bodyReader = bytes.NewReader(b)
-	}
-
-	req, err := http.NewRequest(method, tc.srv.URL+path, bodyReader)
-	if err != nil {
-		tc.t.Fatalf("create request: %v", err)
-	}
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tc.sessionID})
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if method != http.MethodGet && method != http.MethodHead {
-		req.Header.Set("X-CSRF-Token", tc.csrfToken)
-	}
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		tc.t.Fatalf("do request %s %s: %v", method, path, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		tc.t.Fatalf("read response: %v", err)
-	}
-
-	var result map[string]any
-	if len(respBody) > 0 {
-		if err := json.Unmarshal(respBody, &result); err != nil {
-			result = map[string]any{"_raw": string(respBody)}
-		}
-	}
-	return resp.StatusCode, result
-}
-
-// doJSONArray performs a GET and returns the response as a raw JSON array.
-func (tc *testClient) doJSONArray(path string) (int, []any) {
-	tc.t.Helper()
-	req, err := http.NewRequest(http.MethodGet, tc.srv.URL+path, nil)
-	if err != nil {
-		tc.t.Fatalf("create request: %v", err)
-	}
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tc.sessionID})
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		tc.t.Fatalf("do request GET %s: %v", path, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return resp.StatusCode, nil
-	}
-
-	var result []any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		tc.t.Fatalf("decode array response: %v", err)
-	}
-	return resp.StatusCode, result
-}
-
 // TestMedicationNotificationLifecycle exercises the full medication reminder
 // notification lifecycle using mock time and a mock push sender:
 //
@@ -133,7 +55,7 @@ func (tc *testClient) doJSONArray(path string) (int, []any) {
 func TestMedicationNotificationLifecycle(t *testing.T) {
 	t.Parallel()
 
-	srv, db, cleanup := setupMultiParentServer(t)
+	srv, db, cleanup := setupIntegrationServer(t)
 	defer cleanup()
 
 	client := newTestClient(t, srv, db)
@@ -313,7 +235,7 @@ func TestAccountDeletionAnonymizesMedicationTables(t *testing.T) {
 		}
 	}
 
-	srv, db, cleanup := setupMultiParentServer(t)
+	srv, db, cleanup := setupIntegrationServer(t)
 	defer cleanup()
 
 	clientA := newTestClient(t, srv, db)
@@ -413,8 +335,8 @@ func TestAccountDeletionAnonymizesMedicationTables(t *testing.T) {
 	}
 
 	// --- Verify medications and med_logs still exist ---
-	verifyEntryCountByTable(t, db, "medications", babyID, 1)
-	verifyEntryCountByTable(t, db, "med_logs", babyID, 2)
+	verifyEntryCount(t, db, "medications", babyID, 1)
+	verifyEntryCount(t, db, "med_logs", babyID, 2)
 
 	// --- Verify medications.logged_by anonymized for User A ---
 	verifyAnonymized(t, db, "medications", "logged_by", userAID, "deleted_user")
@@ -464,35 +386,5 @@ func TestAccountDeletionAnonymizesMedicationTables(t *testing.T) {
 	}
 	if babyCount != 1 {
 		t.Fatalf("expected baby to still exist, got count=%d", babyCount)
-	}
-}
-
-// --- Helper functions ---
-
-// createBabyViaAPI creates a baby via the API and returns the baby ID.
-func createBabyViaAPI(t *testing.T, client *testClient, name string) string {
-	t.Helper()
-	status, resp := client.doJSON(http.MethodPost, "/api/babies", map[string]any{
-		"name":          name,
-		"sex":           "female",
-		"date_of_birth": "2025-01-01",
-	})
-	if status != http.StatusCreated {
-		t.Fatalf("expected 201 creating baby, got %d: %v", status, resp)
-	}
-	return resp["id"].(string)
-}
-
-
-// verifyEntryCountByTable checks that the given table has the expected number of rows for a baby.
-func verifyEntryCountByTable(t *testing.T, db *sql.DB, table, babyID string, expected int) {
-	t.Helper()
-	var count int
-	err := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE baby_id = ?", table), babyID).Scan(&count)
-	if err != nil {
-		t.Fatalf("query %s count: %v", table, err)
-	}
-	if count != expected {
-		t.Errorf("expected %d entries in %s, got %d", expected, table, count)
 	}
 }

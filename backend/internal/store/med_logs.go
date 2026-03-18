@@ -34,7 +34,7 @@ func scanMedLog(s scanner) (*model.MedLog, error) {
 	m.Notes = nullStr(notes)
 
 	if scheduledTimeStr.Valid {
-		t, err := parseTime(scheduledTimeStr.String)
+		t, err := ParseTime(scheduledTimeStr.String)
 		if err != nil {
 			return nil, fmt.Errorf("parse scheduled_time: %w", err)
 		}
@@ -42,18 +42,18 @@ func scanMedLog(s scanner) (*model.MedLog, error) {
 	}
 
 	if givenAtStr.Valid {
-		t, err := parseTime(givenAtStr.String)
+		t, err := ParseTime(givenAtStr.String)
 		if err != nil {
 			return nil, fmt.Errorf("parse given_at: %w", err)
 		}
 		m.GivenAt = &t
 	}
 
-	m.CreatedAt, err = parseTime(createdStr)
+	m.CreatedAt, err = ParseTime(createdStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse created_at: %w", err)
 	}
-	m.UpdatedAt, err = parseTime(updatedStr)
+	m.UpdatedAt, err = ParseTime(updatedStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse updated_at: %w", err)
 	}

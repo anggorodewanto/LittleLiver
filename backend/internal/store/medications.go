@@ -31,11 +31,11 @@ func scanMedication(s scanner) (*model.Medication, error) {
 	m.Schedule = nullStr(schedule)
 	m.Timezone = nullStr(timezone)
 
-	m.CreatedAt, err = parseTime(createdStr)
+	m.CreatedAt, err = ParseTime(createdStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse created_at: %w", err)
 	}
-	m.UpdatedAt, err = parseTime(updatedStr)
+	m.UpdatedAt, err = ParseTime(updatedStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse updated_at: %w", err)
 	}

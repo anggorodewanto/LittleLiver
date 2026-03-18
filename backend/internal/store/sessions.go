@@ -61,11 +61,11 @@ func GetSessionByID(db *sql.DB, id string) (*model.Session, error) {
 		return nil, err
 	}
 
-	s.ExpiresAt, err = parseTime(expiresStr)
+	s.ExpiresAt, err = ParseTime(expiresStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse expires_at: %w", err)
 	}
-	s.CreatedAt, err = parseTime(createdStr)
+	s.CreatedAt, err = ParseTime(createdStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse created_at: %w", err)
 	}
@@ -82,8 +82,8 @@ func DeleteSession(db *sql.DB, id string) error {
 	return nil
 }
 
-// parseTime tries multiple time formats used by SQLite.
-func parseTime(s string) (time.Time, error) {
+// ParseTime tries multiple time formats used by SQLite.
+func ParseTime(s string) (time.Time, error) {
 	for _, layout := range []string{
 		time.DateTime,
 		time.RFC3339,

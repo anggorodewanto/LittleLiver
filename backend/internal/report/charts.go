@@ -97,7 +97,7 @@ func renderWeightChart(weights []store.WeightSeriesEntry, curves []who.Percentil
 		return nil, nil
 	}
 
-	dobTime, err := time.Parse("2006-01-02", dob)
+	dobTime, err := time.Parse(model.DateFormat, dob)
 	if err != nil {
 		return nil, fmt.Errorf("parse dob: %w", err)
 	}
@@ -133,7 +133,7 @@ func renderWeightChart(weights []store.WeightSeriesEntry, curves []who.Percentil
 	if len(weights) > 0 {
 		pts := make(plotter.XYs, 0, len(weights))
 		for _, w := range weights {
-			ts, parseErr := parseTimestampMulti(w.Timestamp)
+			ts, parseErr := store.ParseTime(w.Timestamp)
 			if parseErr != nil {
 				continue
 			}
@@ -191,7 +191,7 @@ func renderLabTrendsChart(trends map[string][]store.LabTrendEntry) ([]byte, erro
 			if err != nil {
 				continue // skip non-numeric values
 			}
-			ts, err := parseTimestampMulti(e.Timestamp)
+			ts, err := store.ParseTime(e.Timestamp)
 			if err != nil {
 				continue
 			}
@@ -261,21 +261,6 @@ func (dateTicker) Ticks(min, max float64) []plot.Tick {
 func formatUnixDate(unix float64) string {
 	t := time.Unix(int64(math.Round(unix)), 0).UTC()
 	return t.Format("Jan 02")
-}
-
-// parseTimestampMulti tries multiple datetime formats.
-func parseTimestampMulti(ts string) (time.Time, error) {
-	formats := []string{
-		model.DateTimeFormat,  // 2006-01-02T15:04:05Z
-		"2006-01-02 15:04:05", // SQLite default
-		"2006-01-02T15:04:05",
-	}
-	for _, f := range formats {
-		if t, err := time.Parse(f, ts); err == nil {
-			return t, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("cannot parse timestamp %q", ts)
 }
 
 // renderPlotToPNG renders a plot to PNG bytes.

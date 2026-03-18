@@ -16,11 +16,9 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
 
-const testSessionSecret = "integration-test-secret"
-
-// setupIntegrationServer creates mock Google OAuth servers and an httptest.Server
+// setupOAuthIntegrationServer creates mock Google OAuth servers and an httptest.Server
 // with the full router stack. Returns the app server, cleanup func, and DB.
-func setupIntegrationServer(t *testing.T) (*httptest.Server, *sql.DB, func()) {
+func setupOAuthIntegrationServer(t *testing.T) (*httptest.Server, *sql.DB, func()) {
 	t.Helper()
 
 	db := testutil.SetupTestDB(t)
@@ -98,7 +96,7 @@ func newClientWithCookies(t *testing.T) *http.Client {
 // /api/me (authorized GET) -> logout -> verify 401.
 func TestAuthFlow_FullLifecycle(t *testing.T) {
 	t.Parallel()
-	srv, _, cleanup := setupIntegrationServer(t)
+	srv, _, cleanup := setupOAuthIntegrationServer(t)
 	defer cleanup()
 
 	client := newClientWithCookies(t)
@@ -235,7 +233,7 @@ func TestAuthFlow_FullLifecycle(t *testing.T) {
 // endpoint extends the session's expiration (sliding window).
 func TestAuthFlow_SlidingWindowExtension(t *testing.T) {
 	t.Parallel()
-	srv, db, cleanup := setupIntegrationServer(t)
+	srv, db, cleanup := setupOAuthIntegrationServer(t)
 	defer cleanup()
 
 	client := newClientWithCookies(t)
@@ -326,7 +324,7 @@ func TestAuthFlow_SlidingWindowExtension(t *testing.T) {
 // results in a 401 response.
 func TestAuthFlow_ExpiredSessionRejected(t *testing.T) {
 	t.Parallel()
-	srv, db, cleanup := setupIntegrationServer(t)
+	srv, db, cleanup := setupOAuthIntegrationServer(t)
 	defer cleanup()
 
 	client := newClientWithCookies(t)
@@ -405,7 +403,7 @@ func TestAuthFlow_ExpiredSessionRejected(t *testing.T) {
 // to protected endpoints return 401.
 func TestAuthFlow_UnauthenticatedAccess(t *testing.T) {
 	t.Parallel()
-	srv, _, cleanup := setupIntegrationServer(t)
+	srv, _, cleanup := setupOAuthIntegrationServer(t)
 	defer cleanup()
 
 	client := newClientWithCookies(t)
@@ -435,7 +433,7 @@ func TestAuthFlow_UnauthenticatedAccess(t *testing.T) {
 // session cookie value gets 401.
 func TestAuthFlow_InvalidSessionCookie(t *testing.T) {
 	t.Parallel()
-	srv, _, cleanup := setupIntegrationServer(t)
+	srv, _, cleanup := setupOAuthIntegrationServer(t)
 	defer cleanup()
 
 	client := &http.Client{
@@ -464,7 +462,7 @@ func TestAuthFlow_InvalidSessionCookie(t *testing.T) {
 // reused after the callback (replay attack prevention).
 func TestAuthFlow_CallbackReplayPrevented(t *testing.T) {
 	t.Parallel()
-	srv, _, cleanup := setupIntegrationServer(t)
+	srv, _, cleanup := setupOAuthIntegrationServer(t)
 	defer cleanup()
 
 	client := newClientWithCookies(t)

@@ -63,12 +63,14 @@ type noteEntry struct {
 // Generate produces a PDF report for the given baby within the date range [from, to].
 // The PDF is written to w. If objStore is non-nil, photo thumbnails are fetched and embedded.
 func Generate(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, to string, w io.Writer) error {
-	data, err := queryReportData(db, objStore, baby, from, to)
+	now := time.Now().UTC()
+
+	data, err := queryReportData(db, objStore, baby, from, to, now)
 	if err != nil {
 		return fmt.Errorf("query report data: %w", err)
 	}
 
-	m := buildPDF(baby, from, to, data)
+	m := buildPDF(baby, from, to, data, now)
 
 	doc, err := m.Generate()
 	if err != nil {
@@ -80,7 +82,7 @@ func Generate(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, 
 }
 
 // queryReportData fetches all data needed for the report.
-func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, to string) (*reportData, error) {
+func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, to string, now time.Time) (*reportData, error) {
 	babyID := baby.ID
 
 	summary, err := store.GetDashboardSummary(db, babyID, from, to)
@@ -125,7 +127,6 @@ func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby,
 
 	// Compute WHO percentile curves for the baby's age range
 	var whoCurves []who.PercentileCurve
-	now := time.Now().UTC()
 	ageDays := int(now.Sub(baby.DateOfBirth).Hours() / 24)
 	if ageDays > 0 && ageDays <= 730 {
 		curves, err := who.PercentileCurves(baby.Sex, 0, ageDays)
@@ -287,7 +288,7 @@ func queryNotes(db *sql.DB, babyID, from, to string) ([]noteEntry, error) {
 }
 
 // buildPDF constructs the maroto PDF document.
-func buildPDF(baby *model.Baby, from, to string, data *reportData) core.Maroto {
+func buildPDF(baby *model.Baby, from, to string, data *reportData, now time.Time) core.Maroto {
 	cfg := config.NewBuilder().
 		WithDefaultFont(&props.Font{
 			Size:   10,
@@ -298,7 +299,7 @@ func buildPDF(baby *model.Baby, from, to string, data *reportData) core.Maroto {
 
 	m := maroto.New(cfg)
 
-	addHeader(m, baby, from, to)
+	addHeader(m, baby, from, to, now)
 	addSummarySection(m, data.summary)
 	addStoolColorTable(m, data.stools)
 	addTemperatureTable(m, data.temps)
@@ -317,10 +318,9 @@ func buildPDF(baby *model.Baby, from, to string, data *reportData) core.Maroto {
 	return m
 }
 
-// addChartSection renders a stool chart and embeds it.
-func addChartSection(m core.Maroto, title string, stools []store.StoolColorSeriesEntry) {
-	chartPNG, err := renderStoolChart(stools)
-	if err != nil || chartPNG == nil {
+// embedChartPNG embeds a pre-rendered chart PNG into the PDF with a section title.
+func embedChartPNG(m core.Maroto, title string, chartPNG []byte) {
+	if chartPNG == nil {
 		return
 	}
 	m.AddRows(text.NewRow(8, title, sectionStyle))
@@ -333,36 +333,31 @@ func addChartSection(m core.Maroto, title string, stools []store.StoolColorSerie
 	m.AddRows(spacerRow(4))
 }
 
+// addChartSection renders a stool chart and embeds it.
+func addChartSection(m core.Maroto, title string, stools []store.StoolColorSeriesEntry) {
+	chartPNG, err := renderStoolChart(stools)
+	if err != nil {
+		return
+	}
+	embedChartPNG(m, title, chartPNG)
+}
+
 // addWeightChartSection renders a weight chart with WHO percentile bands.
 func addWeightChartSection(m core.Maroto, weights []store.WeightSeriesEntry, curves []who.PercentileCurve, dob string) {
 	chartPNG, err := renderWeightChart(weights, curves, dob)
-	if err != nil || chartPNG == nil {
+	if err != nil {
 		return
 	}
-	m.AddRows(text.NewRow(8, "Weight Chart (WHO Percentiles)", sectionStyle))
-	m.AddRows(row.New(80).Add(
-		image.NewFromBytesCol(12, chartPNG, extension.Png, props.Rect{
-			Percent: 100,
-			Center:  true,
-		}),
-	))
-	m.AddRows(spacerRow(4))
+	embedChartPNG(m, "Weight Chart (WHO Percentiles)", chartPNG)
 }
 
 // addLabTrendsSection renders a lab trends chart.
 func addLabTrendsSection(m core.Maroto, trends map[string][]store.LabTrendEntry) {
 	chartPNG, err := renderLabTrendsChart(trends)
-	if err != nil || chartPNG == nil {
+	if err != nil {
 		return
 	}
-	m.AddRows(text.NewRow(8, "Lab Results Trends", sectionStyle))
-	m.AddRows(row.New(80).Add(
-		image.NewFromBytesCol(12, chartPNG, extension.Png, props.Rect{
-			Percent: 100,
-			Center:  true,
-		}),
-	))
-	m.AddRows(spacerRow(4))
+	embedChartPNG(m, "Lab Results Trends", chartPNG)
 }
 
 // addPhotoAppendix adds a photo appendix section with thumbnails.
@@ -445,11 +440,10 @@ var (
 )
 
 // addHeader adds the report header with baby info.
-func addHeader(m core.Maroto, baby *model.Baby, from, to string) {
+func addHeader(m core.Maroto, baby *model.Baby, from, to string, now time.Time) {
 	m.AddRows(text.NewRow(10, "LittleLiver Health Report", titleStyle))
 	m.AddRows(spacerRow(3))
 
-	now := time.Now().UTC()
 	ageDays := int(now.Sub(baby.DateOfBirth).Hours() / 24)
 	ageStr := FormatAge(ageDays)
 

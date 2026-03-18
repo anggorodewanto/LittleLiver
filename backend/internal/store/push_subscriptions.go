@@ -65,7 +65,6 @@ func GetPushSubscriptionsByUserID(db *sql.DB, userID string) ([]model.PushSubscr
 	return subs, nil
 }
 
-
 // scanPushSubscription scans a single push subscription row from the given scanner.
 func scanPushSubscription(s scanner) (*model.PushSubscription, error) {
 	var sub model.PushSubscription
@@ -76,7 +75,7 @@ func scanPushSubscription(s scanner) (*model.PushSubscription, error) {
 		return nil, err
 	}
 
-	sub.CreatedAt, err = parseTime(createdStr)
+	sub.CreatedAt, err = ParseTime(createdStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse created_at: %w", err)
 	}

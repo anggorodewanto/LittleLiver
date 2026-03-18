@@ -165,13 +165,13 @@ func scanPhotoUpload(s scanner) (*model.PhotoUpload, error) {
 	p.BabyID = nullStr(babyID)
 	p.ThumbnailKey = nullStr(thumbnailKey)
 
-	p.UploadedAt, err = parseTime(uploadedAtStr)
+	p.UploadedAt, err = ParseTime(uploadedAtStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse uploaded_at: %w", err)
 	}
 
 	if linkedAtStr.Valid {
-		t, err := parseTime(linkedAtStr.String)
+		t, err := ParseTime(linkedAtStr.String)
 		if err != nil {
 			return nil, fmt.Errorf("parse linked_at: %w", err)
 		}

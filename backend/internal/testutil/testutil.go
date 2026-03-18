@@ -103,6 +103,39 @@ func CreateTestBaby(t *testing.T, db *sql.DB, userID string) *model.Baby {
 	return nil
 }
 
+// SeedBabyWithKasai creates a baby with kasai_date set, linked to the given user.
+// Returns the fully populated Baby model.
+func SeedBabyWithKasai(t *testing.T, db *sql.DB, userID string) *model.Baby {
+	t.Helper()
+	babyID := model.NewULID()
+	_, err := db.Exec(
+		`INSERT INTO babies (id, name, sex, date_of_birth, kasai_date)
+		 VALUES (?, 'Report Baby', 'female', '2025-06-15', '2025-07-01')`,
+		babyID,
+	)
+	if err != nil {
+		t.Fatalf("testutil.SeedBabyWithKasai: insert baby: %v", err)
+	}
+	_, err = db.Exec(
+		"INSERT INTO baby_parents (baby_id, user_id) VALUES (?, ?)",
+		babyID, userID,
+	)
+	if err != nil {
+		t.Fatalf("testutil.SeedBabyWithKasai: insert baby_parents: %v", err)
+	}
+	babies, err := store.GetBabiesByUserID(db, userID)
+	if err != nil {
+		t.Fatalf("testutil.SeedBabyWithKasai: GetBabiesByUserID: %v", err)
+	}
+	for i := range babies {
+		if babies[i].ID == babyID {
+			return &babies[i]
+		}
+	}
+	t.Fatalf("testutil.SeedBabyWithKasai: baby %s not found after insert", babyID)
+	return nil
+}
+
 // TestFixture bundles commonly used test objects for convenience.
 type TestFixture struct {
 	DB   *sql.DB

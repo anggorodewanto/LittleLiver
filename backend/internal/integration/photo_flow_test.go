@@ -19,64 +19,26 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/auth"
 	"github.com/ablankz/LittleLiver/backend/internal/cron"
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
-	"github.com/ablankz/LittleLiver/backend/internal/middleware"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
-	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
 
 // setupPhotoServer creates a test server with object store enabled.
 func setupPhotoServer(t *testing.T) (*httptest.Server, *sql.DB, *storage.MemoryStore, func()) {
 	t.Helper()
-
-	db := testutil.SetupTestDB(t)
 	objStore := storage.NewMemoryStore()
-
-	mux := handler.NewMux(
-		handler.WithDB(db),
-		handler.WithAuthConfig(auth.Config{
-			ClientID:      "test-client-id",
-			ClientSecret:  "test-client-secret",
-			RedirectURL:   "http://localhost/auth/google/callback",
-			TokenURL:      "http://localhost/fake-token",
-			UserInfoURL:   "http://localhost/fake-userinfo",
-			SessionSecret: testSessionSecret,
-		}),
-		handler.WithObjectStore(objStore),
-	)
-
-	srv := httptest.NewServer(mux)
-	cleanup := func() {
-		srv.Close()
-		db.Close()
-	}
+	srv, db, cleanup := setupIntegrationServer(t, handler.WithObjectStore(objStore))
 	return srv, db, objStore, cleanup
 }
 
 // photoTestClient extends testClient with multipart upload capability.
 type photoTestClient struct {
-	t         *testing.T
-	srv       *httptest.Server
-	userID    string
-	sessionID string
-	csrfToken string
+	*testClient
 }
 
 func newPhotoTestClient(t *testing.T, srv *httptest.Server, db *sql.DB) *photoTestClient {
 	t.Helper()
-	user := testutil.CreateTestUser(t, db)
-	sess, err := store.CreateSession(db, user.ID)
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-	csrfToken := middleware.CSRFToken(sess.Token, testSessionSecret)
-	return &photoTestClient{
-		t:         t,
-		srv:       srv,
-		userID:    user.ID,
-		sessionID: sess.ID,
-		csrfToken: csrfToken,
-	}
+	return &photoTestClient{testClient: newTestClient(t, srv, db)}
 }
 
 // uploadPhoto sends a multipart file upload request and returns the status + decoded JSON body.
@@ -105,50 +67,6 @@ func (pc *photoTestClient) uploadPhoto(babyID, filename string, data []byte) (in
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		pc.t.Fatalf("do upload: %v", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		pc.t.Fatalf("read response: %v", err)
-	}
-
-	var result map[string]any
-	if len(respBody) > 0 {
-		if err := json.Unmarshal(respBody, &result); err != nil {
-			result = map[string]any{"_raw": string(respBody)}
-		}
-	}
-	return resp.StatusCode, result
-}
-
-// doJSON performs an HTTP request with auth headers and optional JSON body.
-func (pc *photoTestClient) doJSON(method, path string, body any) (int, map[string]any) {
-	pc.t.Helper()
-	var bodyReader io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			pc.t.Fatalf("marshal body: %v", err)
-		}
-		bodyReader = bytes.NewReader(b)
-	}
-
-	req, err := http.NewRequest(method, pc.srv.URL+path, bodyReader)
-	if err != nil {
-		pc.t.Fatalf("create request: %v", err)
-	}
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: pc.sessionID})
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if method != http.MethodGet && method != http.MethodHead {
-		req.Header.Set("X-CSRF-Token", pc.csrfToken)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		pc.t.Fatalf("do request %s %s: %v", method, path, err)
 	}
 	defer resp.Body.Close()
 
@@ -372,7 +290,7 @@ func TestPhotoFlow_5MBLimitRejection(t *testing.T) {
 	defer cleanup()
 
 	client := newPhotoTestClient(t, srv, db)
-	babyID := createPhotoBaby(t, client)
+	babyID := createBabyViaAPI(t, client.testClient, "Photo Test Baby")
 
 	// Create data larger than 5MB
 	bigData := make([]byte, 5*1024*1024+1)
@@ -394,7 +312,7 @@ func TestPhotoFlow_InvalidMIMERejection(t *testing.T) {
 	defer cleanup()
 
 	client := newPhotoTestClient(t, srv, db)
-	babyID := createPhotoBaby(t, client)
+	babyID := createBabyViaAPI(t, client.testClient, "Photo Test Baby")
 
 	// Upload a text file disguised as a gif
 	status, resp := client.uploadPhoto(babyID, "test.gif", []byte("GIF89a"))
@@ -411,7 +329,7 @@ func TestPhotoFlow_4PhotoLimit(t *testing.T) {
 	defer cleanup()
 
 	client := newPhotoTestClient(t, srv, db)
-	babyID := createPhotoBaby(t, client)
+	babyID := createBabyViaAPI(t, client.testClient, "Photo Test Baby")
 	stoolPath := fmt.Sprintf("/api/babies/%s/stools", babyID)
 
 	// Upload 5 photos
@@ -459,18 +377,4 @@ func TestPhotoFlow_4PhotoLimit(t *testing.T) {
 			t.Errorf("photo %d: expected non-empty thumbnail_url", i)
 		}
 	}
-}
-
-// createPhotoBaby creates a baby via the API and returns the baby ID.
-func createPhotoBaby(t *testing.T, client *photoTestClient) string {
-	t.Helper()
-	status, resp := client.doJSON(http.MethodPost, "/api/babies", map[string]any{
-		"name":          "Photo Test Baby",
-		"sex":           "female",
-		"date_of_birth": "2025-01-01",
-	})
-	if status != http.StatusCreated {
-		t.Fatalf("expected 201 creating baby, got %d: %v", status, resp)
-	}
-	return resp["id"].(string)
 }

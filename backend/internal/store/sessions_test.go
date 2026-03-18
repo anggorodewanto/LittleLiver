@@ -9,7 +9,7 @@ import (
 func TestParseTime_Unparseable(t *testing.T) {
 	t.Parallel()
 
-	_, err := parseTime("not-a-date")
+	_, err := ParseTime("not-a-date")
 	if err == nil {
 		t.Fatal("expected error for unparseable time, got nil")
 	}
@@ -24,9 +24,9 @@ func TestParseTime_ValidFormats(t *testing.T) {
 		"2025-01-15T10:30:00",
 	}
 	for _, tc := range cases {
-		_, err := parseTime(tc)
+		_, err := ParseTime(tc)
 		if err != nil {
-			t.Errorf("parseTime(%q) returned error: %v", tc, err)
+			t.Errorf("ParseTime(%q) returned error: %v", tc, err)
 		}
 	}
 }

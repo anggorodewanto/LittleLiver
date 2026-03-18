@@ -26,19 +26,19 @@ func scanBaby(s scanner) (*model.Baby, error) {
 		return nil, err
 	}
 
-	b.DateOfBirth, err = parseTime(dobStr)
+	b.DateOfBirth, err = ParseTime(dobStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse date_of_birth: %w", err)
 	}
 	if diagStr.Valid {
-		t, err := parseTime(diagStr.String)
+		t, err := ParseTime(diagStr.String)
 		if err != nil {
 			return nil, fmt.Errorf("parse diagnosis_date: %w", err)
 		}
 		b.DiagnosisDate = &t
 	}
 	if kasaiStr.Valid {
-		t, err := parseTime(kasaiStr.String)
+		t, err := ParseTime(kasaiStr.String)
 		if err != nil {
 			return nil, fmt.Errorf("parse kasai_date: %w", err)
 		}
@@ -47,7 +47,7 @@ func scanBaby(s scanner) (*model.Baby, error) {
 	if notesStr.Valid {
 		b.Notes = &notesStr.String
 	}
-	b.CreatedAt, err = parseTime(createdStr)
+	b.CreatedAt, err = ParseTime(createdStr)
 	if err != nil {
 		return nil, fmt.Errorf("parse created_at: %w", err)
 	}

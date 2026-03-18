@@ -13,63 +13,9 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/report"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
+	"github.com/ablankz/LittleLiver/backend/internal/store"
 	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
-
-// seedBabyWithKasai creates a baby with kasai_date set for report testing.
-func seedBabyWithKasai(t *testing.T, db *sql.DB, userID string) *model.Baby {
-	t.Helper()
-	babyID := model.NewULID()
-	_, err := db.Exec(
-		`INSERT INTO babies (id, name, sex, date_of_birth, kasai_date)
-		 VALUES (?, 'Report Baby', 'female', '2025-06-15', '2025-07-01')`,
-		babyID,
-	)
-	if err != nil {
-		t.Fatalf("insert baby: %v", err)
-	}
-	_, err = db.Exec(
-		"INSERT INTO baby_parents (baby_id, user_id) VALUES (?, ?)",
-		babyID, userID,
-	)
-	if err != nil {
-		t.Fatalf("insert baby_parents: %v", err)
-	}
-	baby, err := getBabyByID(db, babyID)
-	if err != nil {
-		t.Fatalf("get baby: %v", err)
-	}
-	return baby
-}
-
-// getBabyByID fetches a baby by ID for test convenience.
-func getBabyByID(db *sql.DB, id string) (*model.Baby, error) {
-	var b model.Baby
-	var diagDate, kasaiDate, notes sql.NullString
-	var dobStr, createdStr string
-	err := db.QueryRow(
-		`SELECT id, name, sex, date_of_birth, diagnosis_date, kasai_date,
-		        default_cal_per_feed, notes, created_at
-		 FROM babies WHERE id = ?`, id,
-	).Scan(&b.ID, &b.Name, &b.Sex, &dobStr, &diagDate, &kasaiDate,
-		&b.DefaultCalPerFeed, &notes, &createdStr)
-	if err != nil {
-		return nil, err
-	}
-	b.DateOfBirth, _ = time.Parse(model.DateFormat, dobStr)
-	if kasaiDate.Valid {
-		t, _ := time.Parse(model.DateFormat, kasaiDate.String)
-		b.KasaiDate = &t
-	}
-	if diagDate.Valid {
-		t, _ := time.Parse(model.DateFormat, diagDate.String)
-		b.DiagnosisDate = &t
-	}
-	if notes.Valid {
-		b.Notes = &notes.String
-	}
-	return &b, nil
-}
 
 // seedReportData inserts sample metrics for a baby within a given date range.
 func seedReportData(t *testing.T, db *sql.DB, babyID, userID string) {
@@ -162,7 +108,7 @@ func TestGeneratePDF_WithData(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasai(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 	seedReportData(t, db, baby.ID, user.ID)
 
 	var buf bytes.Buffer
@@ -187,7 +133,7 @@ func TestGeneratePDF_EmptyDateRange(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasai(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 	// No data seeded — empty date range
 
 	var buf bytes.Buffer
@@ -211,7 +157,7 @@ func TestGeneratePDF_ContainsExpectedText(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasai(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 	seedReportData(t, db, baby.ID, user.ID)
 
 	var buf bytes.Buffer
@@ -225,13 +171,13 @@ func TestGeneratePDF_ContainsExpectedText(t *testing.T) {
 	data := string(buf.Bytes())
 
 	expectedFragments := []string{
-		"Report Baby",        // baby name
-		"Stool Color Log",    // section header
-		"Temperature Log",    // section header
-		"Feeding Summary",    // section header
-		"Medication",         // medication section
-		"UDCA",               // medication name
-		"Notable",            // observations section
+		"Report Baby",     // baby name
+		"Stool Color Log", // section header
+		"Temperature Log", // section header
+		"Feeding Summary", // section header
+		"Medication",      // medication section
+		"UDCA",            // medication name
+		"Notable",         // observations section
 	}
 
 	for _, frag := range expectedFragments {
@@ -316,9 +262,19 @@ func TestGeneratePDF_OldBaby(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert baby_parents: %v", err)
 	}
-	baby, err := getBabyByID(db, babyID)
+	babies, err := store.GetBabiesByUserID(db, user.ID)
 	if err != nil {
-		t.Fatalf("get baby: %v", err)
+		t.Fatalf("get babies: %v", err)
+	}
+	var baby *model.Baby
+	for i := range babies {
+		if babies[i].ID == babyID {
+			baby = &babies[i]
+			break
+		}
+	}
+	if baby == nil {
+		t.Fatalf("baby %s not found", babyID)
 	}
 
 	var buf bytes.Buffer
@@ -354,7 +310,7 @@ func TestGeneratePDF_NoteWithoutCategory(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasai(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 
 	// Insert note without category
 	ts := time.Date(2025, 8, 1, 12, 0, 0, 0, time.UTC).Format(model.DateTimeFormat)
@@ -452,7 +408,7 @@ func TestGeneratePDF_WithCharts(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasai(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 	seedFullReportData(t, db, baby.ID, user.ID, nil)
 
 	var buf bytes.Buffer
@@ -485,7 +441,7 @@ func TestGeneratePDF_WithLabTrendsChart(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasai(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 	seedFullReportData(t, db, baby.ID, user.ID, nil)
 
 	var buf bytes.Buffer
@@ -506,7 +462,7 @@ func TestGeneratePDF_WithPhotos(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasai(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 	objStore := storage.NewMemoryStore()
 	seedFullReportData(t, db, baby.ID, user.ID, objStore)
 
@@ -528,7 +484,7 @@ func TestGeneratePDF_WithPhotos_NoStorage(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasai(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 	seedReportData(t, db, baby.ID, user.ID)
 
 	// Pass nil storage — should not error, just skip photos
@@ -551,7 +507,7 @@ func TestGeneratePDF_FullReport_ValidPDF(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasai(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 	objStore := storage.NewMemoryStore()
 	seedFullReportData(t, db, baby.ID, user.ID, objStore)
 

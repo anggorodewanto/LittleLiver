@@ -1,173 +1,10 @@
 package integration_test
 
 import (
-	"bytes"
-	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"testing"
-
-	"github.com/ablankz/LittleLiver/backend/internal/auth"
-	"github.com/ablankz/LittleLiver/backend/internal/handler"
-	"github.com/ablankz/LittleLiver/backend/internal/middleware"
-	"github.com/ablankz/LittleLiver/backend/internal/store"
-	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
-
-// testClient wraps an HTTP client with session/CSRF info for a test user.
-type testClient struct {
-	t         *testing.T
-	srv       *httptest.Server
-	userID    string
-	sessionID string
-	csrfToken string
-}
-
-// setupMultiParentServer creates a test server and DB without mock OAuth.
-// Auth is handled by directly inserting sessions into the DB.
-func setupMultiParentServer(t *testing.T) (*httptest.Server, *sql.DB, func()) {
-	t.Helper()
-
-	db := testutil.SetupTestDB(t)
-
-	// Provide dummy OAuth config so routes are registered (ClientID + Secret must be non-empty).
-	mux := handler.NewMux(
-		handler.WithDB(db),
-		handler.WithAuthConfig(auth.Config{
-			ClientID:      "test-client-id",
-			ClientSecret:  "test-client-secret",
-			RedirectURL:   "http://localhost/auth/google/callback",
-			TokenURL:      "http://localhost/fake-token",
-			UserInfoURL:   "http://localhost/fake-userinfo",
-			SessionSecret: testSessionSecret,
-		}),
-	)
-
-	srv := httptest.NewServer(mux)
-	cleanup := func() {
-		srv.Close()
-		db.Close()
-	}
-	return srv, db, cleanup
-}
-
-// newTestClient creates a user and authenticated client for integration tests.
-func newTestClient(t *testing.T, srv *httptest.Server, db *sql.DB) *testClient {
-	t.Helper()
-	user := testutil.CreateTestUser(t, db)
-	sess, err := store.CreateSession(db, user.ID)
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-	csrfToken := middleware.CSRFToken(sess.Token, testSessionSecret)
-	return &testClient{
-		t:         t,
-		srv:       srv,
-		userID:    user.ID,
-		sessionID: sess.ID,
-		csrfToken: csrfToken,
-	}
-}
-
-// doJSON performs an HTTP request with auth headers and optional JSON body, returns status + decoded body.
-func (tc *testClient) doJSON(method, path string, body any) (int, map[string]any) {
-	tc.t.Helper()
-	var bodyReader io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			tc.t.Fatalf("marshal body: %v", err)
-		}
-		bodyReader = bytes.NewReader(b)
-	}
-
-	req, err := http.NewRequest(method, tc.srv.URL+path, bodyReader)
-	if err != nil {
-		tc.t.Fatalf("create request: %v", err)
-	}
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tc.sessionID})
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if method != http.MethodGet && method != http.MethodHead {
-		req.Header.Set("X-CSRF-Token", tc.csrfToken)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		tc.t.Fatalf("do request %s %s: %v", method, path, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		tc.t.Fatalf("read response: %v", err)
-	}
-
-	var result map[string]any
-	if len(respBody) > 0 {
-		if err := json.Unmarshal(respBody, &result); err != nil {
-			// Store raw text in a special key for debugging
-			result = map[string]any{"_raw": string(respBody)}
-		}
-	}
-	return resp.StatusCode, result
-}
-
-// doJSONList performs a GET and returns a list response (array at "data" key).
-// Returns nil data for non-200 responses (e.g. 403).
-func (tc *testClient) doJSONList(path string) (int, []any) {
-	tc.t.Helper()
-	req, err := http.NewRequest(http.MethodGet, tc.srv.URL+path, nil)
-	if err != nil {
-		tc.t.Fatalf("create request: %v", err)
-	}
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tc.sessionID})
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		tc.t.Fatalf("do request GET %s: %v", path, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return resp.StatusCode, nil
-	}
-
-	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		tc.t.Fatalf("decode list response: %v", err)
-	}
-
-	data, ok := result["data"].([]any)
-	if !ok {
-		data = []any{}
-	}
-	return resp.StatusCode, data
-}
-
-// doRaw performs an HTTP request and returns the raw status code.
-func (tc *testClient) doRaw(method, path string) int {
-	tc.t.Helper()
-	req, err := http.NewRequest(method, tc.srv.URL+path, nil)
-	if err != nil {
-		tc.t.Fatalf("create request: %v", err)
-	}
-	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tc.sessionID})
-	if method != http.MethodGet && method != http.MethodHead {
-		req.Header.Set("X-CSRF-Token", tc.csrfToken)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		tc.t.Fatalf("do request %s %s: %v", method, path, err)
-	}
-	resp.Body.Close()
-	return resp.StatusCode
-}
 
 // TestMultiParentBabyLifecycle exercises the full multi-parent lifecycle:
 // User A creates baby -> generates invite -> User B joins -> both log entries ->
@@ -175,7 +12,7 @@ func (tc *testClient) doRaw(method, path string) int {
 // User A unlinks (last parent) -> verify baby and all data deleted.
 func TestMultiParentBabyLifecycle(t *testing.T) {
 	t.Parallel()
-	srv, db, cleanup := setupMultiParentServer(t)
+	srv, db, cleanup := setupIntegrationServer(t)
 	defer cleanup()
 
 	clientA := newTestClient(t, srv, db)
@@ -242,9 +79,9 @@ func TestMultiParentBabyLifecycle(t *testing.T) {
 
 	// User B logs a formula feeding
 	status, feedB := clientB.doJSON(http.MethodPost, feedingPath, map[string]any{
-		"timestamp":  "2025-06-15T14:00:00Z",
-		"feed_type":  "formula",
-		"volume_ml":  120.0,
+		"timestamp":   "2025-06-15T14:00:00Z",
+		"feed_type":   "formula",
+		"volume_ml":   120.0,
 		"cal_density": 0.67,
 	})
 	if status != http.StatusCreated {
@@ -401,16 +238,16 @@ func TestMultiParentBabyLifecycle(t *testing.T) {
 // verify all feeding calories updated.
 func TestRecalculateCaloriesFlow(t *testing.T) {
 	t.Parallel()
-	srv, db, cleanup := setupMultiParentServer(t)
+	srv, db, cleanup := setupIntegrationServer(t)
 	defer cleanup()
 
 	client := newTestClient(t, srv, db)
 
 	// --- Step 1: Create baby with default_cal_per_feed ---
 	status, babyResp := client.doJSON(http.MethodPost, "/api/babies", map[string]any{
-		"name":                "Calorie Baby",
-		"sex":                 "male",
-		"date_of_birth":       "2025-05-01",
+		"name":                 "Calorie Baby",
+		"sex":                  "male",
+		"date_of_birth":        "2025-05-01",
 		"default_cal_per_feed": 50.0,
 	})
 	if status != http.StatusCreated {
@@ -461,9 +298,9 @@ func TestRecalculateCaloriesFlow(t *testing.T) {
 	status, updateResp := client.doJSON(http.MethodPut,
 		fmt.Sprintf("/api/babies/%s?recalculate_calories=true", babyID),
 		map[string]any{
-			"name":                "Calorie Baby",
-			"sex":                 "male",
-			"date_of_birth":       "2025-05-01",
+			"name":                 "Calorie Baby",
+			"sex":                  "male",
+			"date_of_birth":        "2025-05-01",
 			"default_cal_per_feed": newCalPerFeed,
 		},
 	)
@@ -525,9 +362,9 @@ func TestRecalculateCaloriesFlow(t *testing.T) {
 	status, noRecalcResp := client.doJSON(http.MethodPut,
 		fmt.Sprintf("/api/babies/%s", babyID),
 		map[string]any{
-			"name":                "Calorie Baby Updated",
-			"sex":                 "male",
-			"date_of_birth":       "2025-05-01",
+			"name":                 "Calorie Baby Updated",
+			"sex":                  "male",
+			"date_of_birth":        "2025-05-01",
 			"default_cal_per_feed": 100.0,
 		},
 	)

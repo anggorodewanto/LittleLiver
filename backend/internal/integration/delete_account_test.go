@@ -36,7 +36,7 @@ func TestAccountDeletionAnonymization(t *testing.T) {
 		}
 	}
 
-	srv, db, cleanup := setupMultiParentServer(t)
+	srv, db, cleanup := setupIntegrationServer(t)
 	defer cleanup()
 
 	clientA := newTestClient(t, srv, db)
@@ -255,67 +255,5 @@ func TestAccountDeletionAnonymization(t *testing.T) {
 	}
 	if babyCount != 1 {
 		t.Fatalf("expected baby to still exist (B is still linked), got count=%d", babyCount)
-	}
-}
-
-// verifyEntryCount checks that the given table has the expected number of rows for a baby.
-func verifyEntryCount(t *testing.T, db *sql.DB, table, babyID string, expected int) {
-	t.Helper()
-	var count int
-	err := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE baby_id = ?", table), babyID).Scan(&count)
-	if err != nil {
-		t.Fatalf("query %s count: %v", table, err)
-	}
-	if count != expected {
-		t.Errorf("expected %d entries in %s, got %d", expected, table, count)
-	}
-}
-
-// verifyAnonymized checks that no rows in the table still have the original user ID
-// in the specified column, and at least one row has "deleted_user".
-func verifyAnonymized(t *testing.T, db *sql.DB, table, column, originalUserID, sentinel string) {
-	t.Helper()
-
-	// No rows should have the original user ID
-	var remaining int
-	err := db.QueryRow(
-		fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s = ?", table, column),
-		originalUserID,
-	).Scan(&remaining)
-	if err != nil {
-		t.Fatalf("query %s.%s remaining: %v", table, column, err)
-	}
-	if remaining != 0 {
-		t.Errorf("expected 0 rows with %s.%s=%q after anonymization, got %d", table, column, originalUserID, remaining)
-	}
-
-	// At least one row should have the sentinel value
-	var anonymized int
-	err = db.QueryRow(
-		fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s = ?", table, column),
-		sentinel,
-	).Scan(&anonymized)
-	if err != nil {
-		t.Fatalf("query %s.%s anonymized: %v", table, column, err)
-	}
-	if anonymized == 0 {
-		t.Errorf("expected at least 1 row with %s.%s=%q after anonymization, got 0", table, column, sentinel)
-	}
-}
-
-// verifyNotAnonymized checks that the specified user's entries still have the
-// original user ID in the specified column (not anonymized).
-func verifyNotAnonymized(t *testing.T, db *sql.DB, table, column, userID string) {
-	t.Helper()
-	var count int
-	err := db.QueryRow(
-		fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s = ?", table, column),
-		userID,
-	).Scan(&count)
-	if err != nil {
-		t.Fatalf("query %s.%s for user %s: %v", table, column, userID, err)
-	}
-	if count == 0 {
-		t.Errorf("expected at least 1 row with %s.%s=%q (should not be anonymized), got 0", table, column, userID)
 	}
 }

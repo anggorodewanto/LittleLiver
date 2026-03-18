@@ -167,17 +167,17 @@ func emptySliceIfNil[T any](s []T) []T {
 
 // parseMetricTimes parses the three standard time strings (timestamp, created_at, updated_at).
 func parseMetricTimes(tsStr, createdStr, updatedStr string) (timestamp, createdAt, updatedAt time.Time, err error) {
-	timestamp, err = parseTime(tsStr)
+	timestamp, err = ParseTime(tsStr)
 	if err != nil {
 		err = fmt.Errorf("parse timestamp: %w", err)
 		return
 	}
-	createdAt, err = parseTime(createdStr)
+	createdAt, err = ParseTime(createdStr)
 	if err != nil {
 		err = fmt.Errorf("parse created_at: %w", err)
 		return
 	}
-	updatedAt, err = parseTime(updatedStr)
+	updatedAt, err = ParseTime(updatedStr)
 	if err != nil {
 		err = fmt.Errorf("parse updated_at: %w", err)
 		return

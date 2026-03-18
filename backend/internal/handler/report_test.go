@@ -13,29 +13,6 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
 
-// seedBabyWithKasaiForHandler creates a baby with kasai_date set.
-func seedBabyWithKasaiForHandler(t *testing.T, db *sql.DB, userID string) *model.Baby {
-	t.Helper()
-	babyID := model.NewULID()
-	_, err := db.Exec(
-		`INSERT INTO babies (id, name, sex, date_of_birth, kasai_date)
-		 VALUES (?, 'Report Baby', 'female', '2025-06-15', '2025-07-01')`,
-		babyID,
-	)
-	if err != nil {
-		t.Fatalf("insert baby: %v", err)
-	}
-	_, err = db.Exec(
-		"INSERT INTO baby_parents (baby_id, user_id) VALUES (?, ?)",
-		babyID, userID,
-	)
-	if err != nil {
-		t.Fatalf("insert baby_parents: %v", err)
-	}
-	// Return minimal baby info
-	return &model.Baby{ID: babyID, Name: "Report Baby"}
-}
-
 // seedReportDataForHandler seeds basic metrics data.
 func seedReportDataForHandler(t *testing.T, db *sql.DB, babyID, userID string) {
 	t.Helper()
@@ -56,7 +33,7 @@ func TestReportHandler_Success(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasaiForHandler(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 	seedReportDataForHandler(t, db, baby.ID, user.ID)
 
 	mux := handler.NewMux(
@@ -94,7 +71,7 @@ func TestReportHandler_MissingParams(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasaiForHandler(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 
 	mux := handler.NewMux(
 		handler.WithDB(db),
@@ -121,7 +98,7 @@ func TestReportHandler_InvalidDateFormat(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasaiForHandler(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 
 	mux := handler.NewMux(
 		handler.WithDB(db),
@@ -159,7 +136,7 @@ func TestReportHandler_Unauthorized(t *testing.T) {
 	defer db.Close()
 
 	user := testutil.CreateTestUser(t, db)
-	baby := seedBabyWithKasaiForHandler(t, db, user.ID)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
 
 	mux := handler.NewMux(
 		handler.WithDB(db),

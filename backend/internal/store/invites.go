@@ -114,7 +114,7 @@ func RedeemInvite(db *sql.DB, code, userID string) (string, error) {
 	}
 
 	// Check if expired
-	expiresAtTime, err := parseTime(expiresStr)
+	expiresAtTime, err := ParseTime(expiresStr)
 	if err != nil {
 		return "", fmt.Errorf("redeem invite: parse expires_at: %w", err)
 	}
