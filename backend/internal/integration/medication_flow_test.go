@@ -14,6 +14,7 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/auth"
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
 	"github.com/ablankz/LittleLiver/backend/internal/notify"
+	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
 
 // mockPusher records push sends for integration test verification.
@@ -139,7 +140,7 @@ func TestMedicationNotificationLifecycle(t *testing.T) {
 	babyID := createBabyViaAPI(t, client, "Med Flow Baby")
 
 	// Register a push subscription for the user
-	seedPushSub(t, db, client.userID, "https://push.example.com/device1")
+	testutil.SeedPushSubscription(t, db, client.userID, "https://push.example.com/device1")
 
 	// --- Step 1: Create medication with schedule ---
 	medPath := fmt.Sprintf("/api/babies/%s/medications", babyID)
@@ -482,18 +483,6 @@ func createBabyViaAPI(t *testing.T, client *testClient, name string) string {
 	return resp["id"].(string)
 }
 
-// seedPushSub inserts a push subscription for a user directly into the DB.
-func seedPushSub(t *testing.T, db *sql.DB, userID, endpoint string) {
-	t.Helper()
-	id := fmt.Sprintf("ps-%s-%d", userID, time.Now().UnixNano())
-	_, err := db.Exec(
-		"INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, 'key', 'auth')",
-		id, userID, endpoint,
-	)
-	if err != nil {
-		t.Fatalf("seed push subscription: %v", err)
-	}
-}
 
 // verifyEntryCountByTable checks that the given table has the expected number of rows for a baby.
 func verifyEntryCountByTable(t *testing.T, db *sql.DB, table, babyID string, expected int) {

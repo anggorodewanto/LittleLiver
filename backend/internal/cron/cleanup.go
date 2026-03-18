@@ -4,6 +4,7 @@ package cron
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -92,33 +93,32 @@ func CleanupPhotos(db *sql.DB, objStore storage.ObjectStore, now time.Time) (int
 	return deleted, nil
 }
 
-// RunAll executes all cleanup tasks and returns the first error encountered.
+// RunAll executes all cleanup tasks and returns a combined error if any fail.
+// All tasks run regardless of individual failures.
 func RunAll(db *sql.DB, objStore storage.ObjectStore) error {
 	now := time.Now().UTC()
+	var errs []error
 
 	invites, err := CleanupInvites(db, now)
 	if err != nil {
-		return fmt.Errorf("run all: %w", err)
-	}
-	if invites > 0 {
+		errs = append(errs, fmt.Errorf("run all: %w", err))
+	} else if invites > 0 {
 		log.Printf("cron: cleaned up %d old invites", invites)
 	}
 
 	sessions, err := CleanupSessions(db, now)
 	if err != nil {
-		return fmt.Errorf("run all: %w", err)
-	}
-	if sessions > 0 {
+		errs = append(errs, fmt.Errorf("run all: %w", err))
+	} else if sessions > 0 {
 		log.Printf("cron: cleaned up %d expired sessions", sessions)
 	}
 
 	photos, err := CleanupPhotos(db, objStore, now)
 	if err != nil {
-		return fmt.Errorf("run all: %w", err)
-	}
-	if photos > 0 {
+		errs = append(errs, fmt.Errorf("run all: %w", err))
+	} else if photos > 0 {
 		log.Printf("cron: cleaned up %d orphaned photos", photos)
 	}
 
-	return nil
+	return errors.Join(errs...)
 }

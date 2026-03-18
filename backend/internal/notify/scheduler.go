@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// utcTimeFormat is the standard UTC time format used for scheduling timestamps.
+const utcTimeFormat = "2006-01-02T15:04:05Z"
+
 // Scheduler checks active medications every minute and sends push
 // notifications when a dose is due. It is stateless — each tick
 // re-derives what notifications should be sent.
@@ -114,16 +117,15 @@ func (s *Scheduler) processMedication(med activeMed, now time.Time) {
 		loc = parsed
 	}
 
-	nowLocal := now.In(loc)
-
 	for _, st := range scheduleTimes {
-		s.checkScheduleTime(med, st, nowLocal, now, loc)
+		s.checkScheduleTime(med, st, now, loc)
 	}
 }
 
 // checkScheduleTime checks if a single schedule time is due (at 0, +15, or
 // +30 min offsets) and sends a notification if not suppressed.
-func (s *Scheduler) checkScheduleTime(med activeMed, schedTime string, nowLocal, nowUTC time.Time, loc *time.Location) {
+func (s *Scheduler) checkScheduleTime(med activeMed, schedTime string, nowUTC time.Time, loc *time.Location) {
+	nowLocal := nowUTC.In(loc)
 	parts := strings.SplitN(schedTime, ":", 2)
 	if len(parts) != 2 {
 		return
@@ -164,8 +166,8 @@ func (s *Scheduler) checkScheduleTime(med activeMed, schedTime string, nowLocal,
 // isDoseSuppressed checks if a med_log exists for this medication within
 // +/-30 minutes of the original scheduled time.
 func (s *Scheduler) isDoseSuppressed(medID, babyID string, scheduledUTC time.Time) bool {
-	windowStart := scheduledUTC.Add(-30 * time.Minute).Format("2006-01-02T15:04:05Z")
-	windowEnd := scheduledUTC.Add(30 * time.Minute).Format("2006-01-02T15:04:05Z")
+	windowStart := scheduledUTC.Add(-30 * time.Minute).Format(utcTimeFormat)
+	windowEnd := scheduledUTC.Add(30 * time.Minute).Format(utcTimeFormat)
 
 	var count int
 	err := s.db.QueryRow(
@@ -250,7 +252,7 @@ func (s *Scheduler) queryPushSubscriptions(userID string) ([]Subscription, error
 // buildMedPayload constructs the notification payload for a medication reminder.
 // The body includes scheduled_time (UTC), medication_id, and medication name.
 func buildMedPayload(med activeMed, scheduledUTC time.Time) Payload {
-	scheduledStr := scheduledUTC.Format("2006-01-02T15:04:05Z")
+	scheduledStr := scheduledUTC.Format(utcTimeFormat)
 	return Payload{
 		Title: fmt.Sprintf("Medication Reminder: %s", med.Name),
 		Body:  fmt.Sprintf("Time to give %s", med.Name),

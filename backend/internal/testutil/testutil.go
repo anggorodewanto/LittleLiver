@@ -131,3 +131,15 @@ func AuthenticatedRequest(t *testing.T, db *sql.DB, userID, cookieName, csrfSecr
 
 	return req
 }
+
+// SeedPushSubscription inserts a push subscription for a user.
+func SeedPushSubscription(t *testing.T, db *sql.DB, userID, endpoint string) {
+	t.Helper()
+	_, err := db.Exec(
+		"INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, 'key', 'auth')",
+		fmt.Sprintf("ps-%s-%s", userID, endpoint), userID, endpoint,
+	)
+	if err != nil {
+		t.Fatalf("testutil.SeedPushSubscription: %v", err)
+	}
+}

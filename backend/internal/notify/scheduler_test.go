@@ -4,58 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
-
-// testDB creates an in-memory SQLite database with all migrations applied.
-func testDB(t *testing.T) *sql.DB {
-	t.Helper()
-
-	// Import store indirectly by opening DB and running migrations manually.
-	// To avoid circular imports we use database/sql directly with modernc sqlite.
-	db, err := sql.Open("sqlite", ":memory:?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	db.SetMaxOpenConns(1)
-
-	migDir := filepath.Join(projectRoot(t), "migrations")
-	entries, err := os.ReadDir(migDir)
-	if err != nil {
-		db.Close()
-		t.Fatalf("read migrations dir: %v", err)
-	}
-	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".sql" {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(migDir, e.Name()))
-		if err != nil {
-			db.Close()
-			t.Fatalf("read migration %s: %v", e.Name(), err)
-		}
-		if _, err := db.Exec(string(data)); err != nil {
-			db.Close()
-			t.Fatalf("exec migration %s: %v", e.Name(), err)
-		}
-	}
-	return db
-}
-
-func projectRoot(t *testing.T) string {
-	t.Helper()
-	_, filename, _, _ := runtime.Caller(0)
-	// filename is .../backend/internal/notify/scheduler_test.go
-	return filepath.Join(filepath.Dir(filename), "..", "..")
-}
 
 // seedUser inserts a test user and returns their ID.
 func seedUser(t *testing.T, db *sql.DB, id, googleID, email string) {
@@ -118,28 +73,17 @@ func seedMedLog(t *testing.T, db *sql.DB, medID, babyID string, scheduledTime, g
 	}
 }
 
-// seedPushSubscription inserts a push subscription for a user.
-func seedPushSubscription(t *testing.T, db *sql.DB, userID, endpoint string) {
-	t.Helper()
-	_, err := db.Exec(
-		"INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, 'key', 'auth')",
-		fmt.Sprintf("ps-%s-%s", userID, endpoint), userID, endpoint,
-	)
-	if err != nil {
-		t.Fatalf("seed push subscription: %v", err)
-	}
-}
 
 // TestScheduler_MedicationDueNowTriggersNotification tests that a medication
 // due at the current time triggers a push notification.
 func TestScheduler_MedicationDueNowTriggersNotification(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	// Medication scheduled at 08:00 in America/New_York
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
@@ -164,12 +108,12 @@ func TestScheduler_MedicationDueNowTriggersNotification(t *testing.T) {
 // with a logged dose within +/-30 min of the scheduled time is suppressed.
 func TestScheduler_LoggedDoseSuppressesNotification(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -192,12 +136,12 @@ func TestScheduler_LoggedDoseSuppressesNotification(t *testing.T) {
 // fires if no dose has been logged.
 func TestScheduler_FollowUpAt15MinIfNoLog(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -219,12 +163,12 @@ func TestScheduler_FollowUpAt15MinIfNoLog(t *testing.T) {
 // fires if still no dose has been logged.
 func TestScheduler_FollowUpAt30MinIfNoLog(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -246,12 +190,12 @@ func TestScheduler_FollowUpAt30MinIfNoLog(t *testing.T) {
 // suppresses the +15 and +30 min follow-up notifications.
 func TestScheduler_LoggedDoseSuppressesFollowUps(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -284,12 +228,12 @@ func TestScheduler_LoggedDoseSuppressesFollowUps(t *testing.T) {
 // A medication at 08:00 America/New_York should fire at 13:00 UTC (EST).
 func TestScheduler_TimezoneConversion(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -318,12 +262,12 @@ func TestScheduler_TimezoneConversion(t *testing.T) {
 // TestScheduler_InactiveMedsSkipped tests that inactive medications are not scheduled.
 func TestScheduler_InactiveMedsSkipped(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	// Inactive medication
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", false)
@@ -344,12 +288,12 @@ func TestScheduler_InactiveMedsSkipped(t *testing.T) {
 // contains scheduled_time (UTC), medication_id, medication name, and click URL.
 func TestScheduler_PayloadIncludesRequiredFields(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -396,7 +340,7 @@ func TestScheduler_PayloadIncludesRequiredFields(t *testing.T) {
 // with push subscriptions for a baby receive notifications.
 func TestScheduler_MultipleParentsReceiveNotification(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
@@ -407,8 +351,8 @@ func TestScheduler_MultipleParentsReceiveNotification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("link parent2: %v", err)
 	}
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
-	seedPushSubscription(t, db, "u2", "https://push.example.com/u2")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u2", "https://push.example.com/u2")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -440,12 +384,12 @@ func TestScheduler_MultipleParentsReceiveNotification(t *testing.T) {
 // are silently skipped.
 func TestScheduler_NoScheduleSkipped(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	// Medication with no schedule times
 	seedMedication(t, db, "med1", "b1", "Ursodiol", nil, "America/New_York", true)
@@ -465,12 +409,12 @@ func TestScheduler_NoScheduleSkipped(t *testing.T) {
 // schedule times only fires for the one that matches.
 func TestScheduler_MultipleScheduleTimes(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00", "20:00"}, "America/New_York", true)
 
@@ -491,12 +435,12 @@ func TestScheduler_MultipleScheduleTimes(t *testing.T) {
 // is handled gracefully without stopping other notifications.
 func TestScheduler_PushSendErrorDoesNotPanic(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -512,7 +456,7 @@ func TestScheduler_PushSendErrorDoesNotPanic(t *testing.T) {
 // TestScheduler_StartStop tests that the scheduler starts and can be stopped.
 func TestScheduler_StartStop(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	mock := &MockPusher{}
@@ -535,7 +479,7 @@ func TestScheduler_StartStop(t *testing.T) {
 // TestScheduler_ClosedDBHandlesError tests that Tick handles a closed DB gracefully.
 func TestScheduler_ClosedDBHandlesError(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	db.Close() // close immediately
 
 	mock := &MockPusher{}
@@ -551,12 +495,12 @@ func TestScheduler_ClosedDBHandlesError(t *testing.T) {
 // TestScheduler_InvalidTimezoneSkipped tests that a medication with invalid timezone is skipped.
 func TestScheduler_InvalidTimezoneSkipped(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	// Insert medication with invalid timezone directly
 	sched := `["08:00"]`
@@ -580,12 +524,12 @@ func TestScheduler_InvalidTimezoneSkipped(t *testing.T) {
 // TestScheduler_InvalidScheduleFormatSkipped tests that an invalid schedule JSON is skipped.
 func TestScheduler_InvalidScheduleFormatSkipped(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	// Insert medication with invalid schedule JSON
 	_, err := db.Exec(
@@ -609,12 +553,12 @@ func TestScheduler_InvalidScheduleFormatSkipped(t *testing.T) {
 // in the schedule (e.g., "abc") is skipped.
 func TestScheduler_InvalidScheduleTimeFormatSkipped(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	// Schedule with bad time format: "abc" fails hour parse, "8:abc" fails minute parse, "8" has no colon
 	sched := `["abc:00","08:abc","8"]`
@@ -639,12 +583,12 @@ func TestScheduler_InvalidScheduleTimeFormatSkipped(t *testing.T) {
 // TestScheduler_NoTimezoneUsesUTC tests that a medication with no timezone defaults to UTC.
 func TestScheduler_NoTimezoneUsesUTC(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	// Medication with no timezone
 	sched := `["12:00"]`
@@ -670,7 +614,7 @@ func TestScheduler_NoTimezoneUsesUTC(t *testing.T) {
 // subscriptions does not cause errors.
 func TestScheduler_ParentWithNoSubscriptions(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
@@ -696,13 +640,13 @@ func TestScheduler_ParentWithNoSubscriptions(t *testing.T) {
 // push subscriptions receives notifications on all devices.
 func TestScheduler_MultipleDevicesPerParent(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/device1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/device2")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/device1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/device2")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -782,7 +726,7 @@ func strPtr(s string) *string {
 // linked does not cause errors.
 func TestScheduler_BabyWithNoParents(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
@@ -816,12 +760,12 @@ func TestScheduler_BabyWithNoParents(t *testing.T) {
 // defaults to UTC.
 func TestScheduler_EmptyTimezoneDefaultsToUTC(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	sched := `["12:00"]`
 	_, err := db.Exec(
@@ -845,12 +789,12 @@ func TestScheduler_EmptyTimezoneDefaultsToUTC(t *testing.T) {
 // (skipped=true, given_at=NULL) does not suppress the notification.
 func TestScheduler_SkippedDoseDoesNotSuppress(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
@@ -881,7 +825,7 @@ func TestScheduler_SkippedDoseDoesNotSuppress(t *testing.T) {
 // handles missing push_subscriptions table gracefully.
 func TestScheduler_DroppedPushSubsTableHandlesError(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
@@ -910,12 +854,12 @@ func TestScheduler_DroppedPushSubsTableHandlesError(t *testing.T) {
 // handles missing baby_parents table gracefully.
 func TestScheduler_DroppedBabyParentsTableHandlesError(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
 	// Drop baby_parents to trigger query error in sendNotifications
@@ -940,12 +884,12 @@ func TestScheduler_DroppedBabyParentsTableHandlesError(t *testing.T) {
 // handles missing med_logs table gracefully (isDoseSuppressed error path).
 func TestScheduler_DroppedMedLogsTableHandlesError(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
 	// Drop med_logs to trigger query error in isDoseSuppressed
@@ -970,12 +914,12 @@ func TestScheduler_DroppedMedLogsTableHandlesError(t *testing.T) {
 // a scheduled time or follow-up, no notification is sent.
 func TestScheduler_NotDueTimeNoNotification(t *testing.T) {
 	t.Parallel()
-	db := testDB(t)
+	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
 	seedUser(t, db, "u1", "g1", "u1@test.com")
 	seedBaby(t, db, "b1", "u1")
-	seedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
 
 	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
 
