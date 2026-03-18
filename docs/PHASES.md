@@ -251,7 +251,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) subscribe stores subscription with correct fields, (2) duplicate endpoint upserts existing subscription, (3) unsubscribe deletes, (4) sending a push notification calls the correct endpoint with VAPID auth (mock HTTP). Write store + notify package.
   **Proof of progress:** Subscription CRUD tested; upsert on duplicate endpoint verified; push send verified with mock.
 
-- [ ] **Phase 34: Medication reminder scheduler**
+- [x] **Phase 34: Medication reminder scheduler**
   **Depends on:** Phase 25, Phase 26, Phase 29, Phase 33
   **What to build:** Scheduler goroutine in `internal/notify/scheduler.go`. Every minute: query active medications, compute "now" per medication timezone, check if any scheduled time is due (initial, +15 min, +30 min). Suppression check: look for med_log within +/-30 min of original scheduled_time. Send push to all subscribed devices for that baby's parents. Notification payload must include `scheduled_time` (UTC), `medication_id`, medication name, and click URL `/log/med?medication_id=X`. Stateless re-derivation (no tracking table).
   **TDD approach:** Write tests that (1) medication due now triggers notification, (2) medication with logged dose is suppressed, (3) +15 min follow-up fires if no log, (4) +30 min follow-up fires if still no log, (5) logged dose suppresses follow-ups, (6) timezone conversion is correct (e.g., med at 08:00 America/New_York), (7) inactive meds skipped, (8) notification payload includes `scheduled_time`, `medication_id`, medication name, and click URL `/log/med?medication_id=X`. Use mock time and mock push sender.

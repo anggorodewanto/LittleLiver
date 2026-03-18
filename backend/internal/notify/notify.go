@@ -11,9 +11,10 @@ import (
 
 // Payload is the JSON structure sent as the push notification body.
 type Payload struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
-	URL   string `json:"url,omitempty"`
+	Title string            `json:"title"`
+	Body  string            `json:"body"`
+	URL   string            `json:"url,omitempty"`
+	Data  map[string]string `json:"data,omitempty"`
 }
 
 // Subscription holds the Web Push subscription details from the client.
