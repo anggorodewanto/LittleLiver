@@ -311,7 +311,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) login page renders sign-in button, (2) API client attaches correct headers, (3) 401 triggers redirect, (4) user store updates on successful `/api/me` fetch (mock fetch). Write components and API client.
   **Proof of progress:** Login page renders; API client tested with mocks; auth redirect works.
 
-- [ ] **Phase 42: Baby selector, create baby, and join flow UI**
+- [x] **Phase 42: Baby selector, create baby, and join flow UI**
   **Depends on:** Phase 41
   **What to build:** First-login screen (create baby or enter invite code). Baby creation form (name, DOB, sex, diagnosis date, kasai date). Invite code entry form. Baby selector dropdown in app header for multi-baby switching. Svelte store for active baby.
   **TDD approach:** Write tests that (1) first-login screen shows only create/join options, (2) baby form validates required fields, (3) invite code submission calls correct API, (4) baby selector renders linked babies and switches active baby. Write components.
