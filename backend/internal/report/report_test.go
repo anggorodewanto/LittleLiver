@@ -2,12 +2,17 @@ package report_test
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
+	"image"
+	"image/color"
+	"image/png"
 	"testing"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/report"
+	"github.com/ablankz/LittleLiver/backend/internal/storage"
 	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 )
 
@@ -161,7 +166,7 @@ func TestGeneratePDF_WithData(t *testing.T) {
 	seedReportData(t, db, baby.ID, user.ID)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -186,7 +191,7 @@ func TestGeneratePDF_EmptyDateRange(t *testing.T) {
 	// No data seeded — empty date range
 
 	var buf bytes.Buffer
-	err := report.Generate(db, baby, "2025-09-01", "2025-09-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-09-01", "2025-09-01", &buf)
 	if err != nil {
 		t.Fatalf("Generate returned error for empty range: %v", err)
 	}
@@ -210,7 +215,7 @@ func TestGeneratePDF_ContainsExpectedText(t *testing.T) {
 	seedReportData(t, db, baby.ID, user.ID)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -277,7 +282,7 @@ func TestGeneratePDF_NoKasaiDate(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -317,7 +322,7 @@ func TestGeneratePDF_OldBaby(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err = report.Generate(db, baby, "2025-08-01", "2025-08-01", &buf)
+	err = report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -337,7 +342,7 @@ func TestGeneratePDF_InvalidDateRange(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, baby, "invalid", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "invalid", "2025-08-01", &buf)
 	if err == nil {
 		t.Fatal("expected error for invalid date range")
 	}
@@ -363,7 +368,7 @@ func TestGeneratePDF_NoteWithoutCategory(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err = report.Generate(db, baby, "2025-08-01", "2025-08-01", &buf)
+	err = report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -371,5 +376,215 @@ func TestGeneratePDF_NoteWithoutCategory(t *testing.T) {
 	data := string(buf.Bytes())
 	if !containsText(data, "Note without category") {
 		t.Error("PDF should contain note content")
+	}
+}
+
+// createTestPNG generates a small valid PNG image for testing.
+func createTestPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	for x := 0; x < 10; x++ {
+		for y := 0; y < 10; y++ {
+			img.Set(x, y, color.RGBA{R: 200, G: 150, B: 100, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode test PNG: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// seedFullReportData seeds all types of data including weights, labs, and photos.
+func seedFullReportData(t *testing.T, db *sql.DB, babyID, userID string, objStore *storage.MemoryStore) {
+	t.Helper()
+	seedReportData(t, db, babyID, userID)
+
+	// Weights
+	for i, w := range []float64{4.2, 4.5, 4.8} {
+		ts := time.Date(2025, 8, 1, 8+i*4, 0, 0, 0, time.UTC).Format(model.DateTimeFormat)
+		_, err := db.Exec(
+			`INSERT INTO weights (id, baby_id, logged_by, timestamp, weight_kg)
+			 VALUES (?, ?, ?, ?, ?)`,
+			model.NewULID(), babyID, userID, ts, w,
+		)
+		if err != nil {
+			t.Fatalf("insert weight: %v", err)
+		}
+	}
+
+	// Lab results
+	for i, val := range []string{"2.5", "2.1"} {
+		ts := time.Date(2025, 8, 1, 8+i*6, 0, 0, 0, time.UTC).Format(model.DateTimeFormat)
+		_, err := db.Exec(
+			`INSERT INTO lab_results (id, baby_id, logged_by, timestamp, test_name, value, unit)
+			 VALUES (?, ?, ?, ?, 'Bilirubin', ?, 'mg/dL')`,
+			model.NewULID(), babyID, userID, ts, val,
+		)
+		if err != nil {
+			t.Fatalf("insert lab result: %v", err)
+		}
+	}
+
+	// Photo uploads with thumbnails
+	if objStore != nil {
+		thumbPNG := createTestPNG(t)
+		thumbKey := "photos/thumb_test1.png"
+		ctx := context.Background()
+		if err := objStore.Put(ctx, thumbKey, bytes.NewReader(thumbPNG), "image/png"); err != nil {
+			t.Fatalf("put thumbnail: %v", err)
+		}
+		uploadedAt := time.Date(2025, 8, 1, 10, 0, 0, 0, time.UTC).Format(model.DateTimeFormat)
+		_, err := db.Exec(
+			`INSERT INTO photo_uploads (id, baby_id, r2_key, thumbnail_key, uploaded_at, linked_at)
+			 VALUES (?, ?, 'photos/test1.jpg', ?, ?, ?)`,
+			model.NewULID(), babyID, thumbKey, uploadedAt, uploadedAt,
+		)
+		if err != nil {
+			t.Fatalf("insert photo_upload: %v", err)
+		}
+	}
+}
+
+func TestGeneratePDF_WithCharts(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := seedBabyWithKasai(t, db, user.ID)
+	seedFullReportData(t, db, baby.ID, user.ID, nil)
+
+	var buf bytes.Buffer
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+
+	data := buf.Bytes()
+	if len(data) < 5 {
+		t.Fatal("PDF output too small")
+	}
+	if string(data[:5]) != "%PDF-" {
+		t.Fatalf("output does not start with %%PDF-")
+	}
+
+	pdfStr := string(data)
+	// PDF with charts should contain chart section headers
+	if !containsText(pdfStr, "Stool Color Distribution") {
+		t.Error("PDF should contain 'Stool Color Distribution' chart section")
+	}
+	if !containsText(pdfStr, "Weight Chart") {
+		t.Error("PDF should contain 'Weight Chart' section")
+	}
+}
+
+func TestGeneratePDF_WithLabTrendsChart(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := seedBabyWithKasai(t, db, user.ID)
+	seedFullReportData(t, db, baby.ID, user.ID, nil)
+
+	var buf bytes.Buffer
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+
+	pdfStr := string(buf.Bytes())
+	if !containsText(pdfStr, "Lab Results Trends") {
+		t.Error("PDF should contain 'Lab Results Trends' chart section")
+	}
+}
+
+func TestGeneratePDF_WithPhotos(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := seedBabyWithKasai(t, db, user.ID)
+	objStore := storage.NewMemoryStore()
+	seedFullReportData(t, db, baby.ID, user.ID, objStore)
+
+	var buf bytes.Buffer
+	err := report.Generate(db, objStore, baby, "2025-08-01", "2025-08-01", &buf)
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+
+	pdfStr := string(buf.Bytes())
+	if !containsText(pdfStr, "Photo Appendix") {
+		t.Error("PDF should contain 'Photo Appendix' section when photos exist")
+	}
+}
+
+func TestGeneratePDF_WithPhotos_NoStorage(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := seedBabyWithKasai(t, db, user.ID)
+	seedReportData(t, db, baby.ID, user.ID)
+
+	// Pass nil storage — should not error, just skip photos
+	var buf bytes.Buffer
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+
+	pdfStr := string(buf.Bytes())
+	// Without photos, no Photo Appendix
+	if containsText(pdfStr, "Photo Appendix") {
+		t.Error("PDF should not contain 'Photo Appendix' when no photos exist")
+	}
+}
+
+func TestGeneratePDF_FullReport_ValidPDF(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := seedBabyWithKasai(t, db, user.ID)
+	objStore := storage.NewMemoryStore()
+	seedFullReportData(t, db, baby.ID, user.ID, objStore)
+
+	var buf bytes.Buffer
+	err := report.Generate(db, objStore, baby, "2025-08-01", "2025-08-01", &buf)
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+
+	data := buf.Bytes()
+	if len(data) < 100 {
+		t.Fatalf("full report PDF too small: %d bytes", len(data))
+	}
+	if string(data[:5]) != "%PDF-" {
+		t.Fatal("output is not a valid PDF")
+	}
+
+	pdfStr := string(data)
+	expected := []string{
+		"Report Baby",
+		"Summary",
+		"Stool Color Log",
+		"Temperature Log",
+		"Feeding Summary",
+		"Medication",
+		"Stool Color Distribution",
+		"Weight Chart",
+		"Lab Results Trends",
+		"Photo Appendix",
+	}
+	for _, frag := range expected {
+		if !containsText(pdfStr, frag) {
+			t.Errorf("full PDF missing expected section: %q", frag)
+		}
 	}
 }

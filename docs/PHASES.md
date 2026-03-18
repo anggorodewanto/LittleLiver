@@ -289,7 +289,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) PDF is generated without error for a baby with seeded data, (2) PDF contains expected text content (parse or check byte markers), (3) empty date range produces a valid but minimal PDF. Write the maroto v2 skeleton and text section generation.
   **Proof of progress:** PDF generation test passes; generated file is a valid PDF with expected text sections.
 
-- [ ] **Phase 39: PDF report — charts and photos**
+- [x] **Phase 39: PDF report — charts and photos**
   **Depends on:** Phase 38, Phase 31, Phase 24
   **What to build:** Pre-render charts as PNG using go-echarts/gonum: stool color distribution chart, weight chart with WHO percentile bands, lab trends chart. Embed chart PNGs in the PDF. Photo appendix section: fetch thumbnails from R2 (using signed URLs), embed in PDF. Complete the report endpoint.
   **TDD approach:** Write tests that (1) chart PNGs are generated correctly, (2) weight chart includes WHO percentile data, (3) lab trends chart groups by test_name, (4) photo appendix includes thumbnails (mock R2 fetch), (5) full PDF with charts is a valid file. Write chart rendering and photo embedding.

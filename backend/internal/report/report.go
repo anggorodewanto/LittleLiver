@@ -1,46 +1,56 @@
 package report
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"time"
 
 	"github.com/johnfercher/maroto/v2"
 	"github.com/johnfercher/maroto/v2/pkg/components/col"
+	"github.com/johnfercher/maroto/v2/pkg/components/image"
 	"github.com/johnfercher/maroto/v2/pkg/components/row"
 	"github.com/johnfercher/maroto/v2/pkg/components/text"
 	"github.com/johnfercher/maroto/v2/pkg/config"
 	"github.com/johnfercher/maroto/v2/pkg/consts/align"
 	"github.com/johnfercher/maroto/v2/pkg/consts/border"
+	"github.com/johnfercher/maroto/v2/pkg/consts/extension"
 	"github.com/johnfercher/maroto/v2/pkg/consts/fontstyle"
 	"github.com/johnfercher/maroto/v2/pkg/core"
 	"github.com/johnfercher/maroto/v2/pkg/props"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
+	"github.com/ablankz/LittleLiver/backend/internal/storage"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
+	"github.com/ablankz/LittleLiver/backend/internal/who"
 )
 
 const feverThreshold = 38.0
 
 // reportData holds all queried data for the report.
 type reportData struct {
-	summary   *store.DashboardSummary
-	stools    []store.StoolColorSeriesEntry
-	temps     []store.TemperatureSeriesEntry
-	feedings  []store.FeedingDailyEntry
-	medLogs   []medAdherence
-	notes     []noteEntry
+	summary     *store.DashboardSummary
+	stools      []store.StoolColorSeriesEntry
+	temps       []store.TemperatureSeriesEntry
+	feedings    []store.FeedingDailyEntry
+	medLogs     []medAdherence
+	notes       []noteEntry
+	weights     []store.WeightSeriesEntry
+	labTrends   map[string][]store.LabTrendEntry
+	whoCurves   []who.PercentileCurve
+	photoThumbs [][]byte // thumbnail image bytes
 }
 
 // medAdherence holds medication adherence info.
 type medAdherence struct {
-	Name      string
-	Dose      string
-	Total     int
-	Given     int
-	Skipped   int
+	Name    string
+	Dose    string
+	Total   int
+	Given   int
+	Skipped int
 }
 
 // noteEntry holds a general note for the report.
@@ -51,9 +61,9 @@ type noteEntry struct {
 }
 
 // Generate produces a PDF report for the given baby within the date range [from, to].
-// The PDF is written to w.
-func Generate(db *sql.DB, baby *model.Baby, from, to string, w io.Writer) error {
-	data, err := queryReportData(db, baby.ID, from, to)
+// The PDF is written to w. If objStore is non-nil, photo thumbnails are fetched and embedded.
+func Generate(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, to string, w io.Writer) error {
+	data, err := queryReportData(db, objStore, baby, from, to)
 	if err != nil {
 		return fmt.Errorf("query report data: %w", err)
 	}
@@ -70,7 +80,9 @@ func Generate(db *sql.DB, baby *model.Baby, from, to string, w io.Writer) error 
 }
 
 // queryReportData fetches all data needed for the report.
-func queryReportData(db *sql.DB, babyID, from, to string) (*reportData, error) {
+func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, to string) (*reportData, error) {
+	babyID := baby.ID
+
 	summary, err := store.GetDashboardSummary(db, babyID, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("dashboard summary: %w", err)
@@ -101,14 +113,98 @@ func queryReportData(db *sql.DB, babyID, from, to string) (*reportData, error) {
 		return nil, fmt.Errorf("notes: %w", err)
 	}
 
+	weights, err := store.GetWeightSeries(db, babyID, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("weight series: %w", err)
+	}
+
+	labTrends, err := store.GetLabTrends(db, babyID, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("lab trends: %w", err)
+	}
+
+	// Compute WHO percentile curves for the baby's age range
+	var whoCurves []who.PercentileCurve
+	now := time.Now().UTC()
+	ageDays := int(now.Sub(baby.DateOfBirth).Hours() / 24)
+	if ageDays > 0 && ageDays <= 730 {
+		curves, err := who.PercentileCurves(baby.Sex, 0, ageDays)
+		if err == nil {
+			whoCurves = curves
+		}
+	}
+
+	// Fetch photo thumbnails from storage
+	photoThumbs := fetchPhotoThumbnails(db, objStore, babyID, from, to)
+
 	return &reportData{
-		summary:  summary,
-		stools:   stools,
-		temps:    temps,
-		feedings: feedings,
-		medLogs:  medLogs,
-		notes:    notes,
+		summary:     summary,
+		stools:      stools,
+		temps:       temps,
+		feedings:    feedings,
+		medLogs:     medLogs,
+		notes:       notes,
+		weights:     weights,
+		labTrends:   labTrends,
+		whoCurves:   whoCurves,
+		photoThumbs: photoThumbs,
 	}, nil
+}
+
+// fetchPhotoThumbnails queries linked photo_uploads for the baby in the date range
+// and fetches thumbnail bytes from object storage.
+func fetchPhotoThumbnails(db *sql.DB, objStore storage.ObjectStore, babyID, from, to string) [][]byte {
+	if objStore == nil {
+		return nil
+	}
+
+	fromTime, toTime, err := store.ParseDateRange(from, to)
+	if err != nil {
+		return nil
+	}
+
+	// Query for thumbnail keys from stools with photos in this range
+	rows, err := db.Query(
+		`SELECT DISTINCT p.thumbnail_key
+		 FROM photo_uploads p
+		 WHERE p.baby_id = ? AND p.linked_at IS NOT NULL
+		 AND p.uploaded_at >= ? AND p.uploaded_at < ?
+		 AND p.thumbnail_key IS NOT NULL AND p.thumbnail_key != ''
+		 ORDER BY p.uploaded_at ASC
+		 LIMIT 20`,
+		babyID, fromTime, toTime,
+	)
+	if err != nil {
+		log.Printf("query photo thumbnails: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			continue
+		}
+		keys = append(keys, key)
+	}
+
+	if len(keys) == 0 {
+		return nil
+	}
+
+	ctx := context.Background()
+	var thumbs [][]byte
+	for _, key := range keys {
+		data, err := objStore.Get(ctx, key)
+		if err != nil {
+			log.Printf("fetch thumbnail %s: %v", key, err)
+			continue
+		}
+		thumbs = append(thumbs, data)
+	}
+
+	return thumbs
 }
 
 // queryMedAdherence computes medication adherence for the date range.
@@ -210,7 +306,102 @@ func buildPDF(baby *model.Baby, from, to string, data *reportData) core.Maroto {
 	addMedicationAdherence(m, data.medLogs)
 	addNotableObservations(m, data.notes)
 
+	// Charts
+	addChartSection(m, "Stool Color Distribution", data.stools)
+	addWeightChartSection(m, data.weights, data.whoCurves, baby.DateOfBirth.Format(model.DateFormat))
+	addLabTrendsSection(m, data.labTrends)
+
+	// Photo appendix
+	addPhotoAppendix(m, data.photoThumbs)
+
 	return m
+}
+
+// addChartSection renders a stool chart and embeds it.
+func addChartSection(m core.Maroto, title string, stools []store.StoolColorSeriesEntry) {
+	chartPNG, err := renderStoolChart(stools)
+	if err != nil || chartPNG == nil {
+		return
+	}
+	m.AddRows(text.NewRow(8, title, sectionStyle))
+	m.AddRows(row.New(80).Add(
+		image.NewFromBytesCol(12, chartPNG, extension.Png, props.Rect{
+			Percent: 100,
+			Center:  true,
+		}),
+	))
+	m.AddRows(spacerRow(4))
+}
+
+// addWeightChartSection renders a weight chart with WHO percentile bands.
+func addWeightChartSection(m core.Maroto, weights []store.WeightSeriesEntry, curves []who.PercentileCurve, dob string) {
+	chartPNG, err := renderWeightChart(weights, curves, dob)
+	if err != nil || chartPNG == nil {
+		return
+	}
+	m.AddRows(text.NewRow(8, "Weight Chart (WHO Percentiles)", sectionStyle))
+	m.AddRows(row.New(80).Add(
+		image.NewFromBytesCol(12, chartPNG, extension.Png, props.Rect{
+			Percent: 100,
+			Center:  true,
+		}),
+	))
+	m.AddRows(spacerRow(4))
+}
+
+// addLabTrendsSection renders a lab trends chart.
+func addLabTrendsSection(m core.Maroto, trends map[string][]store.LabTrendEntry) {
+	chartPNG, err := renderLabTrendsChart(trends)
+	if err != nil || chartPNG == nil {
+		return
+	}
+	m.AddRows(text.NewRow(8, "Lab Results Trends", sectionStyle))
+	m.AddRows(row.New(80).Add(
+		image.NewFromBytesCol(12, chartPNG, extension.Png, props.Rect{
+			Percent: 100,
+			Center:  true,
+		}),
+	))
+	m.AddRows(spacerRow(4))
+}
+
+// addPhotoAppendix adds a photo appendix section with thumbnails.
+func addPhotoAppendix(m core.Maroto, thumbs [][]byte) {
+	if len(thumbs) == 0 {
+		return
+	}
+
+	m.AddRows(text.NewRow(8, "Photo Appendix", sectionStyle))
+
+	// Layout: 3 photos per row
+	for i := 0; i < len(thumbs); i += 3 {
+		var cols []core.Col
+		for j := 0; j < 3 && i+j < len(thumbs); j++ {
+			ext := detectImageExtension(thumbs[i+j])
+			cols = append(cols, image.NewFromBytesCol(4, thumbs[i+j], ext, props.Rect{
+				Percent: 90,
+				Center:  true,
+			}))
+		}
+		// Fill remaining columns
+		for len(cols) < 3 {
+			cols = append(cols, col.New(4))
+		}
+		m.AddRows(row.New(50).Add(cols...))
+	}
+
+	m.AddRows(spacerRow(4))
+}
+
+// detectImageExtension detects the image format from bytes.
+func detectImageExtension(data []byte) extension.Type {
+	if len(data) >= 8 && string(data[:8]) == "\x89PNG\r\n\x1a\n" {
+		return extension.Png
+	}
+	if len(data) >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
+		return extension.Jpg
+	}
+	return extension.Png // default
 }
 
 // styling helpers
@@ -528,4 +719,3 @@ func formatTimestamp(ts string) string {
 	}
 	return t.Format("2006-01-02 15:04")
 }
-

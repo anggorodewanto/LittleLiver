@@ -226,10 +226,10 @@ func TestPhotoFlowLifecycle(t *testing.T) {
 	}
 
 	// Verify photo is in object store
-	if _, _, found := objStore.Get(r2Key); !found {
+	if _, _, found := objStore.GetWithMeta(r2Key); !found {
 		t.Fatal("step 1: original photo not found in object store")
 	}
-	if _, _, found := objStore.Get(thumbnailKey); !found {
+	if _, _, found := objStore.GetWithMeta(thumbnailKey); !found {
 		t.Fatal("step 1: thumbnail not found in object store")
 	}
 
@@ -350,10 +350,10 @@ func TestPhotoFlowLifecycle(t *testing.T) {
 	}
 
 	// Verify photo is removed from object store
-	if _, _, found := objStore.Get(r2Key); found {
+	if _, _, found := objStore.GetWithMeta(r2Key); found {
 		t.Fatal("step 5: original photo should be deleted from object store after cleanup")
 	}
-	if _, _, found := objStore.Get(thumbnailKey); found {
+	if _, _, found := objStore.GetWithMeta(thumbnailKey); found {
 		t.Fatal("step 5: thumbnail should be deleted from object store after cleanup")
 	}
 

@@ -19,7 +19,7 @@ func TestMemoryStore_PutAndGet(t *testing.T) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
-	got, ct, ok := store.Get("test/key.jpg")
+	got, ct, ok := store.GetWithMeta("test/key.jpg")
 	if !ok {
 		t.Fatal("expected object to exist")
 	}
@@ -42,7 +42,7 @@ func TestMemoryStore_Delete(t *testing.T) {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
-	_, _, ok := store.Get("test/key.jpg")
+	_, _, ok := store.GetWithMeta("test/key.jpg")
 	if ok {
 		t.Error("expected object to be deleted")
 	}
@@ -86,6 +86,34 @@ func TestMemoryStore_Keys(t *testing.T) {
 	keys := store.Keys()
 	if len(keys) != 2 {
 		t.Errorf("expected 2 keys, got %d", len(keys))
+	}
+}
+
+func TestMemoryStore_Get(t *testing.T) {
+	t.Parallel()
+	store := storage.NewMemoryStore()
+	ctx := context.Background()
+
+	data := []byte("test data")
+	_ = store.Put(ctx, "test/get.jpg", bytes.NewReader(data), "image/jpeg")
+
+	got, err := store.Get(ctx, "test/get.jpg")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Errorf("data mismatch: got %q, want %q", got, data)
+	}
+}
+
+func TestMemoryStore_Get_NotFound(t *testing.T) {
+	t.Parallel()
+	store := storage.NewMemoryStore()
+	ctx := context.Background()
+
+	_, err := store.Get(ctx, "nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent key")
 	}
 }
 

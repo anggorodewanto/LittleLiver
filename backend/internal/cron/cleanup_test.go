@@ -203,10 +203,10 @@ func TestCleanupPhotos_DeletesUnlinkedOldPhotos(t *testing.T) {
 	}
 
 	// Verify R2 objects deleted
-	if _, _, ok := memStore.Get("photos/old.jpg"); ok {
+	if _, _, ok := memStore.GetWithMeta("photos/old.jpg"); ok {
 		t.Error("expected R2 object photos/old.jpg to be deleted")
 	}
-	if _, _, ok := memStore.Get("photos/thumb_old.jpg"); ok {
+	if _, _, ok := memStore.GetWithMeta("photos/thumb_old.jpg"); ok {
 		t.Error("expected R2 thumbnail photos/thumb_old.jpg to be deleted")
 	}
 }
@@ -250,7 +250,7 @@ func TestCleanupPhotos_DeletesBabyNullPhotos(t *testing.T) {
 	}
 
 	// Verify R2 objects deleted
-	if _, _, ok := memStore.Get("photos/orphan.jpg"); ok {
+	if _, _, ok := memStore.GetWithMeta("photos/orphan.jpg"); ok {
 		t.Error("expected R2 object to be deleted")
 	}
 }
@@ -362,7 +362,7 @@ func TestCleanupPhotos_HandlesNilThumbnailKey(t *testing.T) {
 		t.Errorf("expected 1 deleted, got %d", deleted)
 	}
 
-	if _, _, ok := memStore.Get("photos/nothumb.jpg"); ok {
+	if _, _, ok := memStore.GetWithMeta("photos/nothumb.jpg"); ok {
 		t.Error("expected R2 object to be deleted")
 	}
 }
@@ -560,6 +560,10 @@ func (f *failingStore) Delete(_ context.Context, _ string) error {
 	return fmt.Errorf("simulated R2 delete error")
 }
 
+func (f *failingStore) Get(_ context.Context, _ string) ([]byte, error) {
+	return nil, fmt.Errorf("get not supported")
+}
+
 func (f *failingStore) SignedURL(_ context.Context, _ string) (string, error) {
 	return "", fmt.Errorf("signed url not supported")
 }
@@ -648,6 +652,10 @@ func (s *thumbFailStore) Delete(ctx context.Context, key string) error {
 		return fmt.Errorf("simulated thumbnail delete error")
 	}
 	return s.inner.Delete(ctx, key)
+}
+
+func (s *thumbFailStore) Get(ctx context.Context, key string) ([]byte, error) {
+	return s.inner.Get(ctx, key)
 }
 
 func (s *thumbFailStore) SignedURL(ctx context.Context, key string) (string, error) {

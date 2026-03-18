@@ -166,7 +166,7 @@ func TestUploadPhoto_JPEG_StoresOriginalAndThumbnail(t *testing.T) {
 	}
 
 	// Verify original is in store
-	_, _, found := objStore.Get(r2Key)
+	_, _, found := objStore.GetWithMeta(r2Key)
 	if !found {
 		t.Error("original not found in object store")
 	}
@@ -176,7 +176,7 @@ func TestUploadPhoto_JPEG_StoresOriginalAndThumbnail(t *testing.T) {
 	if !ok || thumbKey == "" {
 		t.Fatal("expected non-empty thumbnail_key in response")
 	}
-	_, _, found = objStore.Get(thumbKey)
+	_, _, found = objStore.GetWithMeta(thumbKey)
 	if !found {
 		t.Error("thumbnail not found in object store")
 	}
@@ -274,7 +274,7 @@ func TestUploadPhoto_ThumbnailSize(t *testing.T) {
 	}
 
 	thumbKey := resp["thumbnail_key"].(string)
-	thumbData, _, found := objStore.Get(thumbKey)
+	thumbData, _, found := objStore.GetWithMeta(thumbKey)
 	if !found {
 		t.Fatal("thumbnail not found in store")
 	}
@@ -374,7 +374,7 @@ func TestUploadPhoto_SmallImage_NoUpscale(t *testing.T) {
 	}
 
 	thumbKey := resp["thumbnail_key"].(string)
-	thumbData, _, found := objStore.Get(thumbKey)
+	thumbData, _, found := objStore.GetWithMeta(thumbKey)
 	if !found {
 		t.Fatal("thumbnail not found in store")
 	}
@@ -481,7 +481,7 @@ func TestUploadPhoto_HEIC_ConvertedToJPEG(t *testing.T) {
 	}
 
 	// Verify the stored data is the converted JPEG
-	storedData, ct2, found := objStore.Get(r2Key)
+	storedData, ct2, found := objStore.GetWithMeta(r2Key)
 	if !found {
 		t.Fatal("original not found in store after HEIC conversion")
 	}

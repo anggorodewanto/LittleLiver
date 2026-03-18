@@ -56,8 +56,19 @@ func (m *MemoryStore) SignedURL(_ context.Context, key string) (string, error) {
 	return fmt.Sprintf("https://fake-r2.example.com/%s?signed=true", key), nil
 }
 
-// Get retrieves the stored object data (test helper, not part of ObjectStore interface).
-func (m *MemoryStore) Get(key string) ([]byte, string, bool) {
+// Get retrieves the object data at the given key (implements ObjectStore).
+func (m *MemoryStore) Get(_ context.Context, key string) ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	obj, ok := m.objects[key]
+	if !ok {
+		return nil, fmt.Errorf("object not found: %s", key)
+	}
+	return obj.Data, nil
+}
+
+// GetWithMeta retrieves the stored object data with content type (test helper).
+func (m *MemoryStore) GetWithMeta(key string) ([]byte, string, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	obj, ok := m.objects[key]

@@ -11,6 +11,9 @@ type ObjectStore interface {
 	// Put uploads data to the store under the given key with the specified content type.
 	Put(ctx context.Context, key string, r io.Reader, contentType string) error
 
+	// Get retrieves the object data at the given key.
+	Get(ctx context.Context, key string) ([]byte, error)
+
 	// Delete removes the object at the given key.
 	Delete(ctx context.Context, key string) error
 

@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/report"
+	"github.com/ablankz/LittleLiver/backend/internal/storage"
 )
 
 // ReportHandler handles GET /api/babies/{id}/report?from=&to=.
 // Generates a PDF report for the given baby and date range.
-func ReportHandler(db *sql.DB) http.HandlerFunc {
+func ReportHandler(db *sql.DB, objStore storage.ObjectStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireUser(w, r)
 		if !ok {
@@ -41,7 +42,7 @@ func ReportHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		var buf bytes.Buffer
-		if err := report.Generate(db, baby, from, to, &buf); err != nil {
+		if err := report.Generate(db, objStore, baby, from, to, &buf); err != nil {
 			log.Printf("generate report: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
