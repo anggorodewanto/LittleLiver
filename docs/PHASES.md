@@ -259,7 +259,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Integration Test — Medication Flow
 
-- [ ] **Phase 35: Integration test — Medication flow**
+- [x] **Phase 35: Integration test — Medication flow**
   **Depends on:** Phase 34
   **What to build:** End-to-end test: Create medication with schedule → scheduler fires notification at scheduled time (mock time) → parent logs dose as given → verify suppression of follow-ups → next dose: no log → verify +15 min follow-up fires → log as skipped → verify +30 min suppressed → verify adherence ratio in dashboard. Additionally, test account deletion with medication tables: create medication and log doses, delete the user's account, verify `medications.logged_by`/`updated_by` and `med_logs.logged_by`/`updated_by` are anonymized to `deleted_user`.
   **TDD approach:** Write integration test with mock time progression and mock push sender. Verify full notification lifecycle and medication-table anonymization on account deletion.

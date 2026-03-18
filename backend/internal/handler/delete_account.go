@@ -22,6 +22,8 @@ var AnonymizeTables = []string{
 	"bruising",
 	"lab_results",
 	"general_notes",
+	"medications",
+	"med_logs",
 }
 
 // DeleteAccountHandler handles DELETE /api/users/me.
