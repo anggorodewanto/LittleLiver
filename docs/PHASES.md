@@ -297,7 +297,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Integration Test — Report Generation
 
-- [ ] **Phase 40: Integration test — Report generation**
+- [x] **Phase 40: Integration test — Report generation**
   **Depends on:** Phase 39
   **What to build:** End-to-end test: Seed a baby with 30 days of varied data (all metric types, photos, medications). Generate PDF report for the date range. Verify: PDF is valid, contains baby header info, stool log, weight chart data, lab values, feeding summary, medication adherence, photo appendix. Parse PDF text content to verify key values.
   **TDD approach:** Write integration test that generates a PDF and validates its content (text extraction or structural checks).
