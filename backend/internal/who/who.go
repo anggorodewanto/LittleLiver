@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
+	"bytes"
 )
 
 //go:embed data/wfa_boys_lms.csv
@@ -40,6 +40,9 @@ type PercentileCurve struct {
 	Points     []CurvePoint `json:"points"`
 }
 
+// StandardPercentiles are the WHO percentile lines used for growth charts.
+var StandardPercentiles = []float64{3, 15, 50, 85, 97}
+
 // Package-level LMS tables, indexed by day (0-730).
 var (
 	maleLMS   []lmsEntry
@@ -64,7 +67,7 @@ func loadLMS(fs embed.FS, path string) ([]lmsEntry, error) {
 		return nil, fmt.Errorf("read embedded file %s: %w", path, err)
 	}
 
-	r := csv.NewReader(strings.NewReader(string(data)))
+	r := csv.NewReader(bytes.NewReader(data))
 	records, err := r.ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("parse CSV %s: %w", path, err)
@@ -288,7 +291,7 @@ func PercentileCurves(sex string, fromDays, toDays int) ([]PercentileCurve, erro
 		return nil, fmt.Errorf("from_days %d must be <= to_days %d", fromDays, toDays)
 	}
 
-	percentiles := []float64{3, 15, 50, 85, 97}
+	percentiles := StandardPercentiles
 	zScores := make([]float64, len(percentiles))
 	for i, p := range percentiles {
 		zScores[i] = percentileToZ(p)

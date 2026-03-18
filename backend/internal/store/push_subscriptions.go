@@ -12,19 +12,16 @@ import (
 func UpsertPushSubscription(db *sql.DB, userID, endpoint, p256dh, auth string) (*model.PushSubscription, error) {
 	id := model.NewULID()
 
-	_, err := db.Exec(
+	row := db.QueryRow(
 		`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT (endpoint) DO UPDATE SET
 		   p256dh = excluded.p256dh,
-		   auth = excluded.auth`,
+		   auth = excluded.auth
+		 RETURNING id, user_id, endpoint, p256dh, auth, created_at`,
 		id, userID, endpoint, p256dh, auth,
 	)
-	if err != nil {
-		return nil, fmt.Errorf("upsert push subscription: %w", err)
-	}
-
-	return getPushSubscriptionByEndpoint(db, endpoint)
+	return scanPushSubscription(row)
 }
 
 // DeletePushSubscription removes a push subscription by endpoint, scoped to the user.
@@ -68,23 +65,6 @@ func GetPushSubscriptionsByUserID(db *sql.DB, userID string) ([]model.PushSubscr
 	return subs, nil
 }
 
-// DeleteAllPushSubscriptionsByUserID removes all push subscriptions for a user.
-func DeleteAllPushSubscriptionsByUserID(db *sql.DB, userID string) error {
-	_, err := db.Exec("DELETE FROM push_subscriptions WHERE user_id = ?", userID)
-	if err != nil {
-		return fmt.Errorf("delete all push subscriptions: %w", err)
-	}
-	return nil
-}
-
-// getPushSubscriptionByEndpoint retrieves a push subscription by its endpoint.
-func getPushSubscriptionByEndpoint(db *sql.DB, endpoint string) (*model.PushSubscription, error) {
-	row := db.QueryRow(
-		"SELECT id, user_id, endpoint, p256dh, auth, created_at FROM push_subscriptions WHERE endpoint = ?",
-		endpoint,
-	)
-	return scanPushSubscription(row)
-}
 
 // scanPushSubscription scans a single push subscription row from the given scanner.
 func scanPushSubscription(s scanner) (*model.PushSubscription, error) {

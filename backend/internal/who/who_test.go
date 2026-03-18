@@ -356,17 +356,6 @@ func TestNormalCDF_ExtremeValues(t *testing.T) {
 	}
 }
 
-func TestLoadLMS_ErrorCases(t *testing.T) {
-	t.Parallel()
-
-	t.Run("invalid CSV data", func(t *testing.T) {
-		t.Parallel()
-		// Test parsing with invalid data by calling loadLMS indirectly
-		// We can test via the internal loadLMS function with bad embedded FS
-		// This is difficult since we use go:embed, but we test the error
-		// paths via the public API which validates inputs.
-	})
-}
 
 func TestPercentile_ErrorPassthrough(t *testing.T) {
 	t.Parallel()

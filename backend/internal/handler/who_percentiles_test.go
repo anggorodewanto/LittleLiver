@@ -6,29 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ablankz/LittleLiver/backend/internal/auth"
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
+	"github.com/ablankz/LittleLiver/backend/internal/middleware"
 	"github.com/ablankz/LittleLiver/backend/internal/testutil"
 	"github.com/ablankz/LittleLiver/backend/internal/who"
 )
-
-func setupWHOMux(t *testing.T) (*http.ServeMux, *testutil.TestFixture) {
-	t.Helper()
-	db := testutil.SetupTestDB(t)
-	user := testutil.CreateTestUser(t, db)
-
-	mux := handler.NewMux(
-		handler.WithDB(db),
-		handler.WithAuthConfig(auth.Config{
-			ClientID:      "test-client-id",
-			ClientSecret:  "test-client-secret",
-			RedirectURL:   "http://localhost:8080/auth/google/callback",
-			SessionSecret: testSecret,
-		}),
-	)
-
-	return mux, &testutil.TestFixture{DB: db, User: user}
-}
 
 // percentileCurvesResponse matches the JSON structure returned by the endpoint.
 type percentileCurvesResponse struct {
@@ -43,12 +25,17 @@ type percentileCurvesResponse struct {
 
 func TestWHOPercentiles_MaleCurvesReturnExpectedValues(t *testing.T) {
 	t.Parallel()
-	mux, fix := setupWHOMux(t)
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
 
-	req := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.WHOPercentilesHandler()))
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?sex=male&from_days=0&to_days=10")
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
+	h.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -64,10 +51,9 @@ func TestWHOPercentiles_MaleCurvesReturnExpectedValues(t *testing.T) {
 	}
 
 	// Verify the expected percentiles are returned
-	expectedPercentiles := []float64{3, 15, 50, 85, 97}
 	for i, curve := range resp.Curves {
-		if curve.Percentile != expectedPercentiles[i] {
-			t.Errorf("curve %d: expected percentile %v, got %v", i, expectedPercentiles[i], curve.Percentile)
+		if curve.Percentile != who.StandardPercentiles[i] {
+			t.Errorf("curve %d: expected percentile %v, got %v", i, who.StandardPercentiles[i], curve.Percentile)
 		}
 	}
 
@@ -87,13 +73,18 @@ func TestWHOPercentiles_MaleCurvesReturnExpectedValues(t *testing.T) {
 
 func TestWHOPercentiles_FemaleCurvesDifferFromMale(t *testing.T) {
 	t.Parallel()
-	mux, fix := setupWHOMux(t)
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.WHOPercentilesHandler()))
 
 	// Request male curves
-	reqM := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	reqM := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?sex=male&from_days=0&to_days=30")
 	rrM := httptest.NewRecorder()
-	mux.ServeHTTP(rrM, reqM)
+	h.ServeHTTP(rrM, reqM)
 
 	if rrM.Code != http.StatusOK {
 		t.Fatalf("male request: expected 200, got %d", rrM.Code)
@@ -105,10 +96,10 @@ func TestWHOPercentiles_FemaleCurvesDifferFromMale(t *testing.T) {
 	}
 
 	// Request female curves
-	reqF := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	reqF := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?sex=female&from_days=0&to_days=30")
 	rrF := httptest.NewRecorder()
-	mux.ServeHTTP(rrF, reqF)
+	h.ServeHTTP(rrF, reqF)
 
 	if rrF.Code != http.StatusOK {
 		t.Fatalf("female request: expected 200, got %d", rrF.Code)
@@ -136,12 +127,17 @@ func TestWHOPercentiles_FemaleCurvesDifferFromMale(t *testing.T) {
 
 func TestWHOPercentiles_InvalidSexReturns400(t *testing.T) {
 	t.Parallel()
-	mux, fix := setupWHOMux(t)
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
 
-	req := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.WHOPercentilesHandler()))
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?sex=unknown&from_days=0&to_days=30")
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
+	h.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for invalid sex, got %d: %s", rr.Code, rr.Body.String())
@@ -150,12 +146,17 @@ func TestWHOPercentiles_InvalidSexReturns400(t *testing.T) {
 
 func TestWHOPercentiles_MissingSexReturns400(t *testing.T) {
 	t.Parallel()
-	mux, fix := setupWHOMux(t)
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
 
-	req := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.WHOPercentilesHandler()))
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?from_days=0&to_days=30")
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
+	h.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for missing sex, got %d: %s", rr.Code, rr.Body.String())
@@ -164,15 +165,20 @@ func TestWHOPercentiles_MissingSexReturns400(t *testing.T) {
 
 func TestWHOPercentiles_CurvesSpanRequestedDayRange(t *testing.T) {
 	t.Parallel()
-	mux, fix := setupWHOMux(t)
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.WHOPercentilesHandler()))
 
 	fromDays := 10
 	toDays := 50
 
-	req := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?sex=male&from_days=10&to_days=50")
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
+	h.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
@@ -188,11 +194,9 @@ func TestWHOPercentiles_CurvesSpanRequestedDayRange(t *testing.T) {
 		if len(curve.Points) != expectedPoints {
 			t.Errorf("curve %d: expected %d points, got %d", i, expectedPoints, len(curve.Points))
 		}
-		// First point should be at fromDays
 		if curve.Points[0].AgeDays != fromDays {
 			t.Errorf("curve %d: first point age_days expected %d, got %d", i, fromDays, curve.Points[0].AgeDays)
 		}
-		// Last point should be at toDays
 		last := curve.Points[len(curve.Points)-1]
 		if last.AgeDays != toDays {
 			t.Errorf("curve %d: last point age_days expected %d, got %d", i, toDays, last.AgeDays)
@@ -202,12 +206,17 @@ func TestWHOPercentiles_CurvesSpanRequestedDayRange(t *testing.T) {
 
 func TestWHOPercentiles_MissingFromDaysReturns400(t *testing.T) {
 	t.Parallel()
-	mux, fix := setupWHOMux(t)
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
 
-	req := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.WHOPercentilesHandler()))
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?sex=male&to_days=30")
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
+	h.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for missing from_days, got %d", rr.Code)
@@ -216,12 +225,17 @@ func TestWHOPercentiles_MissingFromDaysReturns400(t *testing.T) {
 
 func TestWHOPercentiles_MissingToDaysReturns400(t *testing.T) {
 	t.Parallel()
-	mux, fix := setupWHOMux(t)
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
 
-	req := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.WHOPercentilesHandler()))
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?sex=male&from_days=0")
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
+	h.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for missing to_days, got %d", rr.Code)
@@ -230,12 +244,17 @@ func TestWHOPercentiles_MissingToDaysReturns400(t *testing.T) {
 
 func TestWHOPercentiles_NonIntegerFromDaysReturns400(t *testing.T) {
 	t.Parallel()
-	mux, fix := setupWHOMux(t)
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
 
-	req := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.WHOPercentilesHandler()))
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?sex=male&from_days=abc&to_days=30")
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
+	h.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for non-integer from_days, got %d", rr.Code)
@@ -244,12 +263,17 @@ func TestWHOPercentiles_NonIntegerFromDaysReturns400(t *testing.T) {
 
 func TestWHOPercentiles_NonIntegerToDaysReturns400(t *testing.T) {
 	t.Parallel()
-	mux, fix := setupWHOMux(t)
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
 
-	req := testutil.AuthenticatedRequest(t, fix.DB, fix.User.ID, testCookieName, testSecret, http.MethodGet,
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.WHOPercentilesHandler()))
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet,
 		"/api/who/percentiles?sex=male&from_days=0&to_days=xyz")
 	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
+	h.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for non-integer to_days, got %d", rr.Code)

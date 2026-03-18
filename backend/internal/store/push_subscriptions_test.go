@@ -195,30 +195,6 @@ func TestDeletePushSubscription_OnlyDeletesOwnSubscription(t *testing.T) {
 	}
 }
 
-func TestDeleteAllPushSubscriptionsByUserID(t *testing.T) {
-	t.Parallel()
-	db := setupTestDB(t)
-	defer db.Close()
-
-	_, err := db.Exec("INSERT INTO users (id, google_id, email, name) VALUES ('u1', 'g1', 'a@b.com', 'Test')")
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-
-	_, _ = UpsertPushSubscription(db, "u1", "https://push.example.com/1", "k1", "a1")
-	_, _ = UpsertPushSubscription(db, "u1", "https://push.example.com/2", "k2", "a2")
-
-	err = DeleteAllPushSubscriptionsByUserID(db, "u1")
-	if err != nil {
-		t.Fatalf("delete all: %v", err)
-	}
-
-	var count int
-	_ = db.QueryRow("SELECT COUNT(*) FROM push_subscriptions WHERE user_id = 'u1'").Scan(&count)
-	if count != 0 {
-		t.Errorf("expected 0 subs after delete all, got %d", count)
-	}
-}
 
 func TestGetPushSubscriptionsByUserID_Empty(t *testing.T) {
 	t.Parallel()
