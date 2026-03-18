@@ -1,27 +1,9 @@
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import BabySelector from '$lib/components/BabySelector.svelte';
-import type { Baby } from '$lib/stores/baby';
+import { mockBabies } from './fixtures';
 
 describe('BabySelector', () => {
-	const mockBabies: Baby[] = [
-		{
-			id: 'baby-1',
-			name: 'Alice',
-			date_of_birth: '2025-06-01',
-			sex: 'female',
-			diagnosis_date: '2025-06-15',
-			kasai_date: '2025-06-20'
-		},
-		{
-			id: 'baby-2',
-			name: 'Bob',
-			date_of_birth: '2025-09-01',
-			sex: 'male',
-			diagnosis_date: null,
-			kasai_date: null
-		}
-	];
 
 	let onselect: ReturnType<typeof vi.fn>;
 

@@ -2,9 +2,7 @@ const BASE_URL = '/api';
 
 let csrfToken: string | null = null;
 
-function getTimezone(): string {
-	return Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
+const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 async function fetchCsrfToken(): Promise<string> {
 	if (csrfToken) {
@@ -33,7 +31,7 @@ const STATE_CHANGING_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
 	const method = options?.method ?? 'GET';
 	const headers: Record<string, string> = {
-		'X-Timezone': getTimezone(),
+		'X-Timezone': userTimezone,
 		...(options?.headers as Record<string, string>)
 	};
 

@@ -5,10 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"image"
-	"image/color"
-	"image/jpeg"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -25,6 +21,12 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 	t.Helper()
 	baseDate := time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC)
 
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
 	for day := 0; day < 30; day++ {
 		date := baseDate.AddDate(0, 0, day)
 
@@ -34,7 +36,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 			ts := date.Add(time.Duration(6+i*4) * time.Hour).Format(model.DateTimeFormat)
 			vol := 100.0 + float64(day)*2 + float64(i)*10
 			cal := vol * 0.67
-			_, err := db.Exec(
+			_, err := tx.Exec(
 				`INSERT INTO feedings (id, baby_id, logged_by, timestamp, feed_type, volume_ml, calories)
 				 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				model.NewULID(), babyID, userID, ts, ft, vol, cal,
@@ -49,7 +51,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 		for i := 0; i < stoolCount; i++ {
 			ts := date.Add(time.Duration(9+i*5) * time.Hour).Format(model.DateTimeFormat)
 			colorRating := (day%7 + 1) // 1-7 color scale
-			_, err := db.Exec(
+			_, err := tx.Exec(
 				`INSERT INTO stools (id, baby_id, logged_by, timestamp, color_rating, color_label)
 				 VALUES (?, ?, ?, ?, ?, ?)`,
 				model.NewULID(), babyID, userID, ts, colorRating, "varied",
@@ -62,7 +64,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 		// Urine: 3 per day
 		for i := 0; i < 3; i++ {
 			ts := date.Add(time.Duration(7+i*4) * time.Hour).Format(model.DateTimeFormat)
-			_, err := db.Exec(
+			_, err := tx.Exec(
 				`INSERT INTO urine (id, baby_id, logged_by, timestamp)
 				 VALUES (?, ?, ?, ?)`,
 				model.NewULID(), babyID, userID, ts,
@@ -75,7 +77,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 		// Temperatures: 2 per day, occasional fevers
 		for i, val := range []float64{36.5 + float64(day%3)*0.3, 37.0 + float64(day%5)*0.4} {
 			ts := date.Add(time.Duration(8+i*8) * time.Hour).Format(model.DateTimeFormat)
-			_, err := db.Exec(
+			_, err := tx.Exec(
 				`INSERT INTO temperatures (id, baby_id, logged_by, timestamp, value, method)
 				 VALUES (?, ?, ?, ?, ?, 'axillary')`,
 				model.NewULID(), babyID, userID, ts, val,
@@ -89,7 +91,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 		if day%3 == 0 {
 			ts := date.Add(8 * time.Hour).Format(model.DateTimeFormat)
 			weight := 3.5 + float64(day)*0.05
-			_, err := db.Exec(
+			_, err := tx.Exec(
 				`INSERT INTO weights (id, baby_id, logged_by, timestamp, weight_kg)
 				 VALUES (?, ?, ?, ?, ?)`,
 				model.NewULID(), babyID, userID, ts, weight,
@@ -119,7 +121,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 	}
 	for _, lt := range labTests {
 		ts := baseDate.AddDate(0, 0, lt.day).Add(10 * time.Hour).Format(model.DateTimeFormat)
-		_, err := db.Exec(
+		_, err := tx.Exec(
 			`INSERT INTO lab_results (id, baby_id, logged_by, timestamp, test_name, value, unit)
 			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			model.NewULID(), babyID, userID, ts, lt.testName, lt.value, lt.unit,
@@ -142,7 +144,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 	}
 	for _, n := range notes {
 		ts := baseDate.AddDate(0, 0, n.day).Add(12 * time.Hour).Format(model.DateTimeFormat)
-		_, err := db.Exec(
+		_, err := tx.Exec(
 			`INSERT INTO general_notes (id, baby_id, logged_by, timestamp, content, category)
 			 VALUES (?, ?, ?, ?, ?, ?)`,
 			model.NewULID(), babyID, userID, ts, n.content, n.category,
@@ -154,7 +156,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 
 	// Medications and med logs
 	medID := model.NewULID()
-	_, err := db.Exec(
+	_, err = tx.Exec(
 		`INSERT INTO medications (id, baby_id, logged_by, name, dose, frequency, active)
 		 VALUES (?, ?, ?, 'UDCA', '25mg', 'twice_daily', 1)`,
 		medID, babyID, userID,
@@ -164,7 +166,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 	}
 
 	med2ID := model.NewULID()
-	_, err = db.Exec(
+	_, err = tx.Exec(
 		`INSERT INTO medications (id, baby_id, logged_by, name, dose, frequency, active)
 		 VALUES (?, ?, ?, 'Vitamin K', '1mg', 'once_daily', 1)`,
 		med2ID, babyID, userID,
@@ -182,7 +184,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 			if !skipped {
 				givenAt = &ts
 			}
-			_, err := db.Exec(
+			_, err := tx.Exec(
 				`INSERT INTO med_logs (id, medication_id, baby_id, logged_by, scheduled_time, given_at, skipped, created_at)
 				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 				model.NewULID(), medID, babyID, userID, ts, givenAt, skipped, ts,
@@ -196,7 +198,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 	// Vitamin K daily
 	for day := 0; day < 30; day++ {
 		ts := baseDate.AddDate(0, 0, day).Add(9 * time.Hour).Format(model.DateTimeFormat)
-		_, err := db.Exec(
+		_, err := tx.Exec(
 			`INSERT INTO med_logs (id, medication_id, baby_id, logged_by, scheduled_time, given_at, skipped, created_at)
 			 VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
 			model.NewULID(), med2ID, babyID, userID, ts, ts, ts,
@@ -208,8 +210,8 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 
 	// Photos with thumbnails
 	if objStore != nil {
+		thumbPNG := createTestJPEGData(t, 20, 20)
 		for i := 0; i < 3; i++ {
-			thumbPNG := createReportTestJPEG(t)
 			thumbKey := fmt.Sprintf("photos/report_thumb_%d.jpg", i)
 			r2Key := fmt.Sprintf("photos/report_photo_%d.jpg", i)
 			ctx := context.Background()
@@ -220,7 +222,7 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 				t.Fatalf("put thumbnail %d: %v", i, err)
 			}
 			uploadedAt := baseDate.AddDate(0, 0, i*10).Add(10 * time.Hour).Format(model.DateTimeFormat)
-			_, err := db.Exec(
+			_, err := tx.Exec(
 				`INSERT INTO photo_uploads (id, baby_id, r2_key, thumbnail_key, uploaded_at, linked_at)
 				 VALUES (?, ?, ?, ?, ?, ?)`,
 				model.NewULID(), babyID, r2Key, thumbKey, uploadedAt, uploadedAt,
@@ -230,45 +232,12 @@ func seedDaysOfData(t *testing.T, db *sql.DB, babyID, userID string, objStore *s
 			}
 		}
 	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit transaction: %v", err)
+	}
 }
 
-// createReportTestJPEG creates a small valid JPEG for testing.
-func createReportTestJPEG(t *testing.T) []byte {
-	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, 20, 20))
-	for x := 0; x < 20; x++ {
-		for y := 0; y < 20; y++ {
-			img.Set(x, y, color.RGBA{R: 100, G: 150, B: 200, A: 255})
-		}
-	}
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, nil); err != nil {
-		t.Fatalf("encode test JPEG: %v", err)
-	}
-	return buf.Bytes()
-}
-
-// doRawBytes performs a GET request and returns raw response bytes and status code.
-func (tc *testClient) doRawBytes(path string) (int, []byte) {
-	tc.t.Helper()
-	req, err := http.NewRequest(http.MethodGet, tc.srv.URL+path, nil)
-	if err != nil {
-		tc.t.Fatalf("create request: %v", err)
-	}
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: tc.sessionID})
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		tc.t.Fatalf("do request GET %s: %v", path, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		tc.t.Fatalf("read response body: %v", err)
-	}
-	return resp.StatusCode, body
-}
 
 // TestReportGeneration_FullIntegration seeds 30 days of varied data (all metric
 // types, photos, medications) then generates a PDF report and validates that

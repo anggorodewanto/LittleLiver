@@ -73,12 +73,14 @@ export function _resetBabyStores(): void {
 
 export async function createBaby(input: CreateBabyInput): Promise<Baby> {
 	const result = await apiClient.post<Baby>('/babies', input);
-	await fetchBabies();
+	babies.update((current) => [...current, result]);
+	activeBaby.set(result);
 	return result;
 }
 
 export async function joinBaby(code: string): Promise<JoinResponse> {
 	const result = await apiClient.post<JoinResponse>('/babies/join', { code });
+	// Fetch full baby list since join response only contains baby_id, not full baby data
 	await fetchBabies();
 	return result;
 }

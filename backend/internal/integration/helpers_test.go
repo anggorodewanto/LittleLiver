@@ -302,6 +302,28 @@ func verifyAnonymized(t *testing.T, db *sql.DB, table, column, originalUserID, s
 	}
 }
 
+// doRawBytes performs a GET request and returns raw response bytes and status code.
+func (tc *testClient) doRawBytes(path string) (int, []byte) {
+	tc.t.Helper()
+	req, err := http.NewRequest(http.MethodGet, tc.srv.URL+path, nil)
+	if err != nil {
+		tc.t.Fatalf("create request: %v", err)
+	}
+	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: tc.sessionID})
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		tc.t.Fatalf("do request GET %s: %v", path, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		tc.t.Fatalf("read response body: %v", err)
+	}
+	return resp.StatusCode, body
+}
+
 // verifyNotAnonymized checks that the specified user's entries still have the
 // original user ID in the specified column (not anonymized).
 func verifyNotAnonymized(t *testing.T, db *sql.DB, table, column, userID string) {

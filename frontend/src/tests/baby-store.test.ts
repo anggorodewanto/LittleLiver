@@ -11,26 +11,9 @@ import {
 	_resetBabyStores
 } from '$lib/stores/baby';
 import { apiClient } from '$lib/api';
+import { mockBabies } from './fixtures';
 
 describe('baby store', () => {
-	const mockBabies = [
-		{
-			id: 'baby-1',
-			name: 'Alice',
-			date_of_birth: '2025-06-01',
-			sex: 'female' as const,
-			diagnosis_date: '2025-06-15',
-			kasai_date: '2025-06-20'
-		},
-		{
-			id: 'baby-2',
-			name: 'Bob',
-			date_of_birth: '2025-09-01',
-			sex: 'male' as const,
-			diagnosis_date: null,
-			kasai_date: null
-		}
-	];
 
 	beforeEach(() => {
 		vi.restoreAllMocks();
@@ -115,7 +98,7 @@ describe('baby store', () => {
 		expect(get(activeBaby)).toEqual(mockBabies[0]);
 	});
 
-	it('createBaby calls POST /babies and refreshes list', async () => {
+	it('createBaby calls POST /babies and updates stores directly', async () => {
 		const newBaby = {
 			id: 'baby-3',
 			name: 'Charlie',
@@ -124,10 +107,11 @@ describe('baby store', () => {
 			diagnosis_date: null,
 			kasai_date: null
 		};
+		// Seed initial babies
+		vi.spyOn(apiClient, 'get').mockResolvedValue({ babies: mockBabies });
+		await fetchBabies();
+
 		const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue(newBaby);
-		const getSpy = vi
-			.spyOn(apiClient, 'get')
-			.mockResolvedValue({ babies: [...mockBabies, newBaby] });
 
 		const result = await createBaby({
 			name: 'Charlie',
@@ -141,7 +125,8 @@ describe('baby store', () => {
 			sex: 'male'
 		});
 		expect(result).toEqual(newBaby);
-		expect(getSpy).toHaveBeenCalledWith('/babies');
+		expect(get(babies)).toEqual([...mockBabies, newBaby]);
+		expect(get(activeBaby)).toEqual(newBaby);
 	});
 
 	it('joinBaby calls POST /babies/join and refreshes list', async () => {
