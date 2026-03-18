@@ -231,7 +231,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## WHO Growth Standards
 
-- [ ] **Phase 31: WHO growth data embedding and percentile calculation**
+- [x] **Phase 31: WHO growth data embedding and percentile calculation**
   **Depends on:** Phase 4
   **What to build:** `internal/who/` package. Embed WHO weight-for-age LMS CSV tables (0-24 months, male + female) using `//go:embed`, parse at startup. Function: given sex, age in days, weight_kg, compute z-score and percentile. Function to generate percentile curves (3rd, 15th, 50th, 85th, 97th) for a given sex and age range.
   **TDD approach:** Write tests that (1) known weight/age/sex inputs produce expected z-scores (validated against WHO reference), (2) edge cases (day 0, day 730), (3) percentile curve generation returns correct number of points. Write the LMS calculation code.
