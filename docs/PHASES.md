@@ -267,7 +267,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Cron Jobs
 
-- [ ] **Phase 36: Cron jobs (invite cleanup, session cleanup, photo cleanup)**
+- [x] **Phase 36: Cron jobs (invite cleanup, session cleanup, photo cleanup)**
   **Depends on:** Phase 12, Phase 6, Phase 24
   **What to build:** Three periodic cleanup tasks running **hourly** (goroutines with tickers or a lightweight cron): (1) Delete all invite codes older than 24 hours, (2) Delete expired sessions, (3) Delete orphaned/cascade photo_uploads rows and their R2 objects (`linked_at IS NULL AND uploaded_at < NOW() - 24h` OR `baby_id IS NULL`).
   **TDD approach:** Write tests that (1) old invites are deleted, recent ones kept, (2) expired sessions are deleted, active ones kept, (3) unlinked photos older than 24h are cleaned up with R2 delete calls, (4) baby-deleted photos (baby_id IS NULL) are cleaned up. Use mock R2 for photo cleanup.
