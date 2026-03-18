@@ -305,7 +305,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Frontend Views
 
-- [ ] **Phase 41: Frontend auth flow and API client**
+- [x] **Phase 41: Frontend auth flow and API client**
   **Depends on:** Phase 2, Phase 7
   **What to build:** Login page with "Sign in with Google" button. OAuth redirect handling. API client in `lib/api.ts` that includes session cookie, fetches CSRF token, attaches `X-CSRF-Token` and `X-Timezone` headers. 401 response interceptor that redirects to login. Svelte store for current user state.
   **TDD approach:** Write tests that (1) login page renders sign-in button, (2) API client attaches correct headers, (3) 401 triggers redirect, (4) user store updates on successful `/api/me` fetch (mock fetch). Write components and API client.
