@@ -365,7 +365,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) date range picker renders and validates, (2) generate button calls correct API endpoint, (3) PDF response triggers download (mock fetch), (4) loading state shows during generation. Write report page component.
   **Proof of progress:** Report page renders; PDF download triggered on button click with mock.
 
-- [ ] **Phase 51: Settings, invite sharing, and account management UI**
+- [x] **Phase 51: Settings, invite sharing, and account management UI**
   **Depends on:** Phase 42, Phase 13, Phase 14
   **What to build:** Settings page: baby settings (edit name/DOB/sex/dates, adjust default_cal_per_feed with recalculate option), invite code generation + share UI (display code, copy button, expiry countdown), self-unlink from baby (with confirmation dialog), account deletion (with confirmation dialog). Baby selector management.
   **TDD approach:** Write tests that (1) invite generation displays code and expiry, (2) unlink shows confirmation and calls DELETE, (3) account deletion shows confirmation and calls DELETE, (4) default_cal_per_feed edit with recalculate checkbox. Write settings components.

@@ -8,6 +8,8 @@ export interface Baby {
 	sex: 'male' | 'female';
 	diagnosis_date: string | null;
 	kasai_date: string | null;
+	default_cal_per_feed?: number;
+	notes?: string;
 }
 
 export interface CreateBabyInput {
@@ -83,4 +85,64 @@ export async function joinBaby(code: string): Promise<JoinResponse> {
 	// Fetch full baby list since join response only contains baby_id, not full baby data
 	await fetchBabies();
 	return result;
+}
+
+export interface UpdateBabyInput {
+	name?: string;
+	date_of_birth?: string;
+	sex?: 'male' | 'female';
+	diagnosis_date?: string | null;
+	kasai_date?: string | null;
+	default_cal_per_feed?: number;
+	notes?: string;
+}
+
+interface RecalculateResponse {
+	baby: Baby;
+	recalculated_count: number;
+}
+
+export async function updateBaby(
+	id: string,
+	input: UpdateBabyInput,
+	recalculate = false
+): Promise<Baby> {
+	const path = recalculate
+		? `/babies/${id}?recalculate_calories=true`
+		: `/babies/${id}`;
+
+	let baby: Baby;
+	if (recalculate) {
+		const envelope = await apiClient.put<RecalculateResponse>(path, input);
+		baby = envelope.baby;
+	} else {
+		baby = await apiClient.put<Baby>(path, input);
+	}
+
+	babies.update((current) =>
+		current.map((b) => (b.id === id ? baby : b))
+	);
+	const currentActive = get(activeBaby);
+	if (currentActive?.id === id) {
+		activeBaby.set(baby);
+	}
+	return baby;
+}
+
+export interface InviteResponse {
+	code: string;
+	expires_at: string;
+}
+
+export async function generateInvite(babyId: string): Promise<InviteResponse> {
+	return apiClient.post<InviteResponse>(`/babies/${babyId}/invite`, {});
+}
+
+export async function unlinkFromBaby(babyId: string): Promise<void> {
+	await apiClient.del(`/babies/${babyId}/parents/me`);
+	await fetchBabies();
+}
+
+export async function deleteAccount(): Promise<void> {
+	await apiClient.del('/users/me');
 }
