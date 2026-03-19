@@ -359,7 +359,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Unit tests using mocked `ServiceWorkerGlobalScope` (e.g., via `msw` or manual mocks). Test `push` event handler displays notification with correct title/body. Test `notificationclick` handler calls `clients.openWindow` with correct URL. Additional tests: (1) manifest is valid JSON with required fields, (2) service worker registers successfully (mock), (3) push subscription registration calls correct API endpoint.
   **Proof of progress:** App is installable as PWA; service worker caches app shell; push subscription registers; push and notificationclick handlers tested.
 
-- [ ] **Phase 50: Report generation UI and PDF download**
+- [x] **Phase 50: Report generation UI and PDF download**
   **Depends on:** Phase 38, Phase 39, Phase 42
   **What to build:** Report page with date range picker. "Generate Report" button that calls `GET /api/babies/:id/report?from=&to=` and triggers PDF download. Loading state during generation. Preview summary of what will be included.
   **TDD approach:** Write tests that (1) date range picker renders and validates, (2) generate button calls correct API endpoint, (3) PDF response triggers download (mock fetch), (4) loading state shows during generation. Write report page component.

@@ -28,7 +28,7 @@ export function _resetCsrfToken(): void {
 
 const STATE_CHANGING_METHODS = ['POST', 'PUT', 'DELETE', 'PATCH'];
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function buildRequest(path: string, options?: RequestInit): Promise<Response> {
 	const method = options?.method ?? 'GET';
 	const headers: Record<string, string> = {
 		'X-Timezone': userTimezone,
@@ -57,6 +57,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 		}
 		throw new Error(`API error: ${response.status}`);
 	}
+
+	return response;
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+	const response = await buildRequest(path, options);
 
 	if (response.status === 204) {
 		return undefined as T;
@@ -96,5 +102,9 @@ export const apiClient = {
 		return request<T>(path, {
 			method: 'DELETE'
 		});
+	},
+
+	getRaw(path: string): Promise<Response> {
+		return buildRequest(path);
 	}
 };
