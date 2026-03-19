@@ -353,7 +353,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) medication list renders active/inactive correctly, (2) creation form submits correct schedule JSON, (3) deactivation updates display, (4) med-log list shows given/skipped status, (5) dose logging form pre-fills medication from URL param, (6) Med Given quick-log button renders and triggers dose logging form. Write components.
   **Proof of progress:** Full medication management UI working; dose logging from notification click functional; Med Given quick-log button working.
 
-- [ ] **Phase 49: PWA setup (service worker, manifest, install prompt)**
+- [x] **Phase 49: PWA setup (service worker, manifest, install prompt)**
   **Depends on:** Phase 2
   **What to build:** `manifest.json` with app name, icons, theme color, display standalone. Service worker for app shell caching only (HTML/JS/CSS) — API calls are not cached and fail gracefully when offline. Service worker `push` event handler that displays a notification with title/body from the push payload. Service worker `notificationclick` handler that opens `/log/med?medication_id=X` (URL from notification data). Install prompt handling. Push notification permission request and subscription registration (calls `POST /api/push/subscribe`).
   **TDD approach:** Unit tests using mocked `ServiceWorkerGlobalScope` (e.g., via `msw` or manual mocks). Test `push` event handler displays notification with correct title/body. Test `notificationclick` handler calls `clients.openWindow` with correct URL. Additional tests: (1) manifest is valid JSON with required fields, (2) service worker registers successfully (mock), (3) push subscription registration calls correct API endpoint.
