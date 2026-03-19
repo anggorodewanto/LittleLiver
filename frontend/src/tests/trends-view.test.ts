@@ -117,7 +117,7 @@ describe('TrendsView', () => {
 		expect(lastDashboardCall).toContain('to=');
 	});
 
-	it('renders three canvas elements for the three chart types', async () => {
+	it('renders canvas elements only for charts with data', async () => {
 		const { container } = render(TrendsView, {
 			props: { babyId: 'baby-1', sex: 'female', dateOfBirth: '2026-01-15' }
 		});
@@ -125,6 +125,7 @@ describe('TrendsView', () => {
 		// Wait for data to load
 		await screen.findByText(/stool color/i);
 
+		// Only temperature, weight, and stool_color have data; others show "No data"
 		const canvases = container.querySelectorAll('canvas');
 		expect(canvases.length).toBe(3);
 	});
@@ -141,7 +142,7 @@ describe('TrendsView', () => {
 		);
 	});
 
-	it('shows chart section headings', async () => {
+	it('shows chart section headings for all seven charts', async () => {
 		render(TrendsView, {
 			props: { babyId: 'baby-1', sex: 'female', dateOfBirth: '2026-01-15' }
 		});
@@ -149,6 +150,10 @@ describe('TrendsView', () => {
 		expect(await screen.findByText(/stool color/i)).toBeInTheDocument();
 		expect(screen.getByText(/weight/i)).toBeInTheDocument();
 		expect(screen.getByText(/temperature/i)).toBeInTheDocument();
+		expect(screen.getByText(/abdomen girth/i)).toBeInTheDocument();
+		expect(screen.getByText(/feeding/i)).toBeInTheDocument();
+		expect(screen.getByText(/diaper/i)).toBeInTheDocument();
+		expect(screen.getByText(/lab trends/i)).toBeInTheDocument();
 	});
 
 	it('shows loading state while data is being fetched', () => {

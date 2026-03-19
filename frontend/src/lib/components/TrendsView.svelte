@@ -6,6 +6,10 @@
 	import StoolColorChart from './StoolColorChart.svelte';
 	import WeightChart from './WeightChart.svelte';
 	import TemperatureChart from './TemperatureChart.svelte';
+	import AbdomenGirthChart from './AbdomenGirthChart.svelte';
+	import FeedingChart from './FeedingChart.svelte';
+	import DiaperChart from './DiaperChart.svelte';
+	import LabTrendsChart from './LabTrendsChart.svelte';
 
 	interface Props {
 		babyId: string;
@@ -31,10 +35,10 @@
 			temperature: { timestamp: string; value: number; method: string }[];
 			weight: { timestamp: string; weight_kg: number; measurement_source: string }[];
 			stool_color: { timestamp: string; color_score: number }[];
-			feeding_daily: unknown[];
-			diaper_daily: unknown[];
-			abdomen_girth: unknown[];
-			lab_trends: Record<string, unknown>;
+			feeding_daily: { date: string; total_volume_ml: number; total_calories: number; feed_count: number; by_type: Record<string, number> }[];
+			diaper_daily: { date: string; wet_count: number; stool_count: number }[];
+			abdomen_girth: { timestamp: string; girth_cm: number }[];
+			lab_trends: Record<string, { timestamp: string; test_name: string; value: string; unit: string }[]>;
 		};
 		[key: string]: unknown;
 	}
@@ -140,6 +144,26 @@
 			<section class="chart-section">
 				<h3>Temperature</h3>
 				<TemperatureChart data={dashboard.chart_data_series.temperature} />
+			</section>
+
+			<section class="chart-section">
+				<h3>Abdomen Girth</h3>
+				<AbdomenGirthChart data={dashboard.chart_data_series.abdomen_girth} />
+			</section>
+
+			<section class="chart-section">
+				<h3>Feeding</h3>
+				<FeedingChart data={dashboard.chart_data_series.feeding_daily} />
+			</section>
+
+			<section class="chart-section">
+				<h3>Diaper Counts</h3>
+				<DiaperChart data={dashboard.chart_data_series.diaper_daily} />
+			</section>
+
+			<section class="chart-section">
+				<h3>Lab Trends</h3>
+				<LabTrendsChart data={dashboard.chart_data_series.lab_trends} />
 			</section>
 		</div>
 	{/if}

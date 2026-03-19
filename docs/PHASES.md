@@ -341,7 +341,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) date range selector updates API call params, (2) each chart component renders with mock data (verify canvas element exists), (3) WHO percentile bands appear on weight chart (data fetched from WHO percentile endpoint), (4) fever threshold line appears on temperature chart, (5) stool color scatter uses correct color coding. Write chart wrapper components.
   **Proof of progress:** Trends view renders date range selector and 3 core chart types with mock data.
 
-- [ ] **Phase 47: Trends view — additional charts**
+- [x] **Phase 47: Trends view — additional charts**
   **Depends on:** Phase 46
   **What to build:** Additional Chart.js charts in the trends view: abdomen girth line, feeding bar chart (daily kcal), diaper daily counts (stool + urine), lab trends multi-line with normal range shading. All data from the same dashboard endpoint.
   **TDD approach:** Write tests that (1) abdomen girth chart renders with mock data, (2) feeding bar chart shows daily kcal, (3) diaper chart combines stool + urine counts, (4) lab trends groups by test_name with normal range shading. Write chart wrapper components.
