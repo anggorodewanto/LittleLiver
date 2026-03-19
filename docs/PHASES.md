@@ -329,7 +329,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests for each form: (1) renders required fields, (2) validates input (e.g., color_rating 1-7), (3) submits correct payload to API, (4) photo upload flow integrates with upload endpoint, (5) stool form renders 7 tappable CSS color swatches with labels, (6) lab form quick-pick buttons render and selecting one pre-fills test_name and unit, (7) skin form displays "consistent lighting recommended" hint on photo upload trigger. Write form components.
   **Proof of progress:** All photo-capable and specialized forms render and submit correctly; stool color swatches display; lab quick-pick works; skin lighting hint appears.
 
-- [ ] **Phase 45: Today dashboard view**
+- [x] **Phase 45: Today dashboard view**
   **Depends on:** Phase 43, Phase 27, Phase 29
   **What to build:** Today view consuming `GET /api/babies/:id/dashboard` (no from/to = today). Summary cards (total feeds, calories, wet diapers, stools with color indicator, last temp, last weight). Stool color trend mini-chart (last 7 days). Upcoming medications with countdown. Alert banners with client-side dismissal (localStorage). Quick-log buttons.
   **TDD approach:** Write tests that (1) summary cards display correct values from mock API response, (2) stool color trend renders dots, (3) upcoming meds show countdown, (4) alert banners render for each type, (5) dismissal persists to localStorage and hides alert, (6) recovery clears dismissed IDs. Write dashboard component.

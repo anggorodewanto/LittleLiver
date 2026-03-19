@@ -9,13 +9,14 @@ describe('QuickLogButtons', () => {
 		onselect = vi.fn();
 	});
 
-	it('renders Feed, Wet Diaper, Stool, and Temp buttons', () => {
+	it('renders Feed, Wet Diaper, Stool, Temp, and Medication buttons', () => {
 		render(QuickLogButtons, { props: { onselect } });
 
 		expect(screen.getByRole('button', { name: /feed/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /wet diaper/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /stool/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /temp/i })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /medication/i })).toBeInTheDocument();
 	});
 
 	it('calls onselect with "feeding" when Feed is clicked', async () => {
@@ -48,5 +49,19 @@ describe('QuickLogButtons', () => {
 		await fireEvent.click(screen.getByRole('button', { name: /temp/i }));
 
 		expect(onselect).toHaveBeenCalledWith('temperature');
+	});
+
+	it('renders a Medication button', () => {
+		render(QuickLogButtons, { props: { onselect } });
+
+		expect(screen.getByRole('button', { name: /medication/i })).toBeInTheDocument();
+	});
+
+	it('calls onselect with "medication" when Medication is clicked', async () => {
+		render(QuickLogButtons, { props: { onselect } });
+
+		await fireEvent.click(screen.getByRole('button', { name: /medication/i }));
+
+		expect(onselect).toHaveBeenCalledWith('medication');
 	});
 });
