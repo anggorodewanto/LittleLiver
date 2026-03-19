@@ -15,6 +15,10 @@
 	import UnlinkSection from './UnlinkSection.svelte';
 	import AccountDeletion from './AccountDeletion.svelte';
 
+	function extractError(err: unknown, fallback: string): string {
+		return err instanceof Error ? err.message : fallback;
+	}
+
 	let baby = $derived($activeBaby);
 
 	let settingsSubmitting = $state(false);
@@ -37,7 +41,7 @@
 		try {
 			await updateBaby(baby.id, data, recalculate);
 		} catch (err) {
-			settingsError = err instanceof Error ? err.message : 'Failed to save';
+			settingsError = extractError(err, 'Failed to save');
 		} finally {
 			settingsSubmitting = false;
 		}
@@ -54,7 +58,7 @@
 			inviteCode = result.code;
 			inviteExpiresAt = result.expires_at;
 		} catch (err) {
-			inviteError = err instanceof Error ? err.message : 'Failed to generate invite';
+			inviteError = extractError(err, 'Failed to generate invite');
 		} finally {
 			inviteGenerating = false;
 		}
@@ -68,7 +72,7 @@
 		try {
 			await unlinkFromBaby(baby.id);
 		} catch (err) {
-			unlinkError = err instanceof Error ? err.message : 'Failed to unlink';
+			unlinkError = extractError(err, 'Failed to unlink');
 		}
 	}
 
@@ -78,7 +82,7 @@
 			await deleteAccount();
 			window.location.href = '/login';
 		} catch (err) {
-			deleteError = err instanceof Error ? err.message : 'Failed to delete account';
+			deleteError = extractError(err, 'Failed to delete account');
 		}
 	}
 </script>
@@ -99,12 +103,14 @@
 {#if baby}
 	<section>
 		<h2>Baby Settings</h2>
-		<BabySettingsForm
-			{baby}
-			onsave={handleSave}
-			submitting={settingsSubmitting}
-			error={settingsError}
-		/>
+		{#key baby.id}
+			<BabySettingsForm
+				{baby}
+				onsave={handleSave}
+				submitting={settingsSubmitting}
+				error={settingsError}
+			/>
+		{/key}
 	</section>
 
 	<InviteSection

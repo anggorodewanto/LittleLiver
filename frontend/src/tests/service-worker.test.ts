@@ -35,7 +35,8 @@ function createMockSwScope() {
 		registration: {
 			showNotification: vi.fn(() => Promise.resolve())
 		},
-		fetch: vi.fn()
+		fetch: vi.fn(),
+		location: { origin: 'http://localhost' }
 	};
 }
 

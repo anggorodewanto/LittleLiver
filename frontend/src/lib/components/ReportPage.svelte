@@ -45,7 +45,7 @@
 			link.href = url;
 			link.download = `report-${babyName.toLowerCase()}-${fromDate}-to-${toDate}.pdf`;
 			link.click();
-			URL.revokeObjectURL(url);
+			setTimeout(() => URL.revokeObjectURL(url), 10000);
 		} catch (e) {
 			const statusMatch = e instanceof Error && e.message.match(/(\d{3})/);
 			const status = statusMatch ? statusMatch[1] : 'unknown';

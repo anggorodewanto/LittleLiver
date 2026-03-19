@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { formatDateTime } from '$lib/datetime';
 
 	interface Props {
 		ongenerate: () => void;
@@ -43,7 +44,8 @@
 		}
 		countdown = computeCountdown(expiresAt);
 		countdownInterval = setInterval(() => {
-			countdown = computeCountdown(expiresAt);
+			const next = computeCountdown(expiresAt);
+			if (next !== countdown) countdown = next;
 		}, 30000);
 	}
 
@@ -78,13 +80,6 @@
 		}, 2000);
 	}
 
-	function formatExpiry(iso: string): string {
-		if (!iso) {
-			return '';
-		}
-		const date = new Date(iso);
-		return date.toLocaleString();
-	}
 </script>
 
 <section>
@@ -97,7 +92,7 @@
 	{#if inviteCode}
 		<div>
 			<p><strong>{inviteCode}</strong></p>
-			<p>Expires {formatExpiry(expiresAt)}{#if countdown} ({countdown} remaining){/if}</p>
+			<p>Expires {formatDateTime(expiresAt)}{#if countdown} ({countdown} remaining){/if}</p>
 			<button onclick={copyCode}>
 				{copied ? 'Copied!' : 'Copy Code'}
 			</button>

@@ -40,6 +40,11 @@ export function initServiceWorker(sw: ServiceWorkerGlobalScope): void {
 		const fetchEvent = event as FetchEvent;
 		const url = new URL(fetchEvent.request.url);
 
+		// Only cache same-origin requests
+		if (url.origin !== sw.location.origin) {
+			return;
+		}
+
 		// Do not intercept API requests
 		if (url.pathname.startsWith('/api')) {
 			return;

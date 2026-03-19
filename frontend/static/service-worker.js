@@ -31,6 +31,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
 	const url = new URL(event.request.url);
 
+	// Only cache same-origin requests
+	if (url.origin !== self.location.origin) {
+		return;
+	}
+
 	// Do not intercept API requests
 	if (url.pathname.startsWith('/api')) {
 		return;
