@@ -317,7 +317,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) first-login screen shows only create/join options, (2) baby form validates required fields, (3) invite code submission calls correct API, (4) baby selector renders linked babies and switches active baby. Write components.
   **Proof of progress:** Baby creation and join flows render correctly; baby switching works.
 
-- [ ] **Phase 43: Quick-log buttons and simple metric entry forms**
+- [x] **Phase 43: Quick-log buttons and simple metric entry forms**
   **Depends on:** Phase 42
   **What to build:** Today view quick-log buttons (Feed, Wet Diaper, Stool, Temp). Simple metric entry forms (no photo upload): feeding form (feed type selector, volume, cal density, duration, notes), urine form, temperature form (method selector), weight form.
   **TDD approach:** Write tests for each form: (1) renders required fields, (2) validates input, (3) submits correct payload to API, (4) quick-log buttons trigger correct form. Write form components.

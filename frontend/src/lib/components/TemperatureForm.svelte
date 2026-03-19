@@ -1,0 +1,96 @@
+<script lang="ts">
+	export interface TemperaturePayload {
+		timestamp: string;
+		value: number;
+		method: string;
+		notes?: string;
+	}
+
+	interface Props {
+		onsubmit: (data: TemperaturePayload) => void;
+		submitting?: boolean;
+		error?: string;
+	}
+
+	let { onsubmit, submitting = false, error = '' }: Props = $props();
+
+	function defaultTimestamp(): string {
+		const now = new Date();
+		const offset = now.getTimezoneOffset();
+		const local = new Date(now.getTime() - offset * 60000);
+		return local.toISOString().slice(0, 16);
+	}
+
+	let timestamp = $state(defaultTimestamp());
+	let value = $state('');
+	let method = $state('');
+	let notes = $state('');
+	let validationError = $state('');
+
+	function handleSubmit(event: SubmitEvent) {
+		event.preventDefault();
+
+		if (!value) {
+			validationError = 'Temperature is required';
+			return;
+		}
+
+		if (!method) {
+			validationError = 'Method is required';
+			return;
+		}
+
+		validationError = '';
+		const payload: TemperaturePayload = {
+			timestamp,
+			value: Number(value),
+			method
+		};
+
+		if (notes.trim()) {
+			payload.notes = notes.trim();
+		}
+
+		onsubmit(payload);
+	}
+</script>
+
+<form onsubmit={handleSubmit}>
+	<div>
+		<label for="temp-timestamp">Timestamp</label>
+		<input id="temp-timestamp" type="datetime-local" bind:value={timestamp} />
+	</div>
+
+	<div>
+		<label for="temp-value">Temperature (&deg;C)</label>
+		<input id="temp-value" type="number" step="0.1" min="30" max="45" bind:value={value} />
+	</div>
+
+	<div>
+		<label for="temp-method">Method</label>
+		<select id="temp-method" bind:value={method}>
+			<option value="">Select...</option>
+			<option value="rectal">Rectal</option>
+			<option value="axillary">Axillary</option>
+			<option value="ear">Ear</option>
+			<option value="forehead">Forehead</option>
+		</select>
+	</div>
+
+	<div>
+		<label for="temp-notes">Notes</label>
+		<textarea id="temp-notes" bind:value={notes}></textarea>
+	</div>
+
+	{#if validationError}
+		<p role="alert">{validationError}</p>
+	{/if}
+
+	{#if error}
+		<p role="alert">{error}</p>
+	{/if}
+
+	<button type="submit" disabled={submitting}>
+		{submitting ? 'Logging...' : 'Log Temperature'}
+	</button>
+</form>
