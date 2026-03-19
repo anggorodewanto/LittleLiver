@@ -335,7 +335,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) summary cards display correct values from mock API response, (2) stool color trend renders dots, (3) upcoming meds show countdown, (4) alert banners render for each type, (5) dismissal persists to localStorage and hides alert, (6) recovery clears dismissed IDs. Write dashboard component.
   **Proof of progress:** Today view renders all sections with mock data; alert dismissal works.
 
-- [ ] **Phase 46: Trends view — core charts**
+- [x] **Phase 46: Trends view — core charts**
   **Depends on:** Phase 45, Phase 32
   **What to build:** Trends view with date range selector (7d/14d/30d/90d/custom). Charts using Chart.js: stool color scatter (color-coded, using CSS color swatches with labels), weight curve with WHO percentile bands (fetched from `GET /api/who/percentiles`), temperature line with fever threshold. All data from the same dashboard endpoint with different from/to.
   **TDD approach:** Write tests that (1) date range selector updates API call params, (2) each chart component renders with mock data (verify canvas element exists), (3) WHO percentile bands appear on weight chart (data fetched from WHO percentile endpoint), (4) fever threshold line appears on temperature chart, (5) stool color scatter uses correct color coding. Write chart wrapper components.
