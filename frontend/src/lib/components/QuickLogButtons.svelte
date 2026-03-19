@@ -1,6 +1,8 @@
 <script lang="ts">
+	export type MetricType = 'feeding' | 'urine' | 'stool' | 'temperature' | 'medication';
+
 	interface Props {
-		onselect: (type: string) => void;
+		onselect: (type: MetricType) => void;
 	}
 
 	let { onselect }: Props = $props();

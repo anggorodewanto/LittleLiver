@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { defaultTimestamp } from '$lib/datetime';
+	import { COLOR_SWATCHES } from '$lib/stool-colors';
 	import PhotoUpload from './PhotoUpload.svelte';
 
 	export interface StoolPayload {
@@ -22,34 +24,16 @@
 
 	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKey = '' }: Props = $props();
 
-	function defaultTimestamp(): string {
-		const now = new Date();
-		const offset = now.getTimezoneOffset();
-		const local = new Date(now.getTime() - offset * 60000);
-		return local.toISOString().slice(0, 16);
-	}
-
-	const COLOR_SWATCHES = [
-		{ rating: 1, ref: 'white', label: 'White', color: '#F5F5DC' },
-		{ rating: 2, ref: 'clay', label: 'Clay', color: '#D2B48C' },
-		{ rating: 3, ref: 'pale_yellow', label: 'Pale Yellow', color: '#FFFACD' },
-		{ rating: 4, ref: 'yellow', label: 'Yellow', color: '#FFD700' },
-		{ rating: 5, ref: 'light_green', label: 'Light Green', color: '#90EE90' },
-		{ rating: 6, ref: 'green', label: 'Green', color: '#228B22' },
-		{ rating: 7, ref: 'brown', label: 'Brown', color: '#8B4513' }
-	] as const;
-
 	let timestamp = $state(defaultTimestamp());
 	let colorRating = $state(0);
-	let colorLabel = $state('');
+	let colorLabel = $derived(COLOR_SWATCHES.find(s => s.rating === colorRating)?.ref ?? '');
 	let consistency = $state('');
 	let volumeEstimate = $state('');
 	let notes = $state('');
 	let validationError = $state('');
 
-	function selectColor(rating: number, ref: string) {
+	function selectColor(rating: number) {
 		colorRating = rating;
-		colorLabel = ref;
 	}
 
 	function handleSubmit(event: SubmitEvent) {
@@ -98,7 +82,7 @@
 					type="button"
 					aria-pressed={colorRating === swatch.rating ? 'true' : 'false'}
 					style="background-color: {swatch.color}; width: 48px; height: 48px; border: {colorRating === swatch.rating ? '3px solid black' : '1px solid #ccc'}; border-radius: 8px; cursor: pointer;"
-					onclick={() => selectColor(swatch.rating, swatch.ref)}
+					onclick={() => selectColor(swatch.rating)}
 				>
 					{swatch.label}
 				</button>

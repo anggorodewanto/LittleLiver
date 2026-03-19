@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { defaultTimestamp } from '$lib/datetime';
+
 	export interface FeedingPayload {
 		timestamp: string;
 		feed_type: string;
@@ -15,13 +17,6 @@
 	}
 
 	let { onsubmit, submitting = false, error = '' }: Props = $props();
-
-	function defaultTimestamp(): string {
-		const now = new Date();
-		const offset = now.getTimezoneOffset();
-		const local = new Date(now.getTime() - offset * 60000);
-		return local.toISOString().slice(0, 16);
-	}
 
 	let timestamp = $state(defaultTimestamp());
 	let feedType = $state('');

@@ -1,5 +1,6 @@
 <script lang="ts">
 	interface Props {
+		id?: string;
 		onupload: (file: File) => void;
 		uploading?: boolean;
 		photoKey?: string;
@@ -8,7 +9,7 @@
 		disabled?: boolean;
 	}
 
-	let { onupload, uploading = false, photoKey = '', multiple = false, hint = '', disabled = false }: Props = $props();
+	let { id = `photo-upload-${Math.random().toString(36).slice(2, 9)}`, onupload, uploading = false, photoKey = '', multiple = false, hint = '', disabled = false }: Props = $props();
 
 	function handleChange(event: Event) {
 		const input = event.target as HTMLInputElement;
@@ -26,9 +27,9 @@
 		<p>{hint}</p>
 	{/if}
 
-	<label for="photo-upload">Photo</label>
+	<label for={id}>Photo</label>
 	<input
-		id="photo-upload"
+		id={id}
 		type="file"
 		accept="image/jpeg,image/png,image/heic"
 		{multiple}

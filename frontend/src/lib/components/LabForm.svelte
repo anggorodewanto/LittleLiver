@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { defaultTimestamp } from '$lib/datetime';
+
 	export interface LabPayload {
 		timestamp: string;
 		test_name: string;
@@ -15,13 +17,6 @@
 	}
 
 	let { onsubmit, submitting = false, error = '' }: Props = $props();
-
-	function defaultTimestamp(): string {
-		const now = new Date();
-		const offset = now.getTimezoneOffset();
-		const local = new Date(now.getTime() - offset * 60000);
-		return local.toISOString().slice(0, 16);
-	}
 
 	const QUICK_PICKS = [
 		{ label: 'Total Bilirubin', testName: 'total_bilirubin', unit: 'mg/dL' },
@@ -41,12 +36,10 @@
 	let normalRange = $state('');
 	let notes = $state('');
 	let validationError = $state('');
-	let selectedQuickPick = $state('');
 
 	function selectQuickPick(pick: typeof QUICK_PICKS[number]) {
 		testName = pick.testName;
 		unit = pick.unit;
-		selectedQuickPick = pick.testName;
 	}
 
 	function handleSubmit(event: SubmitEvent) {
@@ -95,7 +88,7 @@
 			{#each QUICK_PICKS as pick (pick.testName)}
 				<button
 					type="button"
-					aria-pressed={selectedQuickPick === pick.testName ? 'true' : 'false'}
+					aria-pressed={testName === pick.testName ? 'true' : 'false'}
 					onclick={() => selectQuickPick(pick)}
 				>
 					{pick.label}

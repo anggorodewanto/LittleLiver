@@ -1,6 +1,10 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { goto } from '$app/navigation';
 	import { apiClient } from '$lib/api';
+	import { stoolStatusColor } from '$lib/stool-colors';
+	import type { MetricType } from './QuickLogButtons.svelte';
 	import QuickLogButtons from './QuickLogButtons.svelte';
 
 	interface Props {
@@ -55,6 +59,7 @@
 	let error = $state<string | null>(null);
 	let dashboard = $state<DashboardResponse | null>(null);
 	let dismissedAlertIds = new SvelteSet<string>();
+	let now = $state(Date.now());
 
 	function loadDismissedAlerts(): SvelteSet<string> {
 		const stored = localStorage.getItem('dismissed_alerts');
@@ -93,7 +98,6 @@
 	}
 
 	function formatCountdown(nextDoseAt: string): string {
-		const now = Date.now();
 		const doseTime = new Date(nextDoseAt).getTime();
 		const diffMs = doseTime - now;
 
@@ -115,13 +119,6 @@
 		return `in ${mins} min`;
 	}
 
-	function stoolDotColor(rating: number): string {
-		if (rating <= 3) return '#dc2626';
-		if (rating <= 5) return '#f59e0b';
-		if (rating <= 7) return '#84cc16';
-		return '#16a34a';
-	}
-
 	function alertLabel(alertType: string): string {
 		switch (alertType) {
 			case 'acholic_stool':
@@ -141,9 +138,8 @@
 		(dashboard?.active_alerts ?? []).filter((a) => !dismissedAlertIds.has(a.entry_id))
 	);
 
-	function handleQuickLog(type: string): void {
-		// Navigate or dispatch event — placeholder for now
-		window.location.href = `/log/${type}`;
+	function handleQuickLog(type: MetricType): void {
+		void goto(`/log/${type}`);
 	}
 
 	async function fetchDashboard(): Promise<void> {
@@ -155,12 +151,16 @@
 
 			// Load dismissed, clean up stale, save back
 			const dismissed = loadDismissedAlerts();
-			const cleaned = cleanupDismissedAlerts(data.active_alerts, dismissed);
-			dismissedAlertIds.clear();
-			for (const id of cleaned) {
-				dismissedAlertIds.add(id);
+			if (dismissed.size > 0) {
+				const cleaned = cleanupDismissedAlerts(data.active_alerts, dismissed);
+				dismissedAlertIds.clear();
+				for (const id of cleaned) {
+					dismissedAlertIds.add(id);
+				}
+				if (cleaned.size !== dismissed.size) {
+					saveDismissedAlerts(dismissedAlertIds);
+				}
 			}
-			saveDismissedAlerts(dismissedAlertIds);
 		} catch {
 			error = 'Failed to load dashboard data';
 		} finally {
@@ -169,8 +169,15 @@
 	}
 
 	$effect(() => {
-		// Re-fetch when babyId changes
-		void fetchDashboard();
+		const _id = babyId;
+		untrack(() => { void fetchDashboard(); });
+	});
+
+	$effect(() => {
+		const interval = setInterval(() => {
+			now = Date.now();
+		}, 60000);
+		return () => clearInterval(interval);
 	});
 </script>
 
@@ -211,7 +218,7 @@
 				{#if dashboard.summary_cards.worst_stool_color !== null}
 					<span
 						class="stool-color-indicator"
-						style="background-color: {stoolDotColor(dashboard.summary_cards.worst_stool_color)}"
+						style="background-color: {stoolStatusColor(dashboard.summary_cards.worst_stool_color)}"
 					></span>
 				{/if}
 			</div>
@@ -248,7 +255,7 @@
 					<div
 						class="stool-trend-dot"
 						data-rating={entry.color_rating}
-						style="background-color: {stoolDotColor(entry.color_rating)}"
+						style="background-color: {stoolStatusColor(entry.color_rating)}"
 						title="{entry.date}: {entry.color} ({entry.color_rating})"
 					></div>
 				{/each}

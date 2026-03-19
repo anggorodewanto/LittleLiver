@@ -9,6 +9,11 @@ vi.mock('$lib/api', () => ({
 	}
 }));
 
+// Mock $app/navigation
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn()
+}));
+
 import { apiClient } from '$lib/api';
 
 const mockDashboardResponse = {
@@ -27,8 +32,8 @@ const mockDashboardResponse = {
 		{ date: '2026-03-15', color: 'yellow', color_rating: 5 },
 		{ date: '2026-03-16', color: 'yellow_green', color_rating: 6 },
 		{ date: '2026-03-17', color: 'green', color_rating: 7 },
-		{ date: '2026-03-18', color: 'brown_green', color_rating: 8 },
-		{ date: '2026-03-19', color: 'brown', color_rating: 9 }
+		{ date: '2026-03-18', color: 'green', color_rating: 6 },
+		{ date: '2026-03-19', color: 'brown', color_rating: 7 }
 	],
 	upcoming_meds: [
 		{
@@ -217,7 +222,7 @@ describe('TodayDashboard', () => {
 		expect(dots.length).toBe(7);
 		// Each dot should have a data-rating attribute for testing
 		expect(dots[0].getAttribute('data-rating')).toBe('3');
-		expect(dots[6].getAttribute('data-rating')).toBe('9');
+		expect(dots[6].getAttribute('data-rating')).toBe('7');
 	});
 
 	// --- Upcoming Medications ---
