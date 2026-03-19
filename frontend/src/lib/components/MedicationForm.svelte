@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getTimeSlotCount } from '$lib/medication-utils';
+
 	export interface MedicationPayload {
 		name: string;
 		dose: string;
@@ -51,19 +53,6 @@
 		notes = initialData?.notes ?? '';
 		validationError = '';
 	});
-
-	function getTimeSlotCount(freq: string): number {
-		switch (freq) {
-			case 'once_daily':
-				return 1;
-			case 'twice_daily':
-				return 2;
-			case 'three_times_daily':
-				return 3;
-			default:
-				return 0;
-		}
-	}
 
 	function handleFrequencyChange(): void {
 		if (frequency === 'as_needed') {

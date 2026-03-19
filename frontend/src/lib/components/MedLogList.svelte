@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { apiClient } from '$lib/api';
+	import { formatDateTime } from '$lib/datetime';
 
 	interface MedLog {
 		id: string;
@@ -28,10 +29,6 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let logs = $state<MedLog[]>([]);
-
-	function formatDateTime(dt: string): string {
-		return new Date(dt).toLocaleString();
-	}
 
 	async function fetchLogs(): Promise<void> {
 		loading = true;

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import { Chart } from 'chart.js';
+	import type { ChartConfiguration } from 'chart.js';
+	import ChartWrapper from './ChartWrapper.svelte';
+	import { dateTickCallback } from '$lib/chart-utils';
 
 	interface LabDataPoint {
 		timestamp: string;
@@ -14,12 +15,18 @@
 	}
 
 	let { data }: Props = $props();
-	let canvas: HTMLCanvasElement;
-	let chart: Chart | null = null;
 
-	const LINE_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+	const LINE_COLORS = [
+		'#ef4444',
+		'#3b82f6',
+		'#22c55e',
+		'#f59e0b',
+		'#8b5cf6',
+		'#ec4899',
+		'#06b6d4',
+		'#84cc16'
+	];
 
-	// Normal ranges for common Kasai-relevant labs
 	const NORMAL_RANGES: Record<string, { min: number; max: number }> = {
 		total_bilirubin: { min: 0, max: 2.0 },
 		direct_bilirubin: { min: 0, max: 0.3 },
@@ -33,13 +40,8 @@
 
 	let isEmpty = $derived(Object.keys(data).length === 0);
 
-	onMount(() => {
-		if (isEmpty) {
-			return;
-		}
-
+	let config = $derived.by<ChartConfiguration>(() => {
 		const testNames = Object.keys(data);
-
 		const datasets: Record<string, unknown>[] = [];
 		let colorIdx = 0;
 
@@ -48,14 +50,16 @@
 			const color = LINE_COLORS[colorIdx % LINE_COLORS.length];
 			const unit = points.length > 0 ? points[0].unit : '';
 
+			const mappedPoints = points
+				.map((p) => ({
+					x: new Date(p.timestamp).getTime(),
+					y: parseFloat(p.value)
+				}))
+				.filter((p) => !isNaN(p.y));
+
 			datasets.push({
 				label: unit ? `${testName} (${unit})` : testName,
-				data: points
-					.map((p) => ({
-						x: new Date(p.timestamp).getTime(),
-						y: parseFloat(p.value)
-					}))
-					.filter((p) => !isNaN(p.y)),
+				data: mappedPoints,
 				borderColor: color,
 				backgroundColor: color + '40',
 				borderWidth: 2,
@@ -63,10 +67,10 @@
 				fill: false
 			});
 
-			// Add normal range shading if available
+			// Add normal range shading if available, reusing mapped points for x-bounds
 			const range = NORMAL_RANGES[testName];
-			if (range && points.length > 0) {
-				const xValues = points.map((p) => new Date(p.timestamp).getTime());
+			if (range && mappedPoints.length > 0) {
+				const xValues = mappedPoints.map((p) => p.x);
 				const xMin = Math.min(...xValues);
 				const xMax = Math.max(...xValues);
 
@@ -90,17 +94,17 @@
 			colorIdx++;
 		}
 
-		chart = new Chart(canvas, {
-			type: 'line',
+		return {
+			type: 'line' as const,
 			data: { datasets },
 			options: {
 				responsive: true,
 				scales: {
 					x: {
-						type: 'linear',
+						type: 'linear' as const,
 						title: { display: true, text: 'Date' },
 						ticks: {
-							callback: (value) => new Date(value as number).toLocaleDateString()
+							callback: dateTickCallback
 						}
 					},
 					y: {
@@ -108,16 +112,8 @@
 					}
 				}
 			}
-		});
-	});
-
-	onDestroy(() => {
-		chart?.destroy();
+		};
 	});
 </script>
 
-{#if isEmpty}
-	<p>No data</p>
-{:else}
-	<canvas bind:this={canvas}></canvas>
-{/if}
+<ChartWrapper {config} {isEmpty} />

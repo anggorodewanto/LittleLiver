@@ -91,12 +91,11 @@ describe('StoolColorChart', () => {
 		expect(mockChartInstance.destroy).toHaveBeenCalled();
 	});
 
-	it('renders a canvas without crashing when data is empty', () => {
+	it('shows "No data available" when data is empty', () => {
 		const { container } = render(StoolColorChart, { props: { data: [] } });
 
-		const canvas = container.querySelector('canvas');
-		expect(canvas).not.toBeNull();
-		expect(chartConstructorCalls.length).toBe(1);
+		expect(container.textContent).toContain('No data available');
+		expect(chartConstructorCalls.length).toBe(0);
 	});
 
 	it('y-axis range is 0.5 to 7.5 for proper padding around valid scores 1-7', () => {

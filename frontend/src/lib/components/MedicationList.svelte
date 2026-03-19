@@ -1,23 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { apiClient } from '$lib/api';
-
-	interface Medication {
-		id: string;
-		baby_id: string;
-		name: string;
-		dose: string;
-		frequency: string;
-		schedule: string | null;
-		timezone: string | null;
-		active: boolean;
-		created_at: string;
-		updated_at: string;
-	}
-
-	interface MedicationsResponse {
-		medications: Medication[];
-	}
+	import type { Medication, MedicationsResponse } from '$lib/types/medication';
+	import { formatFrequency } from '$lib/medication-utils';
 
 	interface Props {
 		babyId: string;
@@ -31,23 +16,6 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let medications = $state<Medication[]>([]);
-
-	function formatFrequency(freq: string): string {
-		switch (freq) {
-			case 'once_daily':
-				return 'Once daily';
-			case 'twice_daily':
-				return 'Twice daily';
-			case 'three_times_daily':
-				return 'Three times daily';
-			case 'as_needed':
-				return 'As needed';
-			case 'custom':
-				return 'Custom';
-			default:
-				return freq;
-		}
-	}
 
 	async function fetchMedications(): Promise<void> {
 		loading = true;

@@ -2,6 +2,8 @@
 	import { untrack } from 'svelte';
 	import '$lib/chart-setup';
 	import { apiClient } from '$lib/api';
+	import { formatDateISO } from '$lib/datetime';
+	import type { Percentiles } from '$lib/types/percentiles';
 	import DateRangeSelector from './DateRangeSelector.svelte';
 	import StoolColorChart from './StoolColorChart.svelte';
 	import WeightChart from './WeightChart.svelte';
@@ -15,19 +17,6 @@
 		babyId: string;
 		sex: 'male' | 'female';
 		dateOfBirth: string;
-	}
-
-	interface PercentilePoint {
-		age_days: number;
-		weight_kg: number;
-	}
-
-	interface Percentiles {
-		p3: PercentilePoint[];
-		p15: PercentilePoint[];
-		p50: PercentilePoint[];
-		p85: PercentilePoint[];
-		p97: PercentilePoint[];
 	}
 
 	interface DashboardResponse {
@@ -55,13 +44,9 @@
 	let dashboard = $state<DashboardResponse | null>(null);
 	let percentiles = $state<Percentiles | null>(null);
 
-	function formatDate(date: Date): string {
-		return date.toISOString().split('T')[0];
-	}
-
 	function computeDateRange(range: string, customFrom?: string, customTo?: string): { from: string; to: string } {
 		const now = new Date();
-		const toStr = formatDate(now);
+		const toStr = formatDateISO(now);
 
 		if (range === 'custom' && customFrom && customTo) {
 			return { from: customFrom, to: customTo };
@@ -77,7 +62,7 @@
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- used in non-reactive function
 		const from = new Date(now);
 		from.setDate(from.getDate() - days);
-		return { from: formatDate(from), to: toStr };
+		return { from: formatDateISO(from), to: toStr };
 	}
 
 	async function fetchData(range: string, cFrom?: string, cTo?: string): Promise<void> {

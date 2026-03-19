@@ -83,21 +83,12 @@ describe('TemperatureChart', () => {
 		expect(mockChartInstance.destroy).toHaveBeenCalled();
 	});
 
-	it('renders a canvas without crashing when data is empty', () => {
+	it('shows "No data available" when data is empty', () => {
 		const { container } = render(TemperatureChart, {
 			props: { data: [] }
 		});
 
-		const canvas = container.querySelector('canvas');
-		expect(canvas).not.toBeNull();
-		expect(chartConstructorCalls.length).toBe(1);
-
-		// Threshold dataset should have empty data when no temperature points
-		const config = chartConstructorCalls[0][1] as {
-			data: { datasets: { label: string; data: { y: number }[] }[] };
-		};
-		const thresholdDs = config.data.datasets.find((d) => d.label === 'Fever Threshold');
-		expect(thresholdDs).toBeDefined();
-		expect(thresholdDs!.data).toHaveLength(0);
+		expect(container.textContent).toContain('No data available');
+		expect(chartConstructorCalls.length).toBe(0);
 	});
 });

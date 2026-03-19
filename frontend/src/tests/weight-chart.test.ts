@@ -115,13 +115,12 @@ describe('WeightChart', () => {
 		expect(mockChartInstance.destroy).toHaveBeenCalled();
 	});
 
-	it('renders a canvas without crashing when data is empty', () => {
+	it('shows "No data available" when data is empty', () => {
 		const { container } = render(WeightChart, {
 			props: { data: [], percentiles: mockPercentiles, dateOfBirth: '2026-01-15' }
 		});
 
-		const canvas = container.querySelector('canvas');
-		expect(canvas).not.toBeNull();
-		expect(chartConstructorCalls.length).toBe(1);
+		expect(container.textContent).toContain('No data available');
+		expect(chartConstructorCalls.length).toBe(0);
 	});
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import { Chart } from 'chart.js';
+	import type { ChartConfiguration } from 'chart.js';
+	import ChartWrapper from './ChartWrapper.svelte';
+	import { dateTickCallback } from '$lib/chart-utils';
 
 	interface AbdomenGirthDataPoint {
 		timestamp: string;
@@ -12,60 +13,41 @@
 	}
 
 	let { data }: Props = $props();
-	let canvas: HTMLCanvasElement;
-	let chart: Chart | null = null;
-	let isEmpty = $derived(data.length === 0);
 
-	onMount(() => {
-		if (isEmpty) {
-			return;
-		}
-
-		const points = data.map((d) => ({
-			x: new Date(d.timestamp).getTime(),
-			y: d.girth_cm
-		}));
-
-		chart = new Chart(canvas, {
-			type: 'line',
-			data: {
-				datasets: [
-					{
-						label: 'Abdomen Girth',
-						data: points,
-						borderColor: '#8b5cf6',
-						backgroundColor: '#8b5cf680',
-						borderWidth: 2,
-						pointRadius: 4,
-						fill: false
+	let config = $derived<ChartConfiguration>({
+		type: 'line',
+		data: {
+			datasets: [
+				{
+					label: 'Abdomen Girth',
+					data: data.map((d) => ({
+						x: new Date(d.timestamp).getTime(),
+						y: d.girth_cm
+					})),
+					borderColor: '#8b5cf6',
+					backgroundColor: '#8b5cf680',
+					borderWidth: 2,
+					pointRadius: 4,
+					fill: false
+				}
+			]
+		},
+		options: {
+			responsive: true,
+			scales: {
+				x: {
+					type: 'linear',
+					title: { display: true, text: 'Date' },
+					ticks: {
+						callback: dateTickCallback
 					}
-				]
-			},
-			options: {
-				responsive: true,
-				scales: {
-					x: {
-						type: 'linear',
-						title: { display: true, text: 'Date' },
-						ticks: {
-							callback: (value) => new Date(value as number).toLocaleDateString()
-						}
-					},
-					y: {
-						title: { display: true, text: 'Girth (cm)' }
-					}
+				},
+				y: {
+					title: { display: true, text: 'Girth (cm)' }
 				}
 			}
-		});
-	});
-
-	onDestroy(() => {
-		chart?.destroy();
+		}
 	});
 </script>
 
-{#if isEmpty}
-	<p>No data</p>
-{:else}
-	<canvas bind:this={canvas}></canvas>
-{/if}
+<ChartWrapper {config} isEmpty={data.length === 0} />

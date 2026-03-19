@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { apiClient } from '$lib/api';
+	import type { Medication, MedicationsResponse } from '$lib/types/medication';
 
 	export interface DoseLogPayload {
 		medication_id: string;
@@ -8,18 +9,6 @@
 		skip_reason?: string;
 		scheduled_time?: string;
 		notes?: string;
-	}
-
-	interface Medication {
-		id: string;
-		name: string;
-		dose: string;
-		frequency: string;
-		active: boolean;
-	}
-
-	interface MedicationsResponse {
-		medications: Medication[];
 	}
 
 	interface Props {

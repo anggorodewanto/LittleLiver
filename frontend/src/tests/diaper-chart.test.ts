@@ -98,7 +98,7 @@ describe('DiaperChart', () => {
 			props: { data: [] }
 		});
 
-		expect(container.textContent).toContain('No data');
+		expect(container.textContent).toContain('No data available');
 		expect(chartConstructorCalls.length).toBe(0);
 	});
 });
