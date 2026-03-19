@@ -437,6 +437,6 @@ describe('TodayDashboard', () => {
 		expect(screen.getByRole('button', { name: /wet diaper/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /stool/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /temp/i })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: /medication/i })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /medication given/i })).toBeInTheDocument();
 	});
 });

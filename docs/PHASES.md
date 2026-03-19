@@ -347,7 +347,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests that (1) abdomen girth chart renders with mock data, (2) feeding bar chart shows daily kcal, (3) diaper chart combines stool + urine counts, (4) lab trends groups by test_name with normal range shading. Write chart wrapper components.
   **Proof of progress:** All 4 additional chart types render with mock data; full trends view complete with 7 charts.
 
-- [ ] **Phase 48: Medication management UI**
+- [x] **Phase 48: Medication management UI**
   **Depends on:** Phase 44, Phase 25, Phase 26
   **What to build:** Medication list view (active and inactive, with visual distinction). Create medication form (name with pre-populated suggestions, dose, frequency, schedule time picker). Edit medication form. Deactivation toggle. Med-log history view per medication. Dose logging from notification click (pre-filled medication via URL param `/log/med?medication_id=X`). Med Given quick-log button on the today view.
   **TDD approach:** Write tests that (1) medication list renders active/inactive correctly, (2) creation form submits correct schedule JSON, (3) deactivation updates display, (4) med-log list shows given/skipped status, (5) dose logging form pre-fills medication from URL param, (6) Med Given quick-log button renders and triggers dose logging form. Write components.

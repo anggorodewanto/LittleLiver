@@ -139,8 +139,13 @@
 	);
 
 	function handleQuickLog(type: MetricType): void {
+		if (type === 'med_given') {
+			void goto('/log/med');
+			return;
+		}
 		void goto(`/log/${type}`);
 	}
+
 
 	async function fetchDashboard(): Promise<void> {
 		loading = true;
