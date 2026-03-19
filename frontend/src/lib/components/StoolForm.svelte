@@ -1,0 +1,155 @@
+<script lang="ts">
+	import PhotoUpload from './PhotoUpload.svelte';
+
+	export interface StoolPayload {
+		timestamp: string;
+		color_rating: number;
+		color_label: string;
+		consistency?: string;
+		volume_estimate?: string;
+		photo_keys?: string[];
+		notes?: string;
+	}
+
+	interface Props {
+		onsubmit: (data: StoolPayload) => void;
+		onphotoupload: (file: File) => void;
+		submitting?: boolean;
+		error?: string;
+		uploading?: boolean;
+		photoKey?: string;
+	}
+
+	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKey = '' }: Props = $props();
+
+	function defaultTimestamp(): string {
+		const now = new Date();
+		const offset = now.getTimezoneOffset();
+		const local = new Date(now.getTime() - offset * 60000);
+		return local.toISOString().slice(0, 16);
+	}
+
+	const COLOR_SWATCHES = [
+		{ rating: 1, ref: 'white', label: 'White', color: '#F5F5DC' },
+		{ rating: 2, ref: 'clay', label: 'Clay', color: '#D2B48C' },
+		{ rating: 3, ref: 'pale_yellow', label: 'Pale Yellow', color: '#FFFACD' },
+		{ rating: 4, ref: 'yellow', label: 'Yellow', color: '#FFD700' },
+		{ rating: 5, ref: 'light_green', label: 'Light Green', color: '#90EE90' },
+		{ rating: 6, ref: 'green', label: 'Green', color: '#228B22' },
+		{ rating: 7, ref: 'brown', label: 'Brown', color: '#8B4513' }
+	] as const;
+
+	let timestamp = $state(defaultTimestamp());
+	let colorRating = $state(0);
+	let colorLabel = $state('');
+	let consistency = $state('');
+	let volumeEstimate = $state('');
+	let notes = $state('');
+	let validationError = $state('');
+
+	function selectColor(rating: number, ref: string) {
+		colorRating = rating;
+		colorLabel = ref;
+	}
+
+	function handleSubmit(event: SubmitEvent) {
+		event.preventDefault();
+
+		if (!colorRating) {
+			validationError = 'Stool color is required';
+			return;
+		}
+
+		validationError = '';
+		const payload: StoolPayload = {
+			timestamp,
+			color_rating: colorRating,
+			color_label: colorLabel
+		};
+
+		if (consistency) {
+			payload.consistency = consistency;
+		}
+		if (volumeEstimate) {
+			payload.volume_estimate = volumeEstimate;
+		}
+		if (photoKey) {
+			payload.photo_keys = [photoKey];
+		}
+		if (notes.trim()) {
+			payload.notes = notes.trim();
+		}
+
+		onsubmit(payload);
+	}
+</script>
+
+<form onsubmit={handleSubmit}>
+	<div>
+		<label for="stool-timestamp">Timestamp</label>
+		<input id="stool-timestamp" type="datetime-local" bind:value={timestamp} />
+	</div>
+
+	<fieldset>
+		<legend>Stool Color</legend>
+		<div style="display: flex; gap: 8px; flex-wrap: wrap;">
+			{#each COLOR_SWATCHES as swatch (swatch.rating)}
+				<button
+					type="button"
+					aria-pressed={colorRating === swatch.rating ? 'true' : 'false'}
+					style="background-color: {swatch.color}; width: 48px; height: 48px; border: {colorRating === swatch.rating ? '3px solid black' : '1px solid #ccc'}; border-radius: 8px; cursor: pointer;"
+					onclick={() => selectColor(swatch.rating, swatch.ref)}
+				>
+					{swatch.label}
+				</button>
+			{/each}
+		</div>
+	</fieldset>
+
+	{#if colorRating >= 1 && colorRating <= 3}
+		<p role="alert" style="color: red; font-weight: bold;">
+			Warning: Acholic stool detected (color {colorRating}). Contact your hepatology team.
+		</p>
+	{/if}
+
+	<div>
+		<label for="stool-consistency">Consistency</label>
+		<select id="stool-consistency" bind:value={consistency}>
+			<option value="">Select...</option>
+			<option value="watery">Watery</option>
+			<option value="loose">Loose</option>
+			<option value="soft">Soft</option>
+			<option value="formed">Formed</option>
+			<option value="hard">Hard</option>
+		</select>
+	</div>
+
+	<div>
+		<label for="stool-volume">Volume estimate</label>
+		<select id="stool-volume" bind:value={volumeEstimate}>
+			<option value="">Select...</option>
+			<option value="small">Small</option>
+			<option value="medium">Medium</option>
+			<option value="large">Large</option>
+		</select>
+	</div>
+
+	<PhotoUpload onupload={onphotoupload} {uploading} {photoKey} />
+
+	<div>
+		<label for="stool-notes">Notes</label>
+		<textarea id="stool-notes" bind:value={notes}></textarea>
+	</div>
+
+	{#if validationError}
+		<p role="alert">{validationError}</p>
+	{/if}
+
+	{#if error}
+		<p role="alert">{error}</p>
+	{/if}
+
+	<button type="submit" disabled={submitting}>
+		{submitting ? 'Logging...' : 'Log Stool'}
+	</button>
+</form>

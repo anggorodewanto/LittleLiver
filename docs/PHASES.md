@@ -323,7 +323,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Write tests for each form: (1) renders required fields, (2) validates input, (3) submits correct payload to API, (4) quick-log buttons trigger correct form. Write form components.
   **Proof of progress:** Quick-log buttons and simple metric forms render and submit correctly.
 
-- [ ] **Phase 44: Photo-capable and specialized metric entry forms**
+- [x] **Phase 44: Photo-capable and specialized metric entry forms**
   **Depends on:** Phase 43
   **What to build:** Stool form (CSS color swatches with labels — 7 tappable swatches, NOT reference images — consistency, volume estimate, photo upload, notes), abdomen form, skin form (with "consistent lighting recommended" hint displayed when photo upload is triggered), bruising form, lab entry form (with quick-pick buttons that pre-fill test_name and unit), general notes form (with category and multi-photo).
   **TDD approach:** Write tests for each form: (1) renders required fields, (2) validates input (e.g., color_rating 1-7), (3) submits correct payload to API, (4) photo upload flow integrates with upload endpoint, (5) stool form renders 7 tappable CSS color swatches with labels, (6) lab form quick-pick buttons render and selecting one pre-fills test_name and unit, (7) skin form displays "consistent lighting recommended" hint on photo upload trigger. Write form components.
