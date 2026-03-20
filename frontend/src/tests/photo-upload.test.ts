@@ -86,4 +86,48 @@ describe('PhotoUpload', () => {
 
 		expect(screen.getByText('Consistent lighting recommended')).toBeInTheDocument();
 	});
+
+	it('disables input when currentCount reaches maxPhotos', () => {
+		render(PhotoUpload, { props: { onupload, currentCount: 4, maxPhotos: 4 } });
+
+		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
+		expect(input.disabled).toBe(true);
+	});
+
+	it('shows photo count when currentCount > 0', () => {
+		render(PhotoUpload, { props: { onupload, currentCount: 2, maxPhotos: 4 } });
+
+		expect(screen.getByText('2/4 photos')).toBeInTheDocument();
+	});
+
+	it('limits onupload calls when files exceed remaining slots', async () => {
+		render(PhotoUpload, { props: { onupload, multiple: true, currentCount: 3, maxPhotos: 4 } });
+
+		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
+		const file1 = new File(['a'], 'photo1.jpg', { type: 'image/jpeg' });
+		const file2 = new File(['b'], 'photo2.jpg', { type: 'image/jpeg' });
+		const file3 = new File(['c'], 'photo3.jpg', { type: 'image/jpeg' });
+		await fireEvent.change(input, { target: { files: [file1, file2, file3] } });
+
+		expect(onupload).toHaveBeenCalledTimes(1);
+		expect(onupload).toHaveBeenCalledWith(file1);
+	});
+
+	it('shows limit warning when files are truncated', async () => {
+		render(PhotoUpload, { props: { onupload, multiple: true, currentCount: 3, maxPhotos: 4 } });
+
+		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
+		const file1 = new File(['a'], 'photo1.jpg', { type: 'image/jpeg' });
+		const file2 = new File(['b'], 'photo2.jpg', { type: 'image/jpeg' });
+		const file3 = new File(['c'], 'photo3.jpg', { type: 'image/jpeg' });
+		await fireEvent.change(input, { target: { files: [file1, file2, file3] } });
+
+		expect(screen.getByText(/only 1 .* uploaded/i)).toBeInTheDocument();
+	});
+
+	it('shows X photos attached when currentCount > 0 and no photoKey', () => {
+		render(PhotoUpload, { props: { onupload, currentCount: 3 } });
+
+		expect(screen.getByText('3 photos attached')).toBeInTheDocument();
+	});
 });

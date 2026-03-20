@@ -3,10 +3,12 @@ package handler_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
 	"github.com/ablankz/LittleLiver/backend/internal/middleware"
@@ -410,8 +412,10 @@ func TestListMedLogs_FilterByFromTo(t *testing.T) {
 		t.Fatalf("CreateMedLog failed: %v", err)
 	}
 
-	// Filter using from/to that covers today
-	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, "/api/babies/"+baby.ID+"/med-logs?from=2026-03-01&to=2026-03-18")
+	// Filter using dynamic from/to that always covers today
+	from := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+	to := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, fmt.Sprintf("/api/babies/%s/med-logs?from=%s&to=%s", baby.ID, from, to))
 
 	authMw := middleware.Auth(db, testCookieName)
 	h := authMw(http.HandlerFunc(handler.ListMedLogsHandler(db)))

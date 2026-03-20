@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import favicon from '$lib/assets/favicon.svg';
 	import { registerServiceWorker, setupInstallPrompt } from '$lib/pwa';
+	import NavHeader from '$lib/components/NavHeader.svelte';
 
 	let { children } = $props();
 
@@ -17,4 +18,5 @@
 	<meta name="theme-color" content="#4a9c5e" />
 </svelte:head>
 
+<NavHeader />
 {@render children()}

@@ -3,6 +3,7 @@ package store_test
 import (
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 	"github.com/ablankz/LittleLiver/backend/internal/testutil"
@@ -132,9 +133,9 @@ func TestListMedLogs_FilterByFromTo(t *testing.T) {
 
 	_, _ = store.CreateMedLog(db, baby.ID, medID, user.ID, nil, strPtr("2026-03-17T08:00:00Z"), false, nil, nil)
 
-	// Use from date that is today — created_at is CURRENT_TIMESTAMP which is "now"
-	from := "2026-03-01"
-	to := "2026-03-18"
+	// Use dynamic dates so the range always covers today
+	from := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+	to := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
 	page, err := store.ListMedLogs(db, baby.ID, nil, &from, &to, nil, 50)
 	if err != nil {
 		t.Fatalf("ListMedLogs: %v", err)
