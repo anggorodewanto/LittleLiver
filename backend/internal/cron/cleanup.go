@@ -42,8 +42,11 @@ type orphanPhoto struct {
 
 // CleanupPhotos deletes orphaned photo_uploads rows and their R2 objects.
 // Orphaned means: (linked_at IS NULL AND uploaded_at < now - 24h) OR (baby_id IS NULL).
-// Returns the number of rows deleted.
+// Returns the number of rows deleted. Skips cleanup when objStore is nil.
 func CleanupPhotos(db *sql.DB, objStore storage.ObjectStore, now time.Time) (int64, error) {
+	if objStore == nil {
+		return 0, nil
+	}
 	cutoff := now.Add(-24 * time.Hour).Format(time.DateTime)
 
 	rows, err := db.Query(

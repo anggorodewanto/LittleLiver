@@ -15,7 +15,9 @@ RUN CGO_ENABLED=1 go build -o /server ./cmd/server
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates imagemagick && rm -rf /var/lib/apt/lists/*
 COPY --from=backend /server /server
+COPY --from=backend /app/backend/migrations /migrations
 COPY --from=frontend /app/frontend/build /static
 ENV STATIC_DIR=/static
+ENV MIGRATIONS_DIR=/migrations
 EXPOSE 8080
 CMD ["/server"]

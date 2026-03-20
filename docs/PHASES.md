@@ -382,7 +382,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Deployment & Production Readiness
 
-- [ ] **Phase 53: fly.io deployment and production configuration**
+- [x] **Phase 53: fly.io deployment and production configuration**
   **Depends on:** Phase 5, all backend phases
   **What to build:** `fly.toml` per spec. Configure fly.io secrets for all env vars (Google OAuth, R2, VAPID, session secret). Deploy. Verify persistent volume mounts, SQLite database survives restarts. Set up custom domain and TLS. Verify health endpoint in production.
   **TDD approach:** Deploy and run a smoke test: hit health endpoint, verify OAuth redirect works, verify R2 connectivity. **Note:** This is a deployment verification phase — an exception to the TDD rule. The "test" is a successful deploy + smoke test.
