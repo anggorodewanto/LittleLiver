@@ -388,7 +388,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
   **TDD approach:** Deploy and run a smoke test: hit health endpoint, verify OAuth redirect works, verify R2 connectivity. **Note:** This is a deployment verification phase — an exception to the TDD rule. The "test" is a successful deploy + smoke test.
   **Proof of progress:** App deployed to fly.io; health check passes; OAuth login flow works in production.
 
-- [ ] **Phase 54: SQLite backup automation**
+- [x] **Phase 54: SQLite backup automation**
   **Depends on:** Phase 53
   **What to build:** Automated daily backup: SQLite `.backup` command copies DB to R2 via a cron/scheduled task. Verify backup restores correctly.
   **TDD approach:** Write a test that (1) backup produces a valid SQLite file, (2) backup file is stored in R2 (mock), (3) restored backup matches original data. Write backup script.

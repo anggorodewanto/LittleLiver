@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/ablankz/LittleLiver/backend/internal/backup"
 	"github.com/ablankz/LittleLiver/backend/internal/cron"
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
 	"github.com/ablankz/LittleLiver/backend/internal/notify"
@@ -94,6 +95,16 @@ func main() {
 	cronRunner.Start()
 	defer cronRunner.Stop()
 	log.Printf("cron jobs started (interval: %s)", cron.DefaultInterval)
+
+	// Start daily backup job (if R2 is configured)
+	if objStore != nil {
+		backupRunner := backup.NewRunner(db, objStore, backup.DefaultInterval)
+		backupRunner.Start()
+		defer backupRunner.Stop()
+		log.Printf("backup job started (interval: %s)", backup.DefaultInterval)
+	} else {
+		log.Printf("WARNING: backup job not started — R2 not configured")
+	}
 
 	mux := handler.NewMux(opts...)
 
