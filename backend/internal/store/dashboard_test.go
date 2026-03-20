@@ -97,8 +97,8 @@ func TestGetDashboardSummary_WithData(t *testing.T) {
 	if summary.Stools != 2 {
 		t.Errorf("expected 2 stools, got %d", summary.Stools)
 	}
-	if summary.ColorIndicator == nil || *summary.ColorIndicator != "green" {
-		t.Errorf("expected color_indicator=green, got %v", summary.ColorIndicator)
+	if summary.ColorIndicator == nil || *summary.ColorIndicator != 3 {
+		t.Errorf("expected worst_stool_color=3, got %v", summary.ColorIndicator)
 	}
 	if summary.LastTemp == nil || *summary.LastTemp != 37.2 {
 		t.Errorf("expected last_temp=37.2, got %v", summary.LastTemp)

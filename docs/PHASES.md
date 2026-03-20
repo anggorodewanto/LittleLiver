@@ -373,7 +373,7 @@ Fine-grained, TDD-ready implementation phases. Each phase is small enough for a 
 
 ## Frontend E2E Tests
 
-- [ ] **Phase 52: Frontend E2E tests (Playwright)**
+- [x] **Phase 52: Frontend E2E tests (Playwright)**
   **Depends on:** Phase 51
   **What to build:** End-to-end tests using Playwright covering the critical user flow: login (mocked OAuth) → baby creation → metric entry (e.g., feeding + stool) → dashboard display (verify summary cards reflect entered data) → alert dismissal. Configure Playwright to run against the full stack (backend + frontend).
   **Note:** Depends on Phase 51 and transitively all prior frontend and backend phases.

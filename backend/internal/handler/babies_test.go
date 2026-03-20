@@ -213,13 +213,15 @@ func TestListBabiesHandler_ReturnsBabies(t *testing.T) {
 		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp []map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	var envelope struct {
+		Babies []map[string]interface{} `json:"babies"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
-	if len(resp) != 2 {
-		t.Errorf("expected 2 babies, got %d", len(resp))
+	if len(envelope.Babies) != 2 {
+		t.Errorf("expected 2 babies, got %d", len(envelope.Babies))
 	}
 }
 
@@ -242,16 +244,18 @@ func TestListBabiesHandler_EmptyList(t *testing.T) {
 		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp []interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	var envelope struct {
+		Babies []interface{} `json:"babies"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
-	if resp == nil {
+	if envelope.Babies == nil {
 		t.Error("expected empty array, got nil")
 	}
-	if len(resp) != 0 {
-		t.Errorf("expected 0 babies, got %d", len(resp))
+	if len(envelope.Babies) != 0 {
+		t.Errorf("expected 0 babies, got %d", len(envelope.Babies))
 	}
 }
 
@@ -277,13 +281,15 @@ func TestListBabiesHandler_OnlyUsersBabies(t *testing.T) {
 		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp []map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+	var envelope struct {
+		Babies []map[string]interface{} `json:"babies"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
-	if len(resp) != 1 {
-		t.Errorf("expected 1 baby for user1, got %d", len(resp))
+	if len(envelope.Babies) != 1 {
+		t.Errorf("expected 1 baby for user1, got %d", len(envelope.Babies))
 	}
 }
 
@@ -882,17 +888,19 @@ func TestBabyCRUD_EndToEnd(t *testing.T) {
 		t.Fatalf("list: expected 200, got %d", rec2.Code)
 	}
 
-	var listed []struct {
-		ID string `json:"id"`
+	var listEnvelope struct {
+		Babies []struct {
+			ID string `json:"id"`
+		} `json:"babies"`
 	}
-	if err := json.Unmarshal(rec2.Body.Bytes(), &listed); err != nil {
+	if err := json.Unmarshal(rec2.Body.Bytes(), &listEnvelope); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
-	if len(listed) != 1 {
-		t.Fatalf("expected 1 baby, got %d", len(listed))
+	if len(listEnvelope.Babies) != 1 {
+		t.Fatalf("expected 1 baby, got %d", len(listEnvelope.Babies))
 	}
-	if listed[0].ID != created.ID {
-		t.Errorf("expected listed baby ID=%q, got %q", created.ID, listed[0].ID)
+	if listEnvelope.Babies[0].ID != created.ID {
+		t.Errorf("expected listed baby ID=%q, got %q", created.ID, listEnvelope.Babies[0].ID)
 	}
 
 	// 3. Get baby by ID

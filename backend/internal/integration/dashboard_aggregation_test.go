@@ -18,13 +18,13 @@ import (
 // dashboardResp mirrors the full dashboard JSON response for integration testing.
 type dashboardResp struct {
 	SummaryCards struct {
-		TotalFeeds     int      `json:"total_feeds"`
-		TotalCalories  float64  `json:"total_calories"`
-		WetDiapers     int      `json:"wet_diapers"`
-		Stools         int      `json:"stools"`
-		ColorIndicator *string  `json:"color_indicator"`
-		LastTemp       *float64 `json:"last_temp"`
-		LastWeight     *float64 `json:"last_weight"`
+		TotalFeeds      int      `json:"total_feeds"`
+		TotalCalories   float64  `json:"total_calories"`
+		WetDiapers      int      `json:"total_wet_diapers"`
+		Stools          int      `json:"total_stools"`
+		ColorIndicator  *int     `json:"worst_stool_color"`
+		LastTemp        *float64 `json:"last_temperature"`
+		LastWeight      *float64 `json:"last_weight"`
 	} `json:"summary_cards"`
 	StoolColorTrend []struct {
 		Date        string `json:"date"`
@@ -308,8 +308,8 @@ func TestDashboardAggregation_Integration(t *testing.T) {
 		if sc.Stools != 1 {
 			t.Errorf("stools: expected 1, got %d", sc.Stools)
 		}
-		if sc.ColorIndicator == nil || *sc.ColorIndicator != "clay" {
-			t.Errorf("color_indicator: expected clay, got %v", sc.ColorIndicator)
+		if sc.ColorIndicator == nil || *sc.ColorIndicator != 2 {
+			t.Errorf("worst_stool_color: expected 2, got %v", sc.ColorIndicator)
 		}
 		// last_temp / last_weight are global (most recent overall)
 		if sc.LastTemp == nil || *sc.LastTemp != 38.5 {
@@ -499,8 +499,8 @@ func TestDashboardAggregation_Integration(t *testing.T) {
 		if sc.Stools != 3 {
 			t.Errorf("stools (7d): expected 3, got %d", sc.Stools)
 		}
-		if sc.ColorIndicator == nil || *sc.ColorIndicator != "clay" {
-			t.Errorf("color_indicator (7d): expected clay, got %v", sc.ColorIndicator)
+		if sc.ColorIndicator == nil || *sc.ColorIndicator != 1 {
+			t.Errorf("worst_stool_color (7d): expected 1, got %v", sc.ColorIndicator)
 		}
 
 		cds := resp.ChartDataSeries

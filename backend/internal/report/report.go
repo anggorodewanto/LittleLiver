@@ -507,7 +507,7 @@ func addSummarySection(m core.Maroto, summary *store.DashboardSummary) {
 
 	colorStr := "N/A"
 	if summary.ColorIndicator != nil {
-		colorStr = *summary.ColorIndicator
+		colorStr = fmt.Sprintf("%d", *summary.ColorIndicator)
 	}
 	tempStr := "N/A"
 	if summary.LastTemp != nil {

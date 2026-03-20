@@ -12,13 +12,13 @@ import (
 
 // summaryCardsResponse is the JSON response for dashboard summary cards.
 type summaryCardsResponse struct {
-	TotalFeeds     int      `json:"total_feeds"`
-	TotalCalories  float64  `json:"total_calories"`
-	WetDiapers     int      `json:"wet_diapers"`
-	Stools         int      `json:"stools"`
-	ColorIndicator *string  `json:"color_indicator"`
-	LastTemp       *float64 `json:"last_temp"`
-	LastWeight     *float64 `json:"last_weight"`
+	TotalFeeds      int      `json:"total_feeds"`
+	TotalCalories   float64  `json:"total_calories"`
+	TotalWetDiapers int      `json:"total_wet_diapers"`
+	TotalStools     int      `json:"total_stools"`
+	WorstStoolColor *int     `json:"worst_stool_color"`
+	LastTemperature *float64 `json:"last_temperature"`
+	LastWeight      *float64 `json:"last_weight"`
 }
 
 // stoolColorTrendEntry is the JSON response for a stool color trend entry.
@@ -164,13 +164,13 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 
 		// Map store types to response types
 		summaryResp := summaryCardsResponse{
-			TotalFeeds:     summary.TotalFeeds,
-			TotalCalories:  summary.TotalCalories,
-			WetDiapers:     summary.WetDiapers,
-			Stools:         summary.Stools,
-			ColorIndicator: summary.ColorIndicator,
-			LastTemp:       summary.LastTemp,
-			LastWeight:     summary.LastWeight,
+			TotalFeeds:      summary.TotalFeeds,
+			TotalCalories:   summary.TotalCalories,
+			TotalWetDiapers: summary.WetDiapers,
+			TotalStools:     summary.Stools,
+			WorstStoolColor: summary.ColorIndicator,
+			LastTemperature: summary.LastTemp,
+			LastWeight:      summary.LastWeight,
 		}
 
 		trendResp := make([]stoolColorTrendEntry, 0, len(trend))

@@ -22,6 +22,11 @@ func NewMux(opts ...Option) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", HealthCheck)
 
+	// Test login endpoint — only active when TEST_MODE=1
+	if cfg.db != nil && os.Getenv("TEST_MODE") == "1" {
+		mux.HandleFunc("POST /api/test/login", TestLoginHandler(cfg.db))
+	}
+
 	// Register auth routes if DB and OAuth config are provided
 	if cfg.db != nil {
 		var authCfg auth.Config

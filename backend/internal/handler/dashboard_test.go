@@ -26,13 +26,13 @@ type alertResp struct {
 // dashboardResp is the expected shape of the dashboard API response.
 type dashboardResp struct {
 	SummaryCards struct {
-		TotalFeeds     int      `json:"total_feeds"`
-		TotalCalories  float64  `json:"total_calories"`
-		WetDiapers     int      `json:"wet_diapers"`
-		Stools         int      `json:"stools"`
-		ColorIndicator *string  `json:"color_indicator"`
-		LastTemp       *float64 `json:"last_temp"`
-		LastWeight     *float64 `json:"last_weight"`
+		TotalFeeds      int      `json:"total_feeds"`
+		TotalCalories   float64  `json:"total_calories"`
+		WetDiapers      int      `json:"total_wet_diapers"`
+		Stools          int      `json:"total_stools"`
+		ColorIndicator  *int     `json:"worst_stool_color"`
+		LastTemp        *float64 `json:"last_temperature"`
+		LastWeight      *float64 `json:"last_weight"`
 	} `json:"summary_cards"`
 	StoolColorTrend []struct {
 		Date        string `json:"date"`
@@ -214,8 +214,8 @@ func TestDashboardHandler_WithData(t *testing.T) {
 	if resp.SummaryCards.Stools != 1 {
 		t.Errorf("expected 1 stools, got %d", resp.SummaryCards.Stools)
 	}
-	if resp.SummaryCards.ColorIndicator == nil || *resp.SummaryCards.ColorIndicator != "green" {
-		t.Errorf("expected color_indicator=green, got %v", resp.SummaryCards.ColorIndicator)
+	if resp.SummaryCards.ColorIndicator == nil || *resp.SummaryCards.ColorIndicator != 5 {
+		t.Errorf("expected worst_stool_color=5, got %v", resp.SummaryCards.ColorIndicator)
 	}
 	if resp.SummaryCards.LastTemp == nil || *resp.SummaryCards.LastTemp != 37.5 {
 		t.Errorf("expected last_temp=37.5, got %v", resp.SummaryCards.LastTemp)

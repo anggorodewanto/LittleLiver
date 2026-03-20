@@ -180,12 +180,14 @@ func ListBabiesHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		resp := make([]babyResponse, 0, len(babies))
+		babyList := make([]babyResponse, 0, len(babies))
 		for i := range babies {
-			resp = append(resp, toBabyResponse(&babies[i]))
+			babyList = append(babyList, toBabyResponse(&babies[i]))
 		}
 
-		writeJSON(w, http.StatusOK, resp)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"babies": babyList,
+		})
 	}
 }
 
