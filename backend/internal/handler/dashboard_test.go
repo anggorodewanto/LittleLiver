@@ -28,10 +28,10 @@ type dashboardResp struct {
 	SummaryCards struct {
 		TotalFeeds      int      `json:"total_feeds"`
 		TotalCalories   float64  `json:"total_calories"`
-		WetDiapers      int      `json:"total_wet_diapers"`
-		Stools          int      `json:"total_stools"`
-		ColorIndicator  *int     `json:"worst_stool_color"`
-		LastTemp        *float64 `json:"last_temperature"`
+		TotalWetDiapers int      `json:"total_wet_diapers"`
+		TotalStools     int      `json:"total_stools"`
+		WorstStoolColor *int     `json:"worst_stool_color"`
+		LastTemperature *float64 `json:"last_temperature"`
 		LastWeight      *float64 `json:"last_weight"`
 	} `json:"summary_cards"`
 	StoolColorTrend []struct {
@@ -142,14 +142,14 @@ func TestDashboardHandler_EmptyData_DefaultsToToday(t *testing.T) {
 	if resp.SummaryCards.TotalCalories != 0 {
 		t.Errorf("expected 0 total_calories, got %f", resp.SummaryCards.TotalCalories)
 	}
-	if resp.SummaryCards.WetDiapers != 0 {
-		t.Errorf("expected 0 wet_diapers, got %d", resp.SummaryCards.WetDiapers)
+	if resp.SummaryCards.TotalWetDiapers != 0 {
+		t.Errorf("expected 0 wet_diapers, got %d", resp.SummaryCards.TotalWetDiapers)
 	}
-	if resp.SummaryCards.Stools != 0 {
-		t.Errorf("expected 0 stools, got %d", resp.SummaryCards.Stools)
+	if resp.SummaryCards.TotalStools != 0 {
+		t.Errorf("expected 0 stools, got %d", resp.SummaryCards.TotalStools)
 	}
-	if resp.SummaryCards.LastTemp != nil {
-		t.Errorf("expected nil last_temp, got %v", resp.SummaryCards.LastTemp)
+	if resp.SummaryCards.LastTemperature != nil {
+		t.Errorf("expected nil last_temp, got %v", resp.SummaryCards.LastTemperature)
 	}
 	if resp.SummaryCards.LastWeight != nil {
 		t.Errorf("expected nil last_weight, got %v", resp.SummaryCards.LastWeight)
@@ -208,17 +208,17 @@ func TestDashboardHandler_WithData(t *testing.T) {
 	if resp.SummaryCards.TotalFeeds != 2 {
 		t.Errorf("expected 2 total_feeds, got %d", resp.SummaryCards.TotalFeeds)
 	}
-	if resp.SummaryCards.WetDiapers != 2 {
-		t.Errorf("expected 2 wet_diapers, got %d", resp.SummaryCards.WetDiapers)
+	if resp.SummaryCards.TotalWetDiapers != 2 {
+		t.Errorf("expected 2 wet_diapers, got %d", resp.SummaryCards.TotalWetDiapers)
 	}
-	if resp.SummaryCards.Stools != 1 {
-		t.Errorf("expected 1 stools, got %d", resp.SummaryCards.Stools)
+	if resp.SummaryCards.TotalStools != 1 {
+		t.Errorf("expected 1 stools, got %d", resp.SummaryCards.TotalStools)
 	}
-	if resp.SummaryCards.ColorIndicator == nil || *resp.SummaryCards.ColorIndicator != 5 {
-		t.Errorf("expected worst_stool_color=5, got %v", resp.SummaryCards.ColorIndicator)
+	if resp.SummaryCards.WorstStoolColor == nil || *resp.SummaryCards.WorstStoolColor != 5 {
+		t.Errorf("expected worst_stool_color=5, got %v", resp.SummaryCards.WorstStoolColor)
 	}
-	if resp.SummaryCards.LastTemp == nil || *resp.SummaryCards.LastTemp != 37.5 {
-		t.Errorf("expected last_temp=37.5, got %v", resp.SummaryCards.LastTemp)
+	if resp.SummaryCards.LastTemperature == nil || *resp.SummaryCards.LastTemperature != 37.5 {
+		t.Errorf("expected last_temp=37.5, got %v", resp.SummaryCards.LastTemperature)
 	}
 	if resp.SummaryCards.LastWeight == nil || *resp.SummaryCards.LastWeight != 4.8 {
 		t.Errorf("expected last_weight=4.8, got %v", resp.SummaryCards.LastWeight)

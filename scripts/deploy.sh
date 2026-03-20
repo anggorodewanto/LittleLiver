@@ -111,8 +111,6 @@ smoke_test() {
     # 2. OAuth redirect
     info "Testing OAuth redirect..."
     local oauth_status
-    oauth_status=$(curl -s -o /dev/null -w "%{http_code}" -L --max-redirs 0 "$base_url/auth/google/login" 2>/dev/null || true)
-    # Should get 302 redirect to Google
     oauth_status=$(curl -s -o /dev/null -w "%{http_code}" "$base_url/auth/google/login")
     if [ "$oauth_status" = "302" ] || [ "$oauth_status" = "307" ]; then
         info "OAuth redirect PASSED (HTTP $oauth_status)"

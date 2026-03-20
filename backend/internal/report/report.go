@@ -501,17 +501,17 @@ func addSummarySection(m core.Maroto, summary *store.DashboardSummary) {
 	m.AddRow(7,
 		text.NewCol(3, fmt.Sprintf("Total Feeds: %d", summary.TotalFeeds), valueStyle),
 		text.NewCol(3, fmt.Sprintf("Total Calories: %.0f kcal", summary.TotalCalories), valueStyle),
-		text.NewCol(3, fmt.Sprintf("Wet Diapers: %d", summary.WetDiapers), valueStyle),
-		text.NewCol(3, fmt.Sprintf("Stools: %d", summary.Stools), valueStyle),
+		text.NewCol(3, fmt.Sprintf("Wet Diapers: %d", summary.TotalWetDiapers), valueStyle),
+		text.NewCol(3, fmt.Sprintf("Stools: %d", summary.TotalStools), valueStyle),
 	)
 
 	colorStr := "N/A"
-	if summary.ColorIndicator != nil {
-		colorStr = fmt.Sprintf("%d", *summary.ColorIndicator)
+	if summary.WorstStoolColor != nil {
+		colorStr = fmt.Sprintf("%d", *summary.WorstStoolColor)
 	}
 	tempStr := "N/A"
-	if summary.LastTemp != nil {
-		tempStr = fmt.Sprintf("%.1f°C", *summary.LastTemp)
+	if summary.LastTemperature != nil {
+		tempStr = fmt.Sprintf("%.1f°C", *summary.LastTemperature)
 	}
 	weightStr := "N/A"
 	if summary.LastWeight != nil {

@@ -20,10 +20,10 @@ type dashboardResp struct {
 	SummaryCards struct {
 		TotalFeeds      int      `json:"total_feeds"`
 		TotalCalories   float64  `json:"total_calories"`
-		WetDiapers      int      `json:"total_wet_diapers"`
-		Stools          int      `json:"total_stools"`
-		ColorIndicator  *int     `json:"worst_stool_color"`
-		LastTemp        *float64 `json:"last_temperature"`
+		TotalWetDiapers int      `json:"total_wet_diapers"`
+		TotalStools     int      `json:"total_stools"`
+		WorstStoolColor *int     `json:"worst_stool_color"`
+		LastTemperature *float64 `json:"last_temperature"`
 		LastWeight      *float64 `json:"last_weight"`
 	} `json:"summary_cards"`
 	StoolColorTrend []struct {
@@ -302,18 +302,18 @@ func TestDashboardAggregation_Integration(t *testing.T) {
 		if sc.TotalCalories != todayExpectedCal {
 			t.Errorf("total_calories: expected %.4f, got %.4f", todayExpectedCal, sc.TotalCalories)
 		}
-		if sc.WetDiapers != 2 {
-			t.Errorf("wet_diapers: expected 2, got %d", sc.WetDiapers)
+		if sc.TotalWetDiapers != 2 {
+			t.Errorf("wet_diapers: expected 2, got %d", sc.TotalWetDiapers)
 		}
-		if sc.Stools != 1 {
-			t.Errorf("stools: expected 1, got %d", sc.Stools)
+		if sc.TotalStools != 1 {
+			t.Errorf("stools: expected 1, got %d", sc.TotalStools)
 		}
-		if sc.ColorIndicator == nil || *sc.ColorIndicator != 2 {
-			t.Errorf("worst_stool_color: expected 2, got %v", sc.ColorIndicator)
+		if sc.WorstStoolColor == nil || *sc.WorstStoolColor != 2 {
+			t.Errorf("worst_stool_color: expected 2, got %v", sc.WorstStoolColor)
 		}
 		// last_temp / last_weight are global (most recent overall)
-		if sc.LastTemp == nil || *sc.LastTemp != 38.5 {
-			t.Errorf("last_temp: expected 38.5, got %v", sc.LastTemp)
+		if sc.LastTemperature == nil || *sc.LastTemperature != 38.5 {
+			t.Errorf("last_temp: expected 38.5, got %v", sc.LastTemperature)
 		}
 		if sc.LastWeight == nil || *sc.LastWeight != 4.8 {
 			t.Errorf("last_weight: expected 4.8, got %v", sc.LastWeight)
@@ -492,15 +492,15 @@ func TestDashboardAggregation_Integration(t *testing.T) {
 		if sc.TotalFeeds != 4 {
 			t.Errorf("total_feeds (7d): expected 4, got %d", sc.TotalFeeds)
 		}
-		if sc.WetDiapers != 3 {
-			t.Errorf("wet_diapers (7d): expected 3, got %d", sc.WetDiapers)
+		if sc.TotalWetDiapers != 3 {
+			t.Errorf("wet_diapers (7d): expected 3, got %d", sc.TotalWetDiapers)
 		}
 		// Stools in range: today + yesterday + 3 days ago = 3
-		if sc.Stools != 3 {
-			t.Errorf("stools (7d): expected 3, got %d", sc.Stools)
+		if sc.TotalStools != 3 {
+			t.Errorf("stools (7d): expected 3, got %d", sc.TotalStools)
 		}
-		if sc.ColorIndicator == nil || *sc.ColorIndicator != 1 {
-			t.Errorf("worst_stool_color (7d): expected 1, got %v", sc.ColorIndicator)
+		if sc.WorstStoolColor == nil || *sc.WorstStoolColor != 1 {
+			t.Errorf("worst_stool_color (7d): expected 1, got %v", sc.WorstStoolColor)
 		}
 
 		cds := resp.ChartDataSeries
@@ -597,8 +597,8 @@ func TestDashboardAggregation_Integration(t *testing.T) {
 		}
 
 		// Verify the summary reflects only the 3-days-ago date
-		if resp.SummaryCards.Stools != 1 {
-			t.Errorf("stools (3d ago only): expected 1, got %d", resp.SummaryCards.Stools)
+		if resp.SummaryCards.TotalStools != 1 {
+			t.Errorf("stools (3d ago only): expected 1, got %d", resp.SummaryCards.TotalStools)
 		}
 	})
 

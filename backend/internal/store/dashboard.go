@@ -12,10 +12,10 @@ import (
 type DashboardSummary struct {
 	TotalFeeds     int      `json:"total_feeds"`
 	TotalCalories  float64  `json:"total_calories"`
-	WetDiapers     int      `json:"total_wet_diapers"`
-	Stools         int      `json:"total_stools"`
-	ColorIndicator *int     `json:"worst_stool_color"`
-	LastTemp       *float64 `json:"last_temperature"`
+	TotalWetDiapers int      `json:"total_wet_diapers"`
+	TotalStools     int      `json:"total_stools"`
+	WorstStoolColor *int     `json:"worst_stool_color"`
+	LastTemperature *float64 `json:"last_temperature"`
 	LastWeight     *float64 `json:"last_weight"`
 }
 
@@ -63,7 +63,7 @@ func GetDashboardSummary(db *sql.DB, babyID, from, to string) (*DashboardSummary
 		 FROM urine
 		 WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?`,
 		babyID, fromTime, toTime,
-	).Scan(&s.WetDiapers)
+	).Scan(&s.TotalWetDiapers)
 	if err != nil {
 		return nil, fmt.Errorf("query urine summary: %w", err)
 	}
@@ -74,7 +74,7 @@ func GetDashboardSummary(db *sql.DB, babyID, from, to string) (*DashboardSummary
 		 FROM stools
 		 WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?`,
 		babyID, fromTime, toTime,
-	).Scan(&s.Stools)
+	).Scan(&s.TotalStools)
 	if err != nil {
 		return nil, fmt.Errorf("query stools summary: %w", err)
 	}
@@ -92,7 +92,7 @@ func GetDashboardSummary(db *sql.DB, babyID, from, to string) (*DashboardSummary
 	}
 	if worstColor.Valid {
 		v := int(worstColor.Int64)
-		s.ColorIndicator = &v
+		s.WorstStoolColor = &v
 	}
 
 	// Last temperature (regardless of date range)
@@ -106,7 +106,7 @@ func GetDashboardSummary(db *sql.DB, babyID, from, to string) (*DashboardSummary
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("query last temperature: %w", err)
 	}
-	s.LastTemp = nullFloat(lastTemp)
+	s.LastTemperature = nullFloat(lastTemp)
 
 	// Last weight (regardless of date range)
 	var lastWeight sql.NullFloat64

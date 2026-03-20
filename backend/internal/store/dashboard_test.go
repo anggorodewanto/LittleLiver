@@ -28,17 +28,17 @@ func TestGetDashboardSummary_EmptyData(t *testing.T) {
 	if summary.TotalCalories != 0 {
 		t.Errorf("expected 0 total_calories, got %f", summary.TotalCalories)
 	}
-	if summary.WetDiapers != 0 {
-		t.Errorf("expected 0 wet_diapers, got %d", summary.WetDiapers)
+	if summary.TotalWetDiapers != 0 {
+		t.Errorf("expected 0 wet_diapers, got %d", summary.TotalWetDiapers)
 	}
-	if summary.Stools != 0 {
-		t.Errorf("expected 0 stools, got %d", summary.Stools)
+	if summary.TotalStools != 0 {
+		t.Errorf("expected 0 stools, got %d", summary.TotalStools)
 	}
-	if summary.ColorIndicator != nil {
-		t.Errorf("expected nil color_indicator, got %v", summary.ColorIndicator)
+	if summary.WorstStoolColor != nil {
+		t.Errorf("expected nil color_indicator, got %v", summary.WorstStoolColor)
 	}
-	if summary.LastTemp != nil {
-		t.Errorf("expected nil last_temp, got %v", summary.LastTemp)
+	if summary.LastTemperature != nil {
+		t.Errorf("expected nil last_temp, got %v", summary.LastTemperature)
 	}
 	if summary.LastWeight != nil {
 		t.Errorf("expected nil last_weight, got %v", summary.LastWeight)
@@ -91,17 +91,17 @@ func TestGetDashboardSummary_WithData(t *testing.T) {
 	if summary.TotalCalories < expectedCal-1.0 || summary.TotalCalories > expectedCal+1.0 {
 		t.Errorf("expected total_calories ~%.1f, got %.1f", expectedCal, summary.TotalCalories)
 	}
-	if summary.WetDiapers != 3 {
-		t.Errorf("expected 3 wet_diapers, got %d", summary.WetDiapers)
+	if summary.TotalWetDiapers != 3 {
+		t.Errorf("expected 3 wet_diapers, got %d", summary.TotalWetDiapers)
 	}
-	if summary.Stools != 2 {
-		t.Errorf("expected 2 stools, got %d", summary.Stools)
+	if summary.TotalStools != 2 {
+		t.Errorf("expected 2 stools, got %d", summary.TotalStools)
 	}
-	if summary.ColorIndicator == nil || *summary.ColorIndicator != 3 {
-		t.Errorf("expected worst_stool_color=3, got %v", summary.ColorIndicator)
+	if summary.WorstStoolColor == nil || *summary.WorstStoolColor != 3 {
+		t.Errorf("expected worst_stool_color=3, got %v", summary.WorstStoolColor)
 	}
-	if summary.LastTemp == nil || *summary.LastTemp != 37.2 {
-		t.Errorf("expected last_temp=37.2, got %v", summary.LastTemp)
+	if summary.LastTemperature == nil || *summary.LastTemperature != 37.2 {
+		t.Errorf("expected last_temp=37.2, got %v", summary.LastTemperature)
 	}
 	if summary.LastWeight == nil || *summary.LastWeight != 4.5 {
 		t.Errorf("expected last_weight=4.5, got %v", summary.LastWeight)
@@ -138,7 +138,7 @@ func TestGetDashboardSummary_DateFiltering(t *testing.T) {
 	}
 }
 
-func TestGetDashboardSummary_LastTempAndWeight_IgnoreDateRange(t *testing.T) {
+func TestGetDashboardSummary_LastTemperatureAndWeight_IgnoreDateRange(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	defer db.Close()
@@ -160,8 +160,8 @@ func TestGetDashboardSummary_LastTempAndWeight_IgnoreDateRange(t *testing.T) {
 		t.Fatalf("GetDashboardSummary failed: %v", err)
 	}
 
-	if summary.LastTemp == nil || *summary.LastTemp != 38.5 {
-		t.Errorf("expected last_temp=38.5 regardless of date range, got %v", summary.LastTemp)
+	if summary.LastTemperature == nil || *summary.LastTemperature != 38.5 {
+		t.Errorf("expected last_temp=38.5 regardless of date range, got %v", summary.LastTemperature)
 	}
 	if summary.LastWeight == nil || *summary.LastWeight != 5.2 {
 		t.Errorf("expected last_weight=5.2 regardless of date range, got %v", summary.LastWeight)

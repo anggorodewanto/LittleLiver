@@ -166,10 +166,10 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 		summaryResp := summaryCardsResponse{
 			TotalFeeds:      summary.TotalFeeds,
 			TotalCalories:   summary.TotalCalories,
-			TotalWetDiapers: summary.WetDiapers,
-			TotalStools:     summary.Stools,
-			WorstStoolColor: summary.ColorIndicator,
-			LastTemperature: summary.LastTemp,
+			TotalWetDiapers: summary.TotalWetDiapers,
+			TotalStools:     summary.TotalStools,
+			WorstStoolColor: summary.WorstStoolColor,
+			LastTemperature: summary.LastTemperature,
 			LastWeight:      summary.LastWeight,
 		}
 

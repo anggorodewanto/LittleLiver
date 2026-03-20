@@ -100,13 +100,16 @@ func (r *R2Client) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// SignedURL returns a presigned URL (1-hour TTL) for accessing the object at the given key.
+// SignedURLExpiry is the TTL for presigned object URLs.
+const SignedURLExpiry = 1 * time.Hour
+
+// SignedURL returns a presigned URL for accessing the object at the given key.
 func (r *R2Client) SignedURL(ctx context.Context, key string) (string, error) {
 	presigned, err := r.presigner.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(r.bucketName),
 		Key:    aws.String(key),
 	}, func(opts *s3.PresignOptions) {
-		opts.Expires = 1 * time.Hour
+		opts.Expires = SignedURLExpiry
 	})
 	if err != nil {
 		return "", fmt.Errorf("presign object %s: %w", key, err)
