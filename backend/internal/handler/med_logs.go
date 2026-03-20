@@ -186,7 +186,7 @@ func ListMedLogsHandler(db *sql.DB) http.HandlerFunc {
 		medicationID := optionalQuery(r, "medication_id")
 		lp := parseListParams(r)
 
-		page, err := store.ListMedLogs(db, baby.ID, medicationID, lp.From, lp.To, lp.Cursor, defaultPageSize)
+		page, err := store.ListMedLogs(db, baby.ID, medicationID, lp.From, lp.To, lp.Cursor, defaultPageSize, lp.Loc)
 		if err != nil {
 			log.Printf("list med_logs: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)

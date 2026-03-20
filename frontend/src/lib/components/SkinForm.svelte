@@ -18,10 +18,10 @@
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
-		photoKey?: string;
+		photoKeys?: string[];
 	}
 
-	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKey = '' }: Props = $props();
+	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let jaundiceLevel = $state('');
@@ -47,8 +47,8 @@
 		if (bruising.trim()) {
 			payload.bruising = bruising.trim();
 		}
-		if (photoKey) {
-			payload.photo_keys = [photoKey];
+		if (photoKeys.length > 0) {
+			payload.photo_keys = photoKeys;
 		}
 		if (notes.trim()) {
 			payload.notes = notes.trim();
@@ -92,7 +92,8 @@
 		<input id="skin-bruising" type="text" bind:value={bruising} />
 	</div>
 
-	<PhotoUpload onupload={onphotoupload} {uploading} {photoKey} hint="Consistent lighting recommended" />
+	<PhotoUpload onupload={onphotoupload} {uploading} multiple={true} currentCount={photoKeys.length} hint="Consistent lighting recommended" />
+	<p>{photoKeys.length} / 4 photos</p>
 
 	<div>
 		<label for="skin-notes">Notes</label>

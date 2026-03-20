@@ -17,10 +17,10 @@
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
-		photoKey?: string;
+		photoKeys?: string[];
 	}
 
-	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKey = '' }: Props = $props();
+	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let firmness = $state('');
@@ -47,8 +47,8 @@
 		if (girthCm) {
 			payload.girth_cm = Number(girthCm);
 		}
-		if (photoKey) {
-			payload.photo_keys = [photoKey];
+		if (photoKeys.length > 0) {
+			payload.photo_keys = photoKeys;
 		}
 		if (notes.trim()) {
 			payload.notes = notes.trim();
@@ -86,7 +86,8 @@
 		<input id="abdomen-girth" type="number" step="0.1" min="0" bind:value={girthCm} />
 	</div>
 
-	<PhotoUpload onupload={onphotoupload} {uploading} {photoKey} />
+	<PhotoUpload onupload={onphotoupload} {uploading} multiple={true} currentCount={photoKeys.length} />
+	<p>{photoKeys.length} / 4 photos</p>
 
 	<div>
 		<label for="abdomen-notes">Notes</label>

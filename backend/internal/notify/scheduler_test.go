@@ -330,9 +330,16 @@ func TestScheduler_PayloadIncludesRequiredFields(t *testing.T) {
 	if p.Data["medication_id"] != "med1" {
 		t.Errorf("expected Data[medication_id]=med1, got %q", p.Data["medication_id"])
 	}
-	// Body should contain medication name
-	if !strings.Contains(p.Body, "Ursodiol") {
-		t.Errorf("body should contain medication name Ursodiol, got %q", p.Body)
+	// Body should contain dose and baby name
+	if !strings.Contains(p.Body, "50mg") {
+		t.Errorf("body should contain dose 50mg, got %q", p.Body)
+	}
+	if !strings.Contains(p.Body, "Baby") {
+		t.Errorf("body should contain baby name Baby, got %q", p.Body)
+	}
+	// Data should include name
+	if p.Data["name"] != "Ursodiol" {
+		t.Errorf("expected Data[name]=Ursodiol, got %q", p.Data["name"])
 	}
 }
 
@@ -693,22 +700,31 @@ func TestBuildMedPayload(t *testing.T) {
 	t.Parallel()
 
 	med := activeMed{
-		ID:     "med123",
-		BabyID: "b1",
-		Name:   "Ursodiol",
+		ID:       "med123",
+		BabyID:   "b1",
+		BabyName: "TestBaby",
+		Name:     "Ursodiol",
+		Dose:     "100mg",
 	}
 	scheduled := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)
 
 	p := buildMedPayload(med, scheduled)
 
-	if p.Title != "Medication Reminder: Ursodiol" {
-		t.Errorf("wrong title: %q", p.Title)
+	expectedTitle := "\U0001F48A Ursodiol \u2014 Time for dose"
+	if p.Title != expectedTitle {
+		t.Errorf("wrong title: %q, expected %q", p.Title, expectedTitle)
 	}
 	if p.URL != "/log/med?medication_id=med123" {
 		t.Errorf("wrong URL: %q", p.URL)
 	}
-	if !strings.Contains(p.Body, "Ursodiol") {
-		t.Errorf("body should contain med name: %q", p.Body)
+	if !strings.Contains(p.Body, "TestBaby") {
+		t.Errorf("body should contain baby name: %q", p.Body)
+	}
+	if !strings.Contains(p.Body, "100mg") {
+		t.Errorf("body should contain dose: %q", p.Body)
+	}
+	if p.Data["name"] != "Ursodiol" {
+		t.Errorf("expected Data[name]=Ursodiol, got %q", p.Data["name"])
 	}
 	if p.Data["scheduled_time"] != "2026-03-18T12:00:00Z" {
 		t.Errorf("expected Data[scheduled_time]=2026-03-18T12:00:00Z, got %q", p.Data["scheduled_time"])
@@ -785,9 +801,9 @@ func TestScheduler_EmptyTimezoneDefaultsToUTC(t *testing.T) {
 	}
 }
 
-// TestScheduler_SkippedDoseDoesNotSuppress tests that a skipped med_log
-// (skipped=true, given_at=NULL) does not suppress the notification.
-func TestScheduler_SkippedDoseDoesNotSuppress(t *testing.T) {
+// TestScheduler_SkippedDoseSuppresses tests that a skipped med_log
+// (skipped=true, given_at=NULL) suppresses the notification per spec §6.4.
+func TestScheduler_SkippedDoseSuppresses(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	defer db.Close()
@@ -801,11 +817,11 @@ func TestScheduler_SkippedDoseDoesNotSuppress(t *testing.T) {
 	loc, _ := time.LoadLocation("America/New_York")
 	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, loc).UTC()
 
-	// Insert a skipped log (given_at is NULL)
+	// Insert a skipped log (given_at is NULL) with created_at within the suppression window
 	stStr := scheduledUTC.Format("2006-01-02T15:04:05Z")
 	_, err := db.Exec(
-		`INSERT INTO med_logs (id, medication_id, baby_id, logged_by, scheduled_time, given_at, skipped, skip_reason)
-		 VALUES ('ml-skip', 'med1', 'b1', 'u1', ?, NULL, 1, 'Out of stock')`, stStr)
+		`INSERT INTO med_logs (id, medication_id, baby_id, logged_by, scheduled_time, given_at, skipped, skip_reason, created_at)
+		 VALUES ('ml-skip', 'med1', 'b1', 'u1', ?, NULL, 1, 'Out of stock', ?)`, stStr, stStr)
 	if err != nil {
 		t.Fatalf("seed skipped med_log: %v", err)
 	}
@@ -815,9 +831,9 @@ func TestScheduler_SkippedDoseDoesNotSuppress(t *testing.T) {
 	s := NewScheduler(db, mock)
 	s.Tick(now)
 
-	// Skipped dose should NOT suppress - only given_at within window suppresses
-	if len(mock.Sends) != 1 {
-		t.Fatalf("expected 1 notification (skipped dose should not suppress), got %d", len(mock.Sends))
+	// Skipped dose SHOULD suppress — spec §6.4: suppression uses created_at for skipped doses
+	if len(mock.Sends) != 0 {
+		t.Fatalf("expected 0 notifications (skipped dose should suppress), got %d", len(mock.Sends))
 	}
 }
 

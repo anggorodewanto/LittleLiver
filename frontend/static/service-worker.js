@@ -89,7 +89,11 @@ self.addEventListener('notificationclick', (event) => {
 
 			const data = event.notification.data;
 			const medicationId = data?.medication_id;
-			const url = medicationId ? `/log/med?medication_id=${medicationId}` : '/';
+			const scheduledTime = data?.scheduled_time;
+			let url = medicationId ? `/log/med?medication_id=${medicationId}` : '/';
+			if (scheduledTime) {
+				url += `&scheduled_time=${encodeURIComponent(scheduledTime)}`;
+			}
 
 			await self.clients.openWindow(url);
 		})()

@@ -18,10 +18,10 @@
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
-		photoKey?: string;
+		photoKeys?: string[];
 	}
 
-	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKey = '' }: Props = $props();
+	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let location = $state('');
@@ -57,8 +57,8 @@
 		if (color.trim()) {
 			payload.color = color.trim();
 		}
-		if (photoKey) {
-			payload.photo_keys = [photoKey];
+		if (photoKeys.length > 0) {
+			payload.photo_keys = photoKeys;
 		}
 		if (notes.trim()) {
 			payload.notes = notes.trim();
@@ -99,7 +99,8 @@
 		<input id="bruising-color" type="text" bind:value={color} placeholder="e.g., red, purple, yellow-green" />
 	</div>
 
-	<PhotoUpload onupload={onphotoupload} {uploading} {photoKey} />
+	<PhotoUpload onupload={onphotoupload} {uploading} multiple={true} currentCount={photoKeys.length} />
+	<p>{photoKeys.length} / 4 photos</p>
 
 	<div>
 		<label for="bruising-notes">Notes</label>

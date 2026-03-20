@@ -55,7 +55,9 @@ func (s *Scheduler) Stop() {
 type activeMed struct {
 	ID       string
 	BabyID   string
+	BabyName string
 	Name     string
+	Dose     string
 	Schedule *string
 	Timezone *string
 }
@@ -79,9 +81,10 @@ func (s *Scheduler) Tick(now time.Time) {
 // queryActiveMeds returns all active medications that have a schedule.
 func (s *Scheduler) queryActiveMeds() ([]activeMed, error) {
 	rows, err := s.db.Query(
-		`SELECT id, baby_id, name, schedule, timezone
-		 FROM medications
-		 WHERE active = 1 AND schedule IS NOT NULL AND schedule != ''`,
+		`SELECT m.id, m.baby_id, b.name, m.name, m.dose, m.schedule, m.timezone
+		 FROM medications m
+		 JOIN babies b ON m.baby_id = b.id
+		 WHERE m.active = 1 AND m.schedule IS NOT NULL AND m.schedule != ''`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query medications: %w", err)
@@ -91,7 +94,7 @@ func (s *Scheduler) queryActiveMeds() ([]activeMed, error) {
 	var meds []activeMed
 	for rows.Next() {
 		var m activeMed
-		if err := rows.Scan(&m.ID, &m.BabyID, &m.Name, &m.Schedule, &m.Timezone); err != nil {
+		if err := rows.Scan(&m.ID, &m.BabyID, &m.BabyName, &m.Name, &m.Dose, &m.Schedule, &m.Timezone); err != nil {
 			return nil, fmt.Errorf("scan medication: %w", err)
 		}
 		meds = append(meds, m)
@@ -173,8 +176,12 @@ func (s *Scheduler) isDoseSuppressed(medID, babyID string, scheduledUTC time.Tim
 	err := s.db.QueryRow(
 		`SELECT COUNT(*) FROM med_logs
 		 WHERE medication_id = ? AND baby_id = ?
-		   AND given_at >= ? AND given_at <= ?`,
-		medID, babyID, windowStart, windowEnd,
+		   AND (
+		     (skipped = 0 AND given_at >= ? AND given_at <= ?)
+		     OR
+		     (skipped = 1 AND created_at >= ? AND created_at <= ?)
+		   )`,
+		medID, babyID, windowStart, windowEnd, windowStart, windowEnd,
 	).Scan(&count)
 	if err != nil {
 		log.Printf("scheduler: check suppression for med %s: %v", medID, err)
@@ -254,12 +261,13 @@ func (s *Scheduler) queryPushSubscriptions(userID string) ([]Subscription, error
 func buildMedPayload(med activeMed, scheduledUTC time.Time) Payload {
 	scheduledStr := scheduledUTC.Format(utcTimeFormat)
 	return Payload{
-		Title: fmt.Sprintf("Medication Reminder: %s", med.Name),
-		Body:  fmt.Sprintf("Time to give %s", med.Name),
+		Title: fmt.Sprintf("\U0001F48A %s \u2014 Time for dose", med.Name),
+		Body:  fmt.Sprintf("%s for %s. Tap to log.", med.Dose, med.BabyName),
 		URL:   fmt.Sprintf("/log/med?medication_id=%s", med.ID),
 		Data: map[string]string{
 			"scheduled_time": scheduledStr,
 			"medication_id":  med.ID,
+			"name":           med.Name,
 		},
 	}
 }

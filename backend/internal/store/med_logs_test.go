@@ -89,7 +89,7 @@ func TestListMedLogs_Empty(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	page, err := store.ListMedLogs(db, baby.ID, nil, nil, nil, nil, 50)
+	page, err := store.ListMedLogs(db, baby.ID, nil, nil, nil, nil, 50, nil)
 	if err != nil {
 		t.Fatalf("ListMedLogs: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestListMedLogs_FilterByMedicationID(t *testing.T) {
 	_, _ = store.CreateMedLog(db, baby.ID, med1, user.ID, nil, strPtr("2026-03-17T08:00:00Z"), false, nil, nil)
 	_, _ = store.CreateMedLog(db, baby.ID, med2.ID, user.ID, nil, strPtr("2026-03-17T09:00:00Z"), false, nil, nil)
 
-	page, err := store.ListMedLogs(db, baby.ID, &med1, nil, nil, nil, 50)
+	page, err := store.ListMedLogs(db, baby.ID, &med1, nil, nil, nil, 50, nil)
 	if err != nil {
 		t.Fatalf("ListMedLogs: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestListMedLogs_FilterByFromTo(t *testing.T) {
 	// Use dynamic dates so the range always covers today
 	from := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
 	to := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
-	page, err := store.ListMedLogs(db, baby.ID, nil, &from, &to, nil, 50)
+	page, err := store.ListMedLogs(db, baby.ID, nil, &from, &to, nil, 50, nil)
 	if err != nil {
 		t.Fatalf("ListMedLogs: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestListMedLogs_Pagination(t *testing.T) {
 	}
 
 	// Fetch with limit=2 to trigger pagination
-	page, err := store.ListMedLogs(db, baby.ID, nil, nil, nil, nil, 2)
+	page, err := store.ListMedLogs(db, baby.ID, nil, nil, nil, nil, 2, nil)
 	if err != nil {
 		t.Fatalf("ListMedLogs: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestListMedLogs_Pagination(t *testing.T) {
 	}
 
 	// Fetch next page using cursor
-	page2, err := store.ListMedLogs(db, baby.ID, nil, nil, nil, page.NextCursor, 2)
+	page2, err := store.ListMedLogs(db, baby.ID, nil, nil, nil, page.NextCursor, 2, nil)
 	if err != nil {
 		t.Fatalf("ListMedLogs page2: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestListMedLogs_InvalidFromDate(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	badDate := "not-a-date"
-	_, err := store.ListMedLogs(db, baby.ID, nil, &badDate, nil, nil, 50)
+	_, err := store.ListMedLogs(db, baby.ID, nil, &badDate, nil, nil, 50, nil)
 	if err == nil {
 		t.Error("expected error for invalid from date")
 	}
@@ -333,7 +333,7 @@ func TestListMedLogs_InvalidToDate(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	badDate := "not-a-date"
-	_, err := store.ListMedLogs(db, baby.ID, nil, nil, &badDate, nil, 50)
+	_, err := store.ListMedLogs(db, baby.ID, nil, nil, &badDate, nil, 50, nil)
 	if err == nil {
 		t.Error("expected error for invalid to date")
 	}

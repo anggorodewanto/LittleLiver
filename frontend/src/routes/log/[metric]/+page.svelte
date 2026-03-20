@@ -20,12 +20,12 @@
 	const METRIC_CONFIG: Record<string, { label: string; endpoint: string; hasPhoto: boolean; multiPhoto?: boolean }> = {
 		feeding: { label: 'Feeding', endpoint: 'feedings', hasPhoto: false },
 		urine: { label: 'Urine', endpoint: 'urine', hasPhoto: false },
-		stool: { label: 'Stool', endpoint: 'stools', hasPhoto: true },
+		stool: { label: 'Stool', endpoint: 'stools', hasPhoto: true, multiPhoto: true },
 		temperature: { label: 'Temperature', endpoint: 'temperatures', hasPhoto: false },
 		weight: { label: 'Weight', endpoint: 'weights', hasPhoto: false },
-		abdomen: { label: 'Abdomen', endpoint: 'abdomen', hasPhoto: true },
-		skin: { label: 'Skin', endpoint: 'skin', hasPhoto: true },
-		bruising: { label: 'Bruising', endpoint: 'bruising', hasPhoto: true },
+		abdomen: { label: 'Abdomen', endpoint: 'abdomen', hasPhoto: true, multiPhoto: true },
+		skin: { label: 'Skin', endpoint: 'skin', hasPhoto: true, multiPhoto: true },
+		bruising: { label: 'Bruising', endpoint: 'bruising', hasPhoto: true, multiPhoto: true },
 		lab: { label: 'Lab', endpoint: 'labs', hasPhoto: false },
 		notes: { label: 'Note', endpoint: 'notes', hasPhoto: true, multiPhoto: true },
 		medication: { label: 'Medication', endpoint: 'medications', hasPhoto: false },
@@ -39,7 +39,6 @@
 	let submitting = $state(false);
 	let error = $state('');
 	let uploading = $state(false);
-	let photoKey = $state('');
 	let photoKeys = $state<string[]>([]);
 
 	// Query params for DoseLogForm
@@ -72,11 +71,7 @@
 		uploading = true;
 		try {
 			const key = await uploadPhoto(baby.id, file);
-			if (config?.multiPhoto) {
-				photoKeys = [...photoKeys, key];
-			} else {
-				photoKey = key;
-			}
+			photoKeys = [...photoKeys, key];
 		} catch {
 			error = 'Photo upload failed';
 		} finally {
@@ -113,17 +108,17 @@
 	{:else if metric === 'urine'}
 		<UrineForm onsubmit={handleSubmit} {submitting} {error} />
 	{:else if metric === 'stool'}
-		<StoolForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKey} />
+		<StoolForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'temperature'}
 		<TemperatureForm onsubmit={handleSubmit} {submitting} {error} />
 	{:else if metric === 'weight'}
 		<WeightForm onsubmit={handleSubmit} {submitting} {error} />
 	{:else if metric === 'abdomen'}
-		<AbdomenForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKey} />
+		<AbdomenForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'skin'}
-		<SkinForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKey} />
+		<SkinForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'bruising'}
-		<BruisingForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKey} />
+		<BruisingForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'lab'}
 		<LabForm onsubmit={handleSubmit} {submitting} {error} />
 	{:else if metric === 'notes'}

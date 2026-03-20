@@ -28,7 +28,10 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/who"
 )
 
-const feverThreshold = 38.0
+// feverThresholdForMethod returns the method-specific fever threshold.
+func feverThresholdForMethod(method string) float64 {
+	return store.FeverThreshold(method)
+}
 
 // reportData holds all queried data for the report.
 type reportData struct {
@@ -576,7 +579,7 @@ func addTemperatureTable(m core.Maroto, temps []store.TemperatureSeriesEntry) {
 		ts := formatTimestamp(t.Timestamp)
 		feverFlag := ""
 		feverStyle := tableCellStyle
-		if t.Value >= feverThreshold {
+		if t.Value >= feverThresholdForMethod(t.Method) {
 			feverFlag = "YES"
 			feverStyle = props.Text{
 				Size:  9,

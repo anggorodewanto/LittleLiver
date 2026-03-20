@@ -90,7 +90,7 @@ func GetMedLogByID(db *sql.DB, babyID, logID string) (*model.MedLog, error) {
 
 // ListMedLogs returns a paginated list of med-logs for a baby with optional
 // medication_id, from/to date filters, and cursor-based pagination.
-func ListMedLogs(db *sql.DB, babyID string, medicationID, from, to, cursor *string, limit int) (*model.MetricPage[model.MedLog], error) {
+func ListMedLogs(db *sql.DB, babyID string, medicationID, from, to, cursor *string, limit int, loc *time.Location) (*model.MetricPage[model.MedLog], error) {
 	var conditions []string
 	var args []any
 
@@ -102,22 +102,26 @@ func ListMedLogs(db *sql.DB, babyID string, medicationID, from, to, cursor *stri
 		args = append(args, *medicationID)
 	}
 
+	if loc == nil {
+		loc = time.UTC
+	}
+
 	if from != nil {
-		fromDate, err := time.Parse(model.DateFormat, *from)
+		fromDate, err := time.ParseInLocation(model.DateFormat, *from, loc)
 		if err != nil {
 			return nil, fmt.Errorf("parse from date: %w", err)
 		}
 		conditions = append(conditions, "created_at >= ?")
-		args = append(args, fromDate.Format(model.DateTimeFormat))
+		args = append(args, fromDate.UTC().Format(model.DateTimeFormat))
 	}
 
 	if to != nil {
-		toDate, err := time.Parse(model.DateFormat, *to)
+		toDate, err := time.ParseInLocation(model.DateFormat, *to, loc)
 		if err != nil {
 			return nil, fmt.Errorf("parse to date: %w", err)
 		}
 		// to is inclusive of the whole day
-		toTime := toDate.Add(24 * time.Hour).Format(model.DateTimeFormat)
+		toTime := toDate.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
 		conditions = append(conditions, "created_at < ?")
 		args = append(args, toTime)
 	}

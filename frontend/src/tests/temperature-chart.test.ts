@@ -38,22 +38,29 @@ describe('TemperatureChart', () => {
 		expect(config.type).toBe('line');
 	});
 
-	it('includes a fever threshold annotation line at 38.0 degrees C', () => {
+	it('includes method-specific fever threshold lines', () => {
 		render(TemperatureChart, { props: { data: mockTemperatureData } });
 
 		const config = chartConstructorCalls[0][1] as {
 			data: { datasets: { label: string; data: { y: number }[] }[] };
 		};
 		const datasets = config.data.datasets;
-		const thresholdDs = datasets.find((d) => d.label === 'Fever Threshold');
-		expect(thresholdDs).toBeDefined();
 
-		for (const point of thresholdDs!.data) {
+		// Should have threshold line for axillary/forehead (37.5) and rectal/ear (38.0)
+		const lowerThreshold = datasets.find((d) => d.label === 'Threshold (axillary/forehead)');
+		expect(lowerThreshold).toBeDefined();
+		for (const point of lowerThreshold!.data) {
+			expect(point.y).toBe(37.5);
+		}
+
+		const upperThreshold = datasets.find((d) => d.label === 'Threshold (rectal/ear)');
+		expect(upperThreshold).toBeDefined();
+		for (const point of upperThreshold!.data) {
 			expect(point.y).toBe(38.0);
 		}
 	});
 
-	it('fever threshold line uses a distinct dashed red style', () => {
+	it('fever threshold lines use distinct dashed styles', () => {
 		render(TemperatureChart, { props: { data: mockTemperatureData } });
 
 		const config = chartConstructorCalls[0][1] as {
@@ -66,11 +73,31 @@ describe('TemperatureChart', () => {
 			};
 		};
 		const datasets = config.data.datasets;
-		const thresholdDs = datasets.find((d) => d.label === 'Fever Threshold');
 
-		expect(thresholdDs!.borderColor).toBe('red');
-		expect(thresholdDs!.borderDash).toBeDefined();
-		expect(thresholdDs!.borderDash.length).toBeGreaterThan(0);
+		const upperThreshold = datasets.find((d) => d.label === 'Threshold (rectal/ear)');
+		expect(upperThreshold!.borderColor).toBe('red');
+		expect(upperThreshold!.borderDash).toBeDefined();
+		expect(upperThreshold!.borderDash.length).toBeGreaterThan(0);
+	});
+
+	it('separates normal and fever data points', () => {
+		render(TemperatureChart, { props: { data: mockTemperatureData } });
+
+		const config = chartConstructorCalls[0][1] as {
+			data: { datasets: { label: string; data: { y: number }[] }[] };
+		};
+		const datasets = config.data.datasets;
+
+		const normalDs = datasets.find((d) => d.label === 'Normal');
+		const feverDs = datasets.find((d) => d.label === 'Fever');
+		expect(normalDs).toBeDefined();
+		expect(feverDs).toBeDefined();
+
+		// 38.5 rectal (>= 38.0) is fever; others are normal
+		expect(feverDs!.data.length).toBe(1);
+		expect(feverDs!.data[0].y).toBe(38.5);
+		// 36.8, 37.2, 37.0 are normal (37.2 axillary is < 37.5 threshold)
+		expect(normalDs!.data.length).toBe(3);
 	});
 
 	it('destroys chart on component unmount', () => {

@@ -101,7 +101,11 @@ export function initServiceWorker(sw: ServiceWorkerGlobalScope): void {
 
 				const data = clickEvent.notification.data as Record<string, unknown> | undefined;
 				const medicationId = data?.medication_id;
-				const url = medicationId ? `/log/med?medication_id=${medicationId}` : '/';
+				const scheduledTime = data?.scheduled_time;
+				let url = medicationId ? `/log/med?medication_id=${medicationId}` : '/';
+				if (scheduledTime) {
+					url += `&scheduled_time=${encodeURIComponent(String(scheduledTime))}`;
+				}
 
 				await sw.clients.openWindow(url);
 			})()

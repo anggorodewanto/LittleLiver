@@ -27,6 +27,8 @@
 					activeBabyId={$activeBaby?.id ?? null}
 					onselect={setActiveBaby}
 				/>
+				<a href="/trends">Trends</a>
+				<a href="/report">Report</a>
 			{/if}
 
 			<a href="/settings">Settings</a>
