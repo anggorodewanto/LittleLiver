@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 // FeedingByType holds per-type feed counts for a day.
@@ -65,14 +66,17 @@ type LabTrendEntry struct {
 }
 
 // GetFeedingDaily returns daily aggregated feeding data within the given date range.
-func GetFeedingDaily(db *sql.DB, babyID, from, to string) ([]FeedingDailyEntry, error) {
-	fromTime, toTime, err := ParseDateRange(from, to)
+// loc specifies the timezone for date interpretation and daily grouping.
+func GetFeedingDaily(db *sql.DB, babyID, from, to string, loc *time.Location) ([]FeedingDailyEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}
 
+	offsetSec := tzOffsetSeconds(from, loc)
+
 	rows, err := db.Query(
-		`SELECT DATE(timestamp) as date,
+		`SELECT DATE(datetime(timestamp, ? || ' seconds')) as date,
 			COALESCE(SUM(volume_ml), 0) as total_volume_ml,
 			COALESCE(SUM(calories), 0) as total_calories,
 			COUNT(*) as feed_count,
@@ -82,9 +86,9 @@ func GetFeedingDaily(db *sql.DB, babyID, from, to string) ([]FeedingDailyEntry, 
 			SUM(CASE WHEN feed_type = 'other' THEN 1 ELSE 0 END) as other_type
 		 FROM feedings
 		 WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?
-		 GROUP BY DATE(timestamp)
+		 GROUP BY DATE(datetime(timestamp, ? || ' seconds'))
 		 ORDER BY date ASC`,
-		babyID, fromTime, toTime,
+		offsetSec, babyID, fromTime, toTime, offsetSec,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query feeding daily: %w", err)
@@ -108,25 +112,28 @@ func GetFeedingDaily(db *sql.DB, babyID, from, to string) ([]FeedingDailyEntry, 
 }
 
 // GetDiaperDaily returns daily aggregated diaper data (wet + stool counts) within the given date range.
-func GetDiaperDaily(db *sql.DB, babyID, from, to string) ([]DiaperDailyEntry, error) {
-	fromTime, toTime, err := ParseDateRange(from, to)
+// loc specifies the timezone for date interpretation and daily grouping.
+func GetDiaperDaily(db *sql.DB, babyID, from, to string, loc *time.Location) ([]DiaperDailyEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}
 
+	offsetSec := tzOffsetSeconds(from, loc)
+
 	// Use UNION ALL to combine urine and stool counts by date
 	rows, err := db.Query(
 		`SELECT date, SUM(wet) as wet_count, SUM(stool) as stool_count FROM (
-			SELECT DATE(timestamp) as date, 1 as wet, 0 as stool
+			SELECT DATE(datetime(timestamp, ? || ' seconds')) as date, 1 as wet, 0 as stool
 			FROM urine WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?
 			UNION ALL
-			SELECT DATE(timestamp) as date, 0 as wet, 1 as stool
+			SELECT DATE(datetime(timestamp, ? || ' seconds')) as date, 0 as wet, 1 as stool
 			FROM stools WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?
 		) combined
 		GROUP BY date
 		ORDER BY date ASC`,
-		babyID, fromTime, toTime,
-		babyID, fromTime, toTime,
+		offsetSec, babyID, fromTime, toTime,
+		offsetSec, babyID, fromTime, toTime,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query diaper daily: %w", err)
@@ -149,8 +156,9 @@ func GetDiaperDaily(db *sql.DB, babyID, from, to string) ([]DiaperDailyEntry, er
 }
 
 // GetTemperatureSeries returns individual temperature readings within the given date range.
-func GetTemperatureSeries(db *sql.DB, babyID, from, to string) ([]TemperatureSeriesEntry, error) {
-	fromTime, toTime, err := ParseDateRange(from, to)
+// loc specifies the timezone for date interpretation.
+func GetTemperatureSeries(db *sql.DB, babyID, from, to string, loc *time.Location) ([]TemperatureSeriesEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}
@@ -183,8 +191,9 @@ func GetTemperatureSeries(db *sql.DB, babyID, from, to string) ([]TemperatureSer
 }
 
 // GetWeightSeries returns individual weight readings within the given date range.
-func GetWeightSeries(db *sql.DB, babyID, from, to string) ([]WeightSeriesEntry, error) {
-	fromTime, toTime, err := ParseDateRange(from, to)
+// loc specifies the timezone for date interpretation.
+func GetWeightSeries(db *sql.DB, babyID, from, to string, loc *time.Location) ([]WeightSeriesEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}
@@ -219,9 +228,9 @@ func GetWeightSeries(db *sql.DB, babyID, from, to string) ([]WeightSeriesEntry, 
 }
 
 // GetAbdomenGirthSeries returns individual abdomen girth readings within the given date range.
-// Only entries with a non-null girth_cm are included.
-func GetAbdomenGirthSeries(db *sql.DB, babyID, from, to string) ([]AbdomenGirthEntry, error) {
-	fromTime, toTime, err := ParseDateRange(from, to)
+// Only entries with a non-null girth_cm are included. loc specifies the timezone for date interpretation.
+func GetAbdomenGirthSeries(db *sql.DB, babyID, from, to string, loc *time.Location) ([]AbdomenGirthEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}
@@ -254,8 +263,9 @@ func GetAbdomenGirthSeries(db *sql.DB, babyID, from, to string) ([]AbdomenGirthE
 }
 
 // GetStoolColorSeries returns individual stool color readings within the given date range.
-func GetStoolColorSeries(db *sql.DB, babyID, from, to string) ([]StoolColorSeriesEntry, error) {
-	fromTime, toTime, err := ParseDateRange(from, to)
+// loc specifies the timezone for date interpretation.
+func GetStoolColorSeries(db *sql.DB, babyID, from, to string, loc *time.Location) ([]StoolColorSeriesEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}
@@ -288,8 +298,9 @@ func GetStoolColorSeries(db *sql.DB, babyID, from, to string) ([]StoolColorSerie
 }
 
 // GetLabTrends returns lab results grouped by test_name within the given date range.
-func GetLabTrends(db *sql.DB, babyID, from, to string) (map[string][]LabTrendEntry, error) {
-	fromTime, toTime, err := ParseDateRange(from, to)
+// loc specifies the timezone for date interpretation.
+func GetLabTrends(db *sql.DB, babyID, from, to string, loc *time.Location) (map[string][]LabTrendEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}

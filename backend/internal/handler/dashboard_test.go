@@ -534,6 +534,65 @@ func TestDashboardHandler_ChartDataSeries_DateRangeFiltering(t *testing.T) {
 	}
 }
 
+func doDashboardRequestWithTimezone(t *testing.T, db *sql.DB, userID, babyID, queryString, tz string) (*httptest.ResponseRecorder, dashboardResp) {
+	t.Helper()
+
+	target := "/api/babies/" + babyID + "/dashboard"
+	if queryString != "" {
+		target += "?" + queryString
+	}
+	req := testutil.AuthenticatedRequest(t, db, userID, testCookieName, testSecret, http.MethodGet, target)
+	if tz != "" {
+		req.Header.Set("X-Timezone", tz)
+	}
+
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.DashboardHandler(db)))
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /api/babies/{id}/dashboard", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	var resp dashboardResp
+	if rec.Code == http.StatusOK {
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("unmarshal dashboard response failed: %v", err)
+		}
+	}
+	return rec, resp
+}
+
+func TestDashboardHandler_TimezoneHeader(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	// Insert a feeding at 2025-03-14T16:00:00Z — March 15 in Tokyo, March 14 in UTC
+	store.CreateFeeding(db, baby.ID, user.ID, "2025-03-14T16:00:00Z", "formula", nil, nil, nil, nil, 67.0)
+
+	// Query for March 15 with Tokyo timezone — should include the feeding
+	rec, resp := doDashboardRequestWithTimezone(t, db, user.ID, baby.ID, "from=2025-03-15&to=2025-03-15", "Asia/Tokyo")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	if resp.SummaryCards.TotalFeeds != 1 {
+		t.Errorf("expected 1 feed for March 15 in Tokyo, got %d", resp.SummaryCards.TotalFeeds)
+	}
+
+	// Query for March 15 with UTC — should NOT include the feeding
+	rec2, resp2 := doDashboardRequestWithTimezone(t, db, user.ID, baby.ID, "from=2025-03-15&to=2025-03-15", "UTC")
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec2.Code, rec2.Body.String())
+	}
+	if resp2.SummaryCards.TotalFeeds != 0 {
+		t.Errorf("expected 0 feeds for March 15 in UTC, got %d", resp2.SummaryCards.TotalFeeds)
+	}
+}
+
 func TestDashboardHandler_Unauthorized(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)

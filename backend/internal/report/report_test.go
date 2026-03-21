@@ -112,7 +112,7 @@ func TestGeneratePDF_WithData(t *testing.T) {
 	seedReportData(t, db, baby.ID, user.ID)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestGeneratePDF_EmptyDateRange(t *testing.T) {
 	// No data seeded — empty date range
 
 	var buf bytes.Buffer
-	err := report.Generate(db, nil, baby, "2025-09-01", "2025-09-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-09-01", "2025-09-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error for empty range: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestGeneratePDF_ContainsExpectedText(t *testing.T) {
 	seedReportData(t, db, baby.ID, user.ID)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestGeneratePDF_NoKasaiDate(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestGeneratePDF_OldBaby(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err = report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	err = report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestGeneratePDF_InvalidDateRange(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, nil, baby, "invalid", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "invalid", "2025-08-01", &buf, nil)
 	if err == nil {
 		t.Fatal("expected error for invalid date range")
 	}
@@ -324,7 +324,7 @@ func TestGeneratePDF_NoteWithoutCategory(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err = report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	err = report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestGeneratePDF_WithCharts(t *testing.T) {
 	seedFullReportData(t, db, baby.ID, user.ID, nil)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -445,7 +445,7 @@ func TestGeneratePDF_WithLabTrendsChart(t *testing.T) {
 	seedFullReportData(t, db, baby.ID, user.ID, nil)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestGeneratePDF_WithPhotos(t *testing.T) {
 	seedFullReportData(t, db, baby.ID, user.ID, objStore)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, objStore, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, objStore, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -489,7 +489,7 @@ func TestGeneratePDF_WithPhotos_NoStorage(t *testing.T) {
 
 	// Pass nil storage — should not error, just skip photos
 	var buf bytes.Buffer
-	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}
@@ -512,7 +512,7 @@ func TestGeneratePDF_FullReport_ValidPDF(t *testing.T) {
 	seedFullReportData(t, db, baby.ID, user.ID, objStore)
 
 	var buf bytes.Buffer
-	err := report.Generate(db, objStore, baby, "2025-08-01", "2025-08-01", &buf)
+	err := report.Generate(db, objStore, baby, "2025-08-01", "2025-08-01", &buf, nil)
 	if err != nil {
 		t.Fatalf("Generate returned error: %v", err)
 	}

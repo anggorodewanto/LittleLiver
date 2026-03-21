@@ -2,3 +2,6 @@
 /bin/
 /server
 *.exe
+
+# Coverage output
+*.out

@@ -184,7 +184,7 @@ func TestGetDashboardSummary_InvalidDateRange(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	_, err := GetDashboardSummary(db, "baby-id", "invalid-date", "2025-07-01")
+	_, err := GetDashboardSummary(db, "baby-id", "invalid-date", "2025-07-01", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for invalid date range")
 	}
@@ -797,7 +797,7 @@ func TestGetLabTrends_WithUnit(t *testing.T) {
 		t.Fatalf("CreateLabResult: %v", err)
 	}
 
-	trends, err := GetLabTrends(db, baby.ID, today, today)
+	trends, err := GetLabTrends(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetLabTrends: %v", err)
 	}
@@ -854,7 +854,7 @@ func TestGetFeedingDaily_AllFeedTypes(t *testing.T) {
 		t.Fatalf("CreateFeeding other: %v", err)
 	}
 
-	series, err := GetFeedingDaily(db, baby.ID, today, today)
+	series, err := GetFeedingDaily(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetFeedingDaily: %v", err)
 	}
@@ -907,7 +907,7 @@ func TestGetWeightSeries_MixedMeasurementSource(t *testing.T) {
 		t.Fatalf("CreateWeight without source: %v", err)
 	}
 
-	series, err := GetWeightSeries(db, baby.ID, today, today)
+	series, err := GetWeightSeries(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetWeightSeries: %v", err)
 	}
@@ -1028,7 +1028,7 @@ func TestGetDiaperDaily_EmptyData(t *testing.T) {
 	}
 
 	today := time.Now().UTC().Format("2006-01-02")
-	series, err := GetDiaperDaily(db, baby.ID, today, today)
+	series, err := GetDiaperDaily(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetDiaperDaily: %v", err)
 	}
@@ -1057,7 +1057,7 @@ func TestGetTemperatureSeries_EmptyData(t *testing.T) {
 	}
 
 	today := time.Now().UTC().Format("2006-01-02")
-	series, err := GetTemperatureSeries(db, baby.ID, today, today)
+	series, err := GetTemperatureSeries(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetTemperatureSeries: %v", err)
 	}
@@ -1083,7 +1083,7 @@ func TestGetAbdomenGirthSeries_EmptyData(t *testing.T) {
 	}
 
 	today := time.Now().UTC().Format("2006-01-02")
-	series, err := GetAbdomenGirthSeries(db, baby.ID, today, today)
+	series, err := GetAbdomenGirthSeries(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetAbdomenGirthSeries: %v", err)
 	}
@@ -1109,7 +1109,7 @@ func TestGetStoolColorSeries_EmptyData(t *testing.T) {
 	}
 
 	today := time.Now().UTC().Format("2006-01-02")
-	series, err := GetStoolColorSeries(db, baby.ID, today, today)
+	series, err := GetStoolColorSeries(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetStoolColorSeries: %v", err)
 	}
@@ -1124,7 +1124,7 @@ func TestGetFeedingDaily_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := GetFeedingDaily(db, "b1", "2025-07-01", "2025-07-02")
+	_, err := GetFeedingDaily(db, "b1", "2025-07-01", "2025-07-02", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}
@@ -1134,7 +1134,7 @@ func TestGetDiaperDaily_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := GetDiaperDaily(db, "b1", "2025-07-01", "2025-07-02")
+	_, err := GetDiaperDaily(db, "b1", "2025-07-01", "2025-07-02", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}
@@ -1144,7 +1144,7 @@ func TestGetTemperatureSeries_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := GetTemperatureSeries(db, "b1", "2025-07-01", "2025-07-02")
+	_, err := GetTemperatureSeries(db, "b1", "2025-07-01", "2025-07-02", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}
@@ -1154,7 +1154,7 @@ func TestGetWeightSeries_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := GetWeightSeries(db, "b1", "2025-07-01", "2025-07-02")
+	_, err := GetWeightSeries(db, "b1", "2025-07-01", "2025-07-02", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}
@@ -1164,7 +1164,7 @@ func TestGetAbdomenGirthSeries_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := GetAbdomenGirthSeries(db, "b1", "2025-07-01", "2025-07-02")
+	_, err := GetAbdomenGirthSeries(db, "b1", "2025-07-01", "2025-07-02", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}
@@ -1174,7 +1174,7 @@ func TestGetStoolColorSeries_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := GetStoolColorSeries(db, "b1", "2025-07-01", "2025-07-02")
+	_, err := GetStoolColorSeries(db, "b1", "2025-07-01", "2025-07-02", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}
@@ -1184,7 +1184,7 @@ func TestGetLabTrends_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := GetLabTrends(db, "b1", "2025-07-01", "2025-07-02")
+	_, err := GetLabTrends(db, "b1", "2025-07-01", "2025-07-02", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}
@@ -1196,7 +1196,7 @@ func TestGetDashboardSummary_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := GetDashboardSummary(db, "b1", "2025-07-01", "2025-07-02")
+	_, err := GetDashboardSummary(db, "b1", "2025-07-01", "2025-07-02", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}

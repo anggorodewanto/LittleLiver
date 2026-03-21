@@ -30,7 +30,7 @@ func TestGetFeedingDaily_AggregatesCorrectly(t *testing.T) {
 	calDen2 := 20.0
 	store.CreateFeeding(db, baby.ID, user.ID, yesterday+"T08:00:00Z", "formula", &vol2, &calDen2, nil, nil, 67.0)
 
-	series, err := store.GetFeedingDaily(db, baby.ID, yesterday, today)
+	series, err := store.GetFeedingDaily(db, baby.ID, yesterday, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetFeedingDaily failed: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestGetFeedingDaily_EmptyData(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	today := time.Now().UTC().Format("2006-01-02")
-	series, err := store.GetFeedingDaily(db, baby.ID, today, today)
+	series, err := store.GetFeedingDaily(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetFeedingDaily failed: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestGetDiaperDaily_CombinesStoolAndUrine(t *testing.T) {
 	store.CreateStool(db, baby.ID, user.ID, ts1, 3, &yellow, nil, nil, nil)
 	store.CreateStool(db, baby.ID, user.ID, ts2, 5, &yellow, nil, nil, nil)
 
-	series, err := store.GetDiaperDaily(db, baby.ID, today, today)
+	series, err := store.GetDiaperDaily(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetDiaperDaily failed: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestGetTemperatureSeries_IndividualReadings(t *testing.T) {
 	store.CreateTemperature(db, baby.ID, user.ID, today+"T08:00:00Z", 37.2, "rectal", nil)
 	store.CreateTemperature(db, baby.ID, user.ID, today+"T14:00:00Z", 37.8, "axillary", nil)
 
-	series, err := store.GetTemperatureSeries(db, baby.ID, today, today)
+	series, err := store.GetTemperatureSeries(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetTemperatureSeries failed: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestGetWeightSeries_IndividualReadings(t *testing.T) {
 	store.CreateWeight(db, baby.ID, user.ID, today+"T10:00:00Z", 4.5, &src, nil)
 	store.CreateWeight(db, baby.ID, user.ID, today+"T15:00:00Z", 4.55, nil, nil)
 
-	series, err := store.GetWeightSeries(db, baby.ID, today, today)
+	series, err := store.GetWeightSeries(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetWeightSeries failed: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestGetAbdomenGirthSeries_IndividualReadings(t *testing.T) {
 	// One without girth - should be excluded
 	store.CreateAbdomen(db, baby.ID, user.ID, today+"T18:00:00Z", "soft", false, nil, nil)
 
-	series, err := store.GetAbdomenGirthSeries(db, baby.ID, today, today)
+	series, err := store.GetAbdomenGirthSeries(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetAbdomenGirthSeries failed: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestGetStoolColorSeries_ColorCodedData(t *testing.T) {
 	store.CreateStool(db, baby.ID, user.ID, today+"T10:00:00Z", 5, &green, nil, nil, nil)
 	store.CreateStool(db, baby.ID, user.ID, today+"T14:00:00Z", 3, &yellow, nil, nil, nil)
 
-	series, err := store.GetStoolColorSeries(db, baby.ID, today, today)
+	series, err := store.GetStoolColorSeries(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetStoolColorSeries failed: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestGetLabTrends_GroupsByTestName(t *testing.T) {
 	store.CreateLabResult(db, baby.ID, user.ID, today+"T14:00:00Z", "bilirubin", "4.8", &unit, nil, nil)
 	store.CreateLabResult(db, baby.ID, user.ID, today+"T10:00:00Z", "ALT", "45", &unit, nil, nil)
 
-	trends, err := store.GetLabTrends(db, baby.ID, today, today)
+	trends, err := store.GetLabTrends(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetLabTrends failed: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestGetLabTrends_EmptyData(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	today := time.Now().UTC().Format("2006-01-02")
-	trends, err := store.GetLabTrends(db, baby.ID, today, today)
+	trends, err := store.GetLabTrends(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetLabTrends failed: %v", err)
 	}
@@ -333,12 +333,12 @@ func TestGetFeedingDaily_InvalidDate(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	_, err := store.GetFeedingDaily(db, baby.ID, "not-a-date", "2024-01-01")
+	_, err := store.GetFeedingDaily(db, baby.ID, "not-a-date", "2024-01-01", time.UTC)
 	if err == nil {
 		t.Error("expected error for invalid from date")
 	}
 
-	_, err = store.GetFeedingDaily(db, baby.ID, "2024-01-01", "not-a-date")
+	_, err = store.GetFeedingDaily(db, baby.ID, "2024-01-01", "not-a-date", time.UTC)
 	if err == nil {
 		t.Error("expected error for invalid to date")
 	}
@@ -352,7 +352,7 @@ func TestGetDiaperDaily_InvalidDate(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	_, err := store.GetDiaperDaily(db, baby.ID, "bad", "2024-01-01")
+	_, err := store.GetDiaperDaily(db, baby.ID, "bad", "2024-01-01", time.UTC)
 	if err == nil {
 		t.Error("expected error for invalid date")
 	}
@@ -366,7 +366,7 @@ func TestGetTemperatureSeries_InvalidDate(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	_, err := store.GetTemperatureSeries(db, baby.ID, "bad", "2024-01-01")
+	_, err := store.GetTemperatureSeries(db, baby.ID, "bad", "2024-01-01", time.UTC)
 	if err == nil {
 		t.Error("expected error for invalid date")
 	}
@@ -380,7 +380,7 @@ func TestGetWeightSeries_InvalidDate(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	_, err := store.GetWeightSeries(db, baby.ID, "bad", "2024-01-01")
+	_, err := store.GetWeightSeries(db, baby.ID, "bad", "2024-01-01", time.UTC)
 	if err == nil {
 		t.Error("expected error for invalid date")
 	}
@@ -394,7 +394,7 @@ func TestGetAbdomenGirthSeries_InvalidDate(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	_, err := store.GetAbdomenGirthSeries(db, baby.ID, "bad", "2024-01-01")
+	_, err := store.GetAbdomenGirthSeries(db, baby.ID, "bad", "2024-01-01", time.UTC)
 	if err == nil {
 		t.Error("expected error for invalid date")
 	}
@@ -408,7 +408,7 @@ func TestGetStoolColorSeries_InvalidDate(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	_, err := store.GetStoolColorSeries(db, baby.ID, "bad", "2024-01-01")
+	_, err := store.GetStoolColorSeries(db, baby.ID, "bad", "2024-01-01", time.UTC)
 	if err == nil {
 		t.Error("expected error for invalid date")
 	}
@@ -422,7 +422,7 @@ func TestGetLabTrends_InvalidDate(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	_, err := store.GetLabTrends(db, baby.ID, "bad", "2024-01-01")
+	_, err := store.GetLabTrends(db, baby.ID, "bad", "2024-01-01", time.UTC)
 	if err == nil {
 		t.Error("expected error for invalid date")
 	}
@@ -445,7 +445,7 @@ func TestGetFeedingDaily_DateFiltering(t *testing.T) {
 	store.CreateFeeding(db, baby.ID, user.ID, today+"T10:00:00Z", "formula", &vol, &calDen, nil, nil, 67.0)
 
 	// Query only today
-	series, err := store.GetFeedingDaily(db, baby.ID, today, today)
+	series, err := store.GetFeedingDaily(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetFeedingDaily failed: %v", err)
 	}

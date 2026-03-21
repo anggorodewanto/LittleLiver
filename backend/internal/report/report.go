@@ -77,10 +77,14 @@ type bruisingEntry struct {
 
 // Generate produces a PDF report for the given baby within the date range [from, to].
 // The PDF is written to w. If objStore is non-nil, photo thumbnails are fetched and embedded.
-func Generate(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, to string, w io.Writer) error {
+// loc specifies the timezone for date interpretation; if nil, UTC is used.
+func Generate(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, to string, w io.Writer, loc *time.Location) error {
+	if loc == nil {
+		loc = time.UTC
+	}
 	now := time.Now().UTC()
 
-	data, err := queryReportData(db, objStore, baby, from, to, now)
+	data, err := queryReportData(db, objStore, baby, from, to, now, loc)
 	if err != nil {
 		return fmt.Errorf("query report data: %w", err)
 	}
@@ -97,40 +101,40 @@ func Generate(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, 
 }
 
 // queryReportData fetches all data needed for the report.
-func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, to string, now time.Time) (*reportData, error) {
+func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby, from, to string, now time.Time, loc *time.Location) (*reportData, error) {
 	babyID := baby.ID
 
-	summary, err := store.GetDashboardSummary(db, babyID, from, to)
+	summary, err := store.GetDashboardSummary(db, babyID, from, to, loc)
 	if err != nil {
 		return nil, fmt.Errorf("dashboard summary: %w", err)
 	}
 
-	stools, err := store.GetStoolColorSeries(db, babyID, from, to)
+	stools, err := store.GetStoolColorSeries(db, babyID, from, to, loc)
 	if err != nil {
 		return nil, fmt.Errorf("stool color series: %w", err)
 	}
 
-	temps, err := store.GetTemperatureSeries(db, babyID, from, to)
+	temps, err := store.GetTemperatureSeries(db, babyID, from, to, loc)
 	if err != nil {
 		return nil, fmt.Errorf("temperature series: %w", err)
 	}
 
-	feedings, err := store.GetFeedingDaily(db, babyID, from, to)
+	feedings, err := store.GetFeedingDaily(db, babyID, from, to, loc)
 	if err != nil {
 		return nil, fmt.Errorf("feeding daily: %w", err)
 	}
 
-	medLogs, err := queryMedAdherence(db, babyID, from, to)
+	medLogs, err := queryMedAdherence(db, babyID, from, to, loc)
 	if err != nil {
 		return nil, fmt.Errorf("med adherence: %w", err)
 	}
 
-	notes, err := queryNotes(db, babyID, from, to)
+	notes, err := queryNotes(db, babyID, from, to, loc)
 	if err != nil {
 		return nil, fmt.Errorf("notes: %w", err)
 	}
 
-	bruisingData, err := queryBruising(db, babyID, from, to)
+	bruisingData, err := queryBruising(db, babyID, from, to, loc)
 	if err != nil {
 		return nil, fmt.Errorf("bruising: %w", err)
 	}
@@ -140,12 +144,12 @@ func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby,
 		return nil, fmt.Errorf("active medications: %w", err)
 	}
 
-	weights, err := store.GetWeightSeries(db, babyID, from, to)
+	weights, err := store.GetWeightSeries(db, babyID, from, to, loc)
 	if err != nil {
 		return nil, fmt.Errorf("weight series: %w", err)
 	}
 
-	labTrends, err := store.GetLabTrends(db, babyID, from, to)
+	labTrends, err := store.GetLabTrends(db, babyID, from, to, loc)
 	if err != nil {
 		return nil, fmt.Errorf("lab trends: %w", err)
 	}
@@ -161,7 +165,7 @@ func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby,
 	}
 
 	// Fetch photo thumbnails from storage
-	photoThumbs := fetchPhotoThumbnails(db, objStore, babyID, from, to)
+	photoThumbs := fetchPhotoThumbnails(db, objStore, babyID, from, to, loc)
 
 	return &reportData{
 		summary:     summary,
@@ -181,12 +185,12 @@ func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby,
 
 // fetchPhotoThumbnails queries linked photo_uploads for the baby in the date range
 // and fetches thumbnail bytes from object storage.
-func fetchPhotoThumbnails(db *sql.DB, objStore storage.ObjectStore, babyID, from, to string) [][]byte {
+func fetchPhotoThumbnails(db *sql.DB, objStore storage.ObjectStore, babyID, from, to string, loc *time.Location) [][]byte {
 	if objStore == nil {
 		return nil
 	}
 
-	fromTime, toTime, err := store.ParseDateRange(from, to)
+	fromTime, toTime, err := store.ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil
 	}
@@ -236,8 +240,8 @@ func fetchPhotoThumbnails(db *sql.DB, objStore storage.ObjectStore, babyID, from
 }
 
 // queryMedAdherence computes medication adherence for the date range.
-func queryMedAdherence(db *sql.DB, babyID, from, to string) ([]medAdherence, error) {
-	fromTime, toTime, err := store.ParseDateRange(from, to)
+func queryMedAdherence(db *sql.DB, babyID, from, to string, loc *time.Location) ([]medAdherence, error) {
+	fromTime, toTime, err := store.ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}
@@ -278,8 +282,8 @@ func queryMedAdherence(db *sql.DB, babyID, from, to string) ([]medAdherence, err
 }
 
 // queryNotes fetches general notes for the date range.
-func queryNotes(db *sql.DB, babyID, from, to string) ([]noteEntry, error) {
-	fromTime, toTime, err := store.ParseDateRange(from, to)
+func queryNotes(db *sql.DB, babyID, from, to string, loc *time.Location) ([]noteEntry, error) {
+	fromTime, toTime, err := store.ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}
@@ -315,8 +319,8 @@ func queryNotes(db *sql.DB, babyID, from, to string) ([]noteEntry, error) {
 }
 
 // queryBruising fetches bruising observations for the date range.
-func queryBruising(db *sql.DB, babyID, from, to string) ([]bruisingEntry, error) {
-	fromTime, toTime, err := store.ParseDateRange(from, to)
+func queryBruising(db *sql.DB, babyID, from, to string, loc *time.Location) ([]bruisingEntry, error) {
+	fromTime, toTime, err := store.ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}

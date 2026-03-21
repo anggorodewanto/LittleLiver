@@ -37,9 +37,10 @@ type UpcomingMed struct {
 }
 
 // GetDashboardSummary returns aggregated summary cards for a baby within the given date range.
-// from and to are in YYYY-MM-DD format. last_temp and last_weight ignore the date range.
-func GetDashboardSummary(db *sql.DB, babyID, from, to string) (*DashboardSummary, error) {
-	fromTime, toTime, err := ParseDateRange(from, to)
+// from and to are in YYYY-MM-DD format. loc specifies the timezone for date interpretation.
+// last_temp and last_weight ignore the date range.
+func GetDashboardSummary(db *sql.DB, babyID, from, to string, loc *time.Location) (*DashboardSummary, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
 		return nil, err
 	}

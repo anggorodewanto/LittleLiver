@@ -17,7 +17,7 @@ func TestGetDashboardSummary_EmptyData(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	today := time.Now().UTC().Format("2006-01-02")
-	summary, err := store.GetDashboardSummary(db, baby.ID, today, today)
+	summary, err := store.GetDashboardSummary(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetDashboardSummary failed: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestGetDashboardSummary_WithData(t *testing.T) {
 	store.CreateTemperature(db, baby.ID, user.ID, ts, 37.2, "rectal", nil)
 	store.CreateWeight(db, baby.ID, user.ID, ts, 4.5, nil, nil)
 
-	summary, err := store.GetDashboardSummary(db, baby.ID, today, today)
+	summary, err := store.GetDashboardSummary(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetDashboardSummary failed: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestGetDashboardSummary_DateFiltering(t *testing.T) {
 	store.CreateFeeding(db, baby.ID, user.ID, tsToday, "formula", &vol, &calDen, nil, nil, 67.0)
 
 	// Query today only
-	summary, err := store.GetDashboardSummary(db, baby.ID, today, today)
+	summary, err := store.GetDashboardSummary(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetDashboardSummary failed: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestGetDashboardSummary_LastTemperatureAndWeight_IgnoreDateRange(t *testing
 	store.CreateWeight(db, baby.ID, user.ID, tsWeekAgo, 5.2, nil, nil)
 
 	// Query today - should still return last temp and weight
-	summary, err := store.GetDashboardSummary(db, baby.ID, today, today)
+	summary, err := store.GetDashboardSummary(db, baby.ID, today, today, time.UTC)
 	if err != nil {
 		t.Fatalf("GetDashboardSummary failed: %v", err)
 	}
@@ -266,6 +266,96 @@ func TestGetUpcomingMeds_ExcludesInactive(t *testing.T) {
 	}
 	if meds[0].Name != "Ursodiol" {
 		t.Errorf("expected Ursodiol, got %s", meds[0].Name)
+	}
+}
+
+func TestParseDateRangeInLocation_NonUTC(t *testing.T) {
+	t.Parallel()
+
+	// For Asia/Tokyo (UTC+9), "2025-03-15" means 2025-03-15T00:00:00+09:00 = 2025-03-14T15:00:00Z
+	// For UTC, "2025-03-15" means 2025-03-15T00:00:00Z
+	// So the from times should differ.
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		t.Fatalf("load Tokyo location: %v", err)
+	}
+
+	fromUTC, _, err := store.ParseDateRange("2025-03-15", "2025-03-15")
+	if err != nil {
+		t.Fatalf("ParseDateRange failed: %v", err)
+	}
+
+	fromTZ, _, err := store.ParseDateRangeInLocation("2025-03-15", "2025-03-15", tokyo)
+	if err != nil {
+		t.Fatalf("ParseDateRangeInLocation failed: %v", err)
+	}
+
+	// UTC parsing: from = "2025-03-15T00:00:00Z"
+	// Tokyo parsing: from = "2025-03-14T15:00:00Z" (midnight Tokyo = 15:00 UTC previous day)
+	if fromUTC == fromTZ {
+		t.Errorf("expected different from times for UTC vs Tokyo, both got %s", fromUTC)
+	}
+	if fromTZ != "2025-03-14T15:00:00Z" {
+		t.Errorf("expected fromTZ=2025-03-14T15:00:00Z, got %s", fromTZ)
+	}
+}
+
+func TestParseDateRangeInLocation_UTC_BackwardsCompatible(t *testing.T) {
+	t.Parallel()
+
+	fromOld, toOld, err := store.ParseDateRange("2025-03-15", "2025-03-16")
+	if err != nil {
+		t.Fatalf("ParseDateRange failed: %v", err)
+	}
+
+	fromNew, toNew, err := store.ParseDateRangeInLocation("2025-03-15", "2025-03-16", time.UTC)
+	if err != nil {
+		t.Fatalf("ParseDateRangeInLocation failed: %v", err)
+	}
+
+	if fromOld != fromNew {
+		t.Errorf("expected same from for UTC, got %s vs %s", fromOld, fromNew)
+	}
+	if toOld != toNew {
+		t.Errorf("expected same to for UTC, got %s vs %s", toOld, toNew)
+	}
+}
+
+func TestGetDashboardSummary_WithTimezone(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	// Insert a feeding at 2025-03-15T01:00:00Z (UTC)
+	// In Asia/Tokyo (UTC+9) this is 2025-03-15T10:00:00+09:00 — i.e., March 15th in Tokyo
+	// In UTC this is March 15th too
+	// But for date "2025-03-15" in Tokyo, the range is 2025-03-14T15:00:00Z to 2025-03-15T15:00:00Z
+	// For date "2025-03-15" in UTC, the range is 2025-03-15T00:00:00Z to 2025-03-16T00:00:00Z
+	//
+	// Insert a feeding at 2025-03-14T16:00:00Z — this is March 15th in Tokyo but March 14th in UTC
+	store.CreateFeeding(db, baby.ID, user.ID, "2025-03-14T16:00:00Z", "formula", nil, nil, nil, nil, 67.0)
+
+	tokyo, _ := time.LoadLocation("Asia/Tokyo")
+
+	// Query for March 15 with Tokyo timezone — should include the feeding
+	summaryTZ, err := store.GetDashboardSummary(db, baby.ID, "2025-03-15", "2025-03-15", tokyo)
+	if err != nil {
+		t.Fatalf("GetDashboardSummary with tz failed: %v", err)
+	}
+	if summaryTZ.TotalFeeds != 1 {
+		t.Errorf("expected 1 feed for March 15 in Tokyo, got %d", summaryTZ.TotalFeeds)
+	}
+
+	// Query for March 15 with UTC — should NOT include the feeding (it's March 14 in UTC)
+	summaryUTC, err := store.GetDashboardSummary(db, baby.ID, "2025-03-15", "2025-03-15", time.UTC)
+	if err != nil {
+		t.Fatalf("GetDashboardSummary with UTC failed: %v", err)
+	}
+	if summaryUTC.TotalFeeds != 0 {
+		t.Errorf("expected 0 feeds for March 15 in UTC, got %d", summaryUTC.TotalFeeds)
 	}
 }
 

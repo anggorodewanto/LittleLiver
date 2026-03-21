@@ -72,6 +72,14 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		// Extract timezone from X-Timezone header
+		loc := time.UTC
+		if tz := optionalTimezone(r); tz != nil {
+			if parsed, err := time.LoadLocation(*tz); err == nil {
+				loc = parsed
+			}
+		}
+
 		// Parse from/to, default to today
 		today := time.Now().UTC().Format(model.DateFormat)
 		from := r.URL.Query().Get("from")
@@ -83,7 +91,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			to = today
 		}
 
-		summary, err := store.GetDashboardSummary(db, baby.ID, from, to)
+		summary, err := store.GetDashboardSummary(db, baby.ID, from, to, loc)
 		if err != nil {
 			log.Printf("dashboard summary: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -105,49 +113,49 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Fetch chart data series
-		feedingDaily, err := store.GetFeedingDaily(db, baby.ID, from, to)
+		feedingDaily, err := store.GetFeedingDaily(db, baby.ID, from, to, loc)
 		if err != nil {
 			log.Printf("feeding daily: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		diaperDaily, err := store.GetDiaperDaily(db, baby.ID, from, to)
+		diaperDaily, err := store.GetDiaperDaily(db, baby.ID, from, to, loc)
 		if err != nil {
 			log.Printf("diaper daily: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		tempSeries, err := store.GetTemperatureSeries(db, baby.ID, from, to)
+		tempSeries, err := store.GetTemperatureSeries(db, baby.ID, from, to, loc)
 		if err != nil {
 			log.Printf("temperature series: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		weightSeries, err := store.GetWeightSeries(db, baby.ID, from, to)
+		weightSeries, err := store.GetWeightSeries(db, baby.ID, from, to, loc)
 		if err != nil {
 			log.Printf("weight series: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		abdomenSeries, err := store.GetAbdomenGirthSeries(db, baby.ID, from, to)
+		abdomenSeries, err := store.GetAbdomenGirthSeries(db, baby.ID, from, to, loc)
 		if err != nil {
 			log.Printf("abdomen girth series: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		stoolColorSeries, err := store.GetStoolColorSeries(db, baby.ID, from, to)
+		stoolColorSeries, err := store.GetStoolColorSeries(db, baby.ID, from, to, loc)
 		if err != nil {
 			log.Printf("stool color series: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 
-		labTrends, err := store.GetLabTrends(db, baby.ID, from, to)
+		labTrends, err := store.GetLabTrends(db, baby.ID, from, to, loc)
 		if err != nil {
 			log.Printf("lab trends: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)

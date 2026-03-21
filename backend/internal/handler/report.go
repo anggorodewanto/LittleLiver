@@ -42,8 +42,16 @@ func ReportHandler(db *sql.DB, objStore storage.ObjectStore) http.HandlerFunc {
 			return
 		}
 
+		// Extract timezone from X-Timezone header
+		loc := time.UTC
+		if tz := optionalTimezone(r); tz != nil {
+			if parsed, err := time.LoadLocation(*tz); err == nil {
+				loc = parsed
+			}
+		}
+
 		var buf bytes.Buffer
-		if err := report.Generate(db, objStore, baby, from, to, &buf); err != nil {
+		if err := report.Generate(db, objStore, baby, from, to, &buf, loc); err != nil {
 			log.Printf("generate report: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return

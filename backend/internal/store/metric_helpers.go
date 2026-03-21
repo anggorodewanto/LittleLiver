@@ -140,20 +140,39 @@ func listMetricWithTZ[T any](
 	return page, nil
 }
 
-// ParseDateRange parses from/to date strings (YYYY-MM-DD) and returns datetime boundaries
-// suitable for SQL WHERE clauses: fromTime is start of from-date, toTime is start of day after to-date.
-func ParseDateRange(from, to string) (string, string, error) {
-	fromDate, err := time.Parse(model.DateFormat, from)
+// ParseDateRangeInLocation parses from/to date strings (YYYY-MM-DD) in the given location
+// and returns UTC datetime boundaries suitable for SQL WHERE clauses:
+// fromTime is start of from-date in loc converted to UTC, toTime is start of day after to-date in loc converted to UTC.
+func ParseDateRangeInLocation(from, to string, loc *time.Location) (string, string, error) {
+	fromDate, err := time.ParseInLocation(model.DateFormat, from, loc)
 	if err != nil {
 		return "", "", fmt.Errorf("parse from date: %w", err)
 	}
-	toDate, err := time.Parse(model.DateFormat, to)
+	toDate, err := time.ParseInLocation(model.DateFormat, to, loc)
 	if err != nil {
 		return "", "", fmt.Errorf("parse to date: %w", err)
 	}
-	fromTime := fromDate.Format(model.DateTimeFormat)
-	toTime := toDate.Add(24 * time.Hour).Format(model.DateTimeFormat)
+	fromTime := fromDate.UTC().Format(model.DateTimeFormat)
+	toTime := toDate.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
 	return fromTime, toTime, nil
+}
+
+// ParseDateRange parses from/to date strings (YYYY-MM-DD) and returns datetime boundaries
+// suitable for SQL WHERE clauses: fromTime is start of from-date, toTime is start of day after to-date.
+// Dates are parsed in UTC. For timezone-aware parsing, use ParseDateRangeInLocation.
+func ParseDateRange(from, to string) (string, string, error) {
+	return ParseDateRangeInLocation(from, to, time.UTC)
+}
+
+// tzOffsetSeconds returns the UTC offset in seconds for the given date string
+// parsed in the specified location. This is used for timezone-aware DATE() grouping in SQLite.
+func tzOffsetSeconds(dateStr string, loc *time.Location) int {
+	t, err := time.ParseInLocation(model.DateFormat, dateStr, loc)
+	if err != nil {
+		return 0
+	}
+	_, offset := t.Zone()
+	return offset
 }
 
 // emptySliceIfNil returns an empty slice if s is nil, otherwise returns s unchanged.
