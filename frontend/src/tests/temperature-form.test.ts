@@ -90,6 +90,45 @@ describe('TemperatureForm', () => {
 		expect(payload.notes).toBe('after bath');
 	});
 
+	it('shows cholangitis warning when rectal temperature >= 38.0', async () => {
+		render(TemperatureForm, { props: { onsubmit } });
+
+		await fireEvent.input(screen.getByLabelText(/temperature/i), {
+			target: { value: '38.0' }
+		});
+		await fireEvent.change(screen.getByLabelText(/method/i), {
+			target: { value: 'rectal' }
+		});
+
+		expect(screen.getByText(/cholangitis/i)).toBeInTheDocument();
+	});
+
+	it('shows cholangitis warning when axillary temperature >= 37.5', async () => {
+		render(TemperatureForm, { props: { onsubmit } });
+
+		await fireEvent.input(screen.getByLabelText(/temperature/i), {
+			target: { value: '37.5' }
+		});
+		await fireEvent.change(screen.getByLabelText(/method/i), {
+			target: { value: 'axillary' }
+		});
+
+		expect(screen.getByText(/cholangitis/i)).toBeInTheDocument();
+	});
+
+	it('does not show fever warning when temperature is below threshold', async () => {
+		render(TemperatureForm, { props: { onsubmit } });
+
+		await fireEvent.input(screen.getByLabelText(/temperature/i), {
+			target: { value: '37.0' }
+		});
+		await fireEvent.change(screen.getByLabelText(/method/i), {
+			target: { value: 'rectal' }
+		});
+
+		expect(screen.queryByText(/cholangitis/i)).not.toBeInTheDocument();
+	});
+
 	it('disables submit button when submitting', () => {
 		render(TemperatureForm, { props: { onsubmit, submitting: true } });
 

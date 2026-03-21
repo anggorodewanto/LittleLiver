@@ -37,7 +37,11 @@
 			const data = await apiClient.get<MedLogsResponse>(
 				`/babies/${babyId}/med-logs?medication_id=${medicationId}`
 			);
-			logs = data.med_logs;
+			logs = [...data.med_logs].sort((a, b) => {
+				const ta = a.scheduled_time ?? a.created_at;
+				const tb = b.scheduled_time ?? b.created_at;
+				return tb.localeCompare(ta);
+			});
 		} catch {
 			error = 'Failed to load dose logs';
 		} finally {

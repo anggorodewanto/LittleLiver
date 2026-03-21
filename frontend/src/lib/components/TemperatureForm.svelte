@@ -22,6 +22,22 @@
 	let notes = $state('');
 	let validationError = $state('');
 
+	const FEVER_THRESHOLDS: Record<string, number> = {
+		rectal: 38.0,
+		axillary: 37.5,
+		ear: 38.0,
+		forehead: 37.5
+	};
+
+	let feverWarning = $derived.by(() => {
+		if (!value || !method) return '';
+		const threshold = FEVER_THRESHOLDS[method];
+		if (threshold && Number(value) >= threshold) {
+			return 'Fever detected. Contact your hepatology team immediately. Fever after Kasai can indicate cholangitis.';
+		}
+		return '';
+	});
+
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 
@@ -76,6 +92,10 @@
 		<label for="temp-notes">Notes</label>
 		<textarea id="temp-notes" bind:value={notes}></textarea>
 	</div>
+
+	{#if feverWarning}
+		<p role="alert" class="fever-warning">{feverWarning}</p>
+	{/if}
 
 	{#if validationError}
 		<p role="alert">{validationError}</p>
