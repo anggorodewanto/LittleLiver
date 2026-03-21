@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/johnfercher/maroto/v2"
@@ -41,6 +42,8 @@ type reportData struct {
 	feedings    []store.FeedingDailyEntry
 	medLogs     []medAdherence
 	notes       []noteEntry
+	bruising    []bruisingEntry
+	activeMeds  []model.Medication
 	weights     []store.WeightSeriesEntry
 	labTrends   map[string][]store.LabTrendEntry
 	whoCurves   []who.PercentileCurve
@@ -61,6 +64,15 @@ type noteEntry struct {
 	Timestamp string
 	Content   string
 	Category  string
+}
+
+// bruisingEntry holds a bruising observation for the report.
+type bruisingEntry struct {
+	Timestamp    string
+	Location     string
+	SizeEstimate string
+	Color        string
+	Notes        string
 }
 
 // Generate produces a PDF report for the given baby within the date range [from, to].
@@ -118,6 +130,16 @@ func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby,
 		return nil, fmt.Errorf("notes: %w", err)
 	}
 
+	bruisingData, err := queryBruising(db, babyID, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("bruising: %w", err)
+	}
+
+	activeMeds, err := queryActiveMedications(db, babyID)
+	if err != nil {
+		return nil, fmt.Errorf("active medications: %w", err)
+	}
+
 	weights, err := store.GetWeightSeries(db, babyID, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("weight series: %w", err)
@@ -148,6 +170,8 @@ func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby,
 		feedings:    feedings,
 		medLogs:     medLogs,
 		notes:       notes,
+		bruising:    bruisingData,
+		activeMeds:  activeMeds,
 		weights:     weights,
 		labTrends:   labTrends,
 		whoCurves:   whoCurves,
@@ -290,6 +314,63 @@ func queryNotes(db *sql.DB, babyID, from, to string) ([]noteEntry, error) {
 	return result, nil
 }
 
+// queryBruising fetches bruising observations for the date range.
+func queryBruising(db *sql.DB, babyID, from, to string) ([]bruisingEntry, error) {
+	fromTime, toTime, err := store.ParseDateRange(from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.Query(
+		`SELECT timestamp, location, size_estimate, COALESCE(color, ''), COALESCE(notes, '')
+		 FROM bruising
+		 WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?
+		 ORDER BY timestamp ASC`,
+		babyID, fromTime, toTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query bruising: %w", err)
+	}
+	defer rows.Close()
+
+	var result []bruisingEntry
+	for rows.Next() {
+		var b bruisingEntry
+		if err := rows.Scan(&b.Timestamp, &b.Location, &b.SizeEstimate, &b.Color, &b.Notes); err != nil {
+			return nil, fmt.Errorf("scan bruising: %w", err)
+		}
+		result = append(result, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if result == nil {
+		result = make([]bruisingEntry, 0)
+	}
+	return result, nil
+}
+
+// queryActiveMedications fetches active medications for the baby.
+func queryActiveMedications(db *sql.DB, babyID string) ([]model.Medication, error) {
+	allMeds, err := store.ListMedications(db, babyID)
+	if err != nil {
+		return nil, err
+	}
+
+	var active []model.Medication
+	for _, m := range allMeds {
+		if m.Active {
+			active = append(active, m)
+		}
+	}
+
+	if active == nil {
+		active = make([]model.Medication, 0)
+	}
+	return active, nil
+}
+
 // buildPDF constructs the maroto PDF document.
 func buildPDF(baby *model.Baby, from, to string, data *reportData, now time.Time) core.Maroto {
 	cfg := config.NewBuilder().
@@ -303,12 +384,12 @@ func buildPDF(baby *model.Baby, from, to string, data *reportData, now time.Time
 	m := maroto.New(cfg)
 
 	addHeader(m, baby, from, to, now)
-	addSummarySection(m, data.summary)
+	addSummarySection(m, data.summary, baby, now, data.activeMeds)
 	addStoolColorTable(m, data.stools)
 	addTemperatureTable(m, data.temps)
 	addFeedingSummary(m, data.feedings)
 	addMedicationAdherence(m, data.medLogs)
-	addNotableObservations(m, data.notes)
+	addNotableObservations(m, data.notes, data.bruising)
 
 	// Charts
 	addChartSection(m, "Stool Color Distribution", data.stools)
@@ -354,13 +435,86 @@ func addWeightChartSection(m core.Maroto, weights []store.WeightSeriesEntry, cur
 	embedChartPNG(m, "Weight Chart (WHO Percentiles)", chartPNG)
 }
 
-// addLabTrendsSection renders a lab trends chart.
+// addLabTrendsSection renders a lab trends chart and results table.
 func addLabTrendsSection(m core.Maroto, trends map[string][]store.LabTrendEntry) {
 	chartPNG, err := renderLabTrendsChart(trends)
-	if err != nil {
+	if err == nil && chartPNG != nil {
+		embedChartPNG(m, "Lab Results Trends", chartPNG)
+	}
+
+	addLabResultsTable(m, trends)
+}
+
+// addLabResultsTable adds a table of lab results after the chart.
+func addLabResultsTable(m core.Maroto, trends map[string][]store.LabTrendEntry) {
+	if len(trends) == 0 {
 		return
 	}
-	embedChartPNG(m, "Lab Results Trends", chartPNG)
+
+	// Flatten all entries and sort by timestamp then test name
+	type flatEntry struct {
+		date        string
+		testName    string
+		value       string
+		unit        string
+		normalRange string
+	}
+
+	var entries []flatEntry
+	for _, trendEntries := range trends {
+		for _, e := range trendEntries {
+			unit := ""
+			if e.Unit != nil {
+				unit = *e.Unit
+			}
+			nr := ""
+			if e.NormalRange != nil {
+				nr = *e.NormalRange
+			}
+			ts := formatTimestamp(e.Timestamp)
+			entries = append(entries, flatEntry{
+				date:        ts,
+				testName:    e.TestName,
+				value:       e.Value,
+				unit:        unit,
+				normalRange: nr,
+			})
+		}
+	}
+
+	if len(entries) == 0 {
+		return
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].date != entries[j].date {
+			return entries[i].date < entries[j].date
+		}
+		return entries[i].testName < entries[j].testName
+	})
+
+	m.AddRows(text.NewRow(8, "Lab Results Table", sectionStyle))
+
+	// Table header
+	m.AddRows(row.New(7).Add(
+		text.NewCol(2, "Date", tableHeaderStyle),
+		text.NewCol(3, "Test Name", tableHeaderStyle),
+		text.NewCol(2, "Value", tableHeaderStyle),
+		text.NewCol(2, "Unit", tableHeaderStyle),
+		text.NewCol(3, "Normal Range", tableHeaderStyle),
+	).WithStyle(headerBg))
+
+	for _, e := range entries {
+		m.AddRows(row.New(6).Add(
+			text.NewCol(2, e.date, tableCellStyle),
+			text.NewCol(3, e.testName, tableCellStyle),
+			text.NewCol(2, e.value, tableCellStyle),
+			text.NewCol(2, e.unit, tableCellStyle),
+			text.NewCol(3, e.normalRange, tableCellStyle),
+		).WithStyle(cellBorder))
+	}
+
+	m.AddRows(spacerRow(3))
 }
 
 // addPhotoAppendix adds a photo appendix section with thumbnails.
@@ -497,8 +651,29 @@ func plural(n int, singular string) string {
 	return singular + "s"
 }
 
+// ordinalSuffix returns the ordinal suffix for an integer (e.g., "st", "nd", "rd", "th").
+func ordinalSuffix(n int) string {
+	if n <= 0 {
+		return "th"
+	}
+	mod100 := n % 100
+	if mod100 >= 11 && mod100 <= 13 {
+		return "th"
+	}
+	switch n % 10 {
+	case 1:
+		return "st"
+	case 2:
+		return "nd"
+	case 3:
+		return "rd"
+	default:
+		return "th"
+	}
+}
+
 // addSummarySection adds the summary section.
-func addSummarySection(m core.Maroto, summary *store.DashboardSummary) {
+func addSummarySection(m core.Maroto, summary *store.DashboardSummary, baby *model.Baby, now time.Time, activeMeds []model.Medication) {
 	m.AddRows(text.NewRow(8, "Summary", sectionStyle))
 
 	m.AddRow(7,
@@ -519,6 +694,11 @@ func addSummarySection(m core.Maroto, summary *store.DashboardSummary) {
 	weightStr := "N/A"
 	if summary.LastWeight != nil {
 		weightStr = fmt.Sprintf("%.2f kg", *summary.LastWeight)
+		ageDays := int(now.Sub(baby.DateOfBirth).Hours() / 24)
+		pct, err := who.Percentile(baby.Sex, ageDays, *summary.LastWeight)
+		if err == nil {
+			weightStr = fmt.Sprintf("%.2f kg (%.0f%s percentile)", *summary.LastWeight, pct, ordinalSuffix(int(pct)))
+		}
 	}
 
 	m.AddRow(7,
@@ -526,6 +706,17 @@ func addSummarySection(m core.Maroto, summary *store.DashboardSummary) {
 		text.NewCol(4, fmt.Sprintf("Last Temp: %s", tempStr), valueStyle),
 		text.NewCol(4, fmt.Sprintf("Last Weight: %s", weightStr), valueStyle),
 	)
+
+	// Current Medications subsection
+	if len(activeMeds) > 0 {
+		m.AddRows(spacerRow(2))
+		m.AddRows(text.NewRow(7, "Current Medications:", labelStyle))
+		for _, med := range activeMeds {
+			m.AddRow(6,
+				text.NewCol(6, fmt.Sprintf("  %s - %s", med.Name, med.Dose), valueStyle),
+			)
+		}
+	}
 
 	m.AddRows(spacerRow(3))
 }
@@ -682,10 +873,10 @@ func addMedicationAdherence(m core.Maroto, meds []medAdherence) {
 }
 
 // addNotableObservations adds the notable observations section.
-func addNotableObservations(m core.Maroto, notes []noteEntry) {
+func addNotableObservations(m core.Maroto, notes []noteEntry, bruisingEntries []bruisingEntry) {
 	m.AddRows(text.NewRow(8, "Notable Observations", sectionStyle))
 
-	if len(notes) == 0 {
+	if len(notes) == 0 && len(bruisingEntries) == 0 {
 		m.AddRows(text.NewRow(6, "No observations in this period.", valueStyle))
 		return
 	}
@@ -700,6 +891,31 @@ func addNotableObservations(m core.Maroto, notes []noteEntry) {
 			text.NewCol(3, ts+catStr, labelStyle),
 			text.NewCol(9, n.Content, valueStyle),
 		)
+	}
+
+	// Bruising entries
+	if len(bruisingEntries) > 0 {
+		m.AddRows(spacerRow(2))
+		m.AddRows(text.NewRow(7, "Bruising Observations", labelStyle))
+
+		m.AddRows(row.New(7).Add(
+			text.NewCol(2, "Timestamp", tableHeaderStyle),
+			text.NewCol(3, "Location", tableHeaderStyle),
+			text.NewCol(2, "Size", tableHeaderStyle),
+			text.NewCol(2, "Color", tableHeaderStyle),
+			text.NewCol(3, "Notes", tableHeaderStyle),
+		).WithStyle(headerBg))
+
+		for _, b := range bruisingEntries {
+			ts := formatTimestamp(b.Timestamp)
+			m.AddRows(row.New(6).Add(
+				text.NewCol(2, ts, tableCellStyle),
+				text.NewCol(3, b.Location, tableCellStyle),
+				text.NewCol(2, b.SizeEstimate, tableCellStyle),
+				text.NewCol(2, b.Color, tableCellStyle),
+				text.NewCol(3, b.Notes, tableCellStyle),
+			).WithStyle(cellBorder))
+		}
 	}
 }
 

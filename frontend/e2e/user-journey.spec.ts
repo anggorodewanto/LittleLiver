@@ -214,7 +214,7 @@ test.describe('Full user journey', () => {
 
 		// Navigate to page
 		await page.goto('/');
-		await expect(page.getByText('Stool Trend Baby')).toBeVisible({ timeout: 10000 });
+		await expect(page.getByTestId('active-baby-name')).toHaveText('Stool Trend Baby', { timeout: 10000 });
 
 		// Verify stool color trend section appears
 		await expect(page.getByText('Stool Color Trend (7 days)')).toBeVisible();

@@ -57,10 +57,11 @@ type StoolColorSeriesEntry struct {
 
 // LabTrendEntry holds an individual lab result for chart series.
 type LabTrendEntry struct {
-	Timestamp string  `json:"timestamp"`
-	TestName  string  `json:"test_name"`
-	Value     string  `json:"value"`
-	Unit      *string `json:"unit"`
+	Timestamp   string  `json:"timestamp"`
+	TestName    string  `json:"test_name"`
+	Value       string  `json:"value"`
+	Unit        *string `json:"unit"`
+	NormalRange *string `json:"normal_range"`
 }
 
 // GetFeedingDaily returns daily aggregated feeding data within the given date range.
@@ -294,7 +295,7 @@ func GetLabTrends(db *sql.DB, babyID, from, to string) (map[string][]LabTrendEnt
 	}
 
 	rows, err := db.Query(
-		`SELECT timestamp, test_name, value, unit
+		`SELECT timestamp, test_name, value, unit, normal_range
 		 FROM lab_results
 		 WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?
 		 ORDER BY test_name ASC, timestamp ASC`,
@@ -308,11 +309,12 @@ func GetLabTrends(db *sql.DB, babyID, from, to string) (map[string][]LabTrendEnt
 	trends := make(map[string][]LabTrendEntry)
 	for rows.Next() {
 		var e LabTrendEntry
-		var unit sql.NullString
-		if err := rows.Scan(&e.Timestamp, &e.TestName, &e.Value, &unit); err != nil {
+		var unit, normalRange sql.NullString
+		if err := rows.Scan(&e.Timestamp, &e.TestName, &e.Value, &unit, &normalRange); err != nil {
 			return nil, fmt.Errorf("scan lab trend: %w", err)
 		}
 		e.Unit = nullStr(unit)
+		e.NormalRange = nullStr(normalRange)
 		trends[e.TestName] = append(trends[e.TestName], e)
 	}
 	if err := rows.Err(); err != nil {

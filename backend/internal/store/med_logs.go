@@ -106,12 +106,15 @@ func ListMedLogs(db *sql.DB, babyID string, medicationID, from, to, cursor *stri
 		loc = time.UTC
 	}
 
+	// For date filtering, use given_at for given doses and created_at for skipped doses.
+	dateField := "CASE WHEN skipped = 1 THEN strftime('%Y-%m-%dT%H:%M:%SZ', created_at) ELSE given_at END"
+
 	if from != nil {
 		fromDate, err := time.ParseInLocation(model.DateFormat, *from, loc)
 		if err != nil {
 			return nil, fmt.Errorf("parse from date: %w", err)
 		}
-		conditions = append(conditions, "created_at >= ?")
+		conditions = append(conditions, dateField+" >= ?")
 		args = append(args, fromDate.UTC().Format(model.DateTimeFormat))
 	}
 
@@ -122,7 +125,7 @@ func ListMedLogs(db *sql.DB, babyID string, medicationID, from, to, cursor *stri
 		}
 		// to is inclusive of the whole day
 		toTime := toDate.Add(24 * time.Hour).UTC().Format(model.DateTimeFormat)
-		conditions = append(conditions, "created_at < ?")
+		conditions = append(conditions, dateField+" < ?")
 		args = append(args, toTime)
 	}
 

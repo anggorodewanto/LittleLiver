@@ -131,17 +131,102 @@ func TestListMedLogs_FilterByFromTo(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	medID := createTestMed(t, db, baby.ID, user.ID)
 
+	// Given dose with given_at on 2026-03-17
 	_, _ = store.CreateMedLog(db, baby.ID, medID, user.ID, nil, strPtr("2026-03-17T08:00:00Z"), false, nil, nil)
 
-	// Use dynamic dates so the range always covers today
-	from := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
-	to := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
-	page, err := store.ListMedLogs(db, baby.ID, nil, &from, &to, nil, 50, nil)
+	// Filter by the given_at date range — should match the given dose
+	from := "2026-03-17"
+	to := "2026-03-17"
+	page, err := store.ListMedLogs(db, baby.ID, nil, &from, &to, nil, 50, time.UTC)
 	if err != nil {
 		t.Fatalf("ListMedLogs: %v", err)
 	}
 	if len(page.Data) != 1 {
 		t.Errorf("expected 1, got %d", len(page.Data))
+	}
+
+	// Filter by a date range that excludes the given_at — should return 0
+	from2 := "2026-03-18"
+	to2 := "2026-03-19"
+	page2, err := store.ListMedLogs(db, baby.ID, nil, &from2, &to2, nil, 50, time.UTC)
+	if err != nil {
+		t.Fatalf("ListMedLogs: %v", err)
+	}
+	if len(page2.Data) != 0 {
+		t.Errorf("expected 0, got %d", len(page2.Data))
+	}
+}
+
+func TestListMedLogs_FilterByDate_SkippedUsesCreatedAt(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+	medID := createTestMed(t, db, baby.ID, user.ID)
+
+	// Skipped dose — no given_at, created_at is today
+	_, err := store.CreateMedLog(db, baby.ID, medID, user.ID, nil, nil, true, strPtr("vomited"), nil)
+	if err != nil {
+		t.Fatalf("CreateMedLog: %v", err)
+	}
+
+	// Filter covering today — skipped dose should match via created_at
+	today := time.Now().UTC().Format("2006-01-02")
+	page, err := store.ListMedLogs(db, baby.ID, nil, &today, &today, nil, 50, time.UTC)
+	if err != nil {
+		t.Fatalf("ListMedLogs: %v", err)
+	}
+	if len(page.Data) != 1 {
+		t.Errorf("expected 1 skipped dose, got %d", len(page.Data))
+	}
+
+	// Filter for a past date — skipped dose should NOT match
+	past := "2026-01-01"
+	pastEnd := "2026-01-01"
+	page2, err := store.ListMedLogs(db, baby.ID, nil, &past, &pastEnd, nil, 50, time.UTC)
+	if err != nil {
+		t.Fatalf("ListMedLogs: %v", err)
+	}
+	if len(page2.Data) != 0 {
+		t.Errorf("expected 0, got %d", len(page2.Data))
+	}
+}
+
+func TestListMedLogs_FilterByDate_GivenUsesGivenAt(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+	medID := createTestMed(t, db, baby.ID, user.ID)
+
+	// Given dose with given_at in the past (not today)
+	_, err := store.CreateMedLog(db, baby.ID, medID, user.ID, nil, strPtr("2026-01-15T10:00:00Z"), false, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateMedLog: %v", err)
+	}
+
+	// Filter by the given_at date — should find the dose
+	from := "2026-01-15"
+	to := "2026-01-15"
+	page, err := store.ListMedLogs(db, baby.ID, nil, &from, &to, nil, 50, time.UTC)
+	if err != nil {
+		t.Fatalf("ListMedLogs: %v", err)
+	}
+	if len(page.Data) != 1 {
+		t.Errorf("expected 1 given dose, got %d", len(page.Data))
+	}
+
+	// Filter by today (created_at) — given dose should NOT match because
+	// given doses filter by given_at, not created_at
+	today := time.Now().UTC().Format("2006-01-02")
+	page2, err := store.ListMedLogs(db, baby.ID, nil, &today, &today, nil, 50, time.UTC)
+	if err != nil {
+		t.Fatalf("ListMedLogs: %v", err)
+	}
+	if len(page2.Data) != 0 {
+		t.Errorf("expected 0 (given dose should filter by given_at not created_at), got %d", len(page2.Data))
 	}
 }
 
