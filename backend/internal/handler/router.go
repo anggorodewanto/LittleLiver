@@ -123,8 +123,7 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("GET /api/babies/{id}/medications", rateMw(authMw(http.HandlerFunc(ListMedicationsHandler(cfg.db)))))
 			mux.Handle("GET /api/babies/{id}/medications/{medId}", rateMw(authMw(http.HandlerFunc(GetMedicationHandler(cfg.db)))))
 			mux.Handle("PUT /api/babies/{id}/medications/{medId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateMedicationHandler(cfg.db))))))
-			mux.Handle("DELETE /api/babies/{id}/medications/{medId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteMedicationHandler(cfg.db))))))
-
+	
 			// Med-log CRUD endpoints
 			mux.Handle("POST /api/babies/{id}/med-logs", rateMw(authMw(csrfMw(http.HandlerFunc(CreateMedLogHandler(cfg.db))))))
 			mux.Handle("GET /api/babies/{id}/med-logs", rateMw(authMw(http.HandlerFunc(ListMedLogsHandler(cfg.db)))))

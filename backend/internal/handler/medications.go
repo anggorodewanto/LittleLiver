@@ -219,10 +219,3 @@ func UpdateMedicationHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// DeleteMedicationHandler handles DELETE /api/babies/{id}/medications/{medId}.
-// Medications cannot be deleted, only deactivated. Returns 405 Method Not Allowed.
-func DeleteMedicationHandler(_ *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "medications cannot be deleted, use PUT to deactivate", http.StatusMethodNotAllowed)
-	}
-}

@@ -486,34 +486,6 @@ func TestUpdateMedicationHandler_NotFound(t *testing.T) {
 
 // --- DELETE /api/babies/{id}/medications/{medId} returns 405 ---
 
-func TestDeleteMedicationHandler_Returns405(t *testing.T) {
-	t.Parallel()
-	db := testutil.SetupTestDB(t)
-	defer db.Close()
-
-	user := testutil.CreateTestUser(t, db)
-	baby := testutil.CreateTestBaby(t, db, user.ID)
-
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil)
-	if err != nil {
-		t.Fatalf("CreateMedication failed: %v", err)
-	}
-
-	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodDelete, "/api/babies/"+baby.ID+"/medications/"+med.ID)
-
-	authMw := middleware.Auth(db, testCookieName)
-	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
-	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteMedicationHandler(db))))
-
-	mux := http.NewServeMux()
-	mux.Handle("DELETE /api/babies/{id}/medications/{medId}", h)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405, got %d. Body: %s", rec.Code, rec.Body.String())
-	}
-}
 
 // --- Unauthorized access ---
 
