@@ -113,6 +113,12 @@ func UpdateMedication(db *sql.DB, babyID, medID, updatedBy, name, dose, frequenc
 		activeVal = *active
 	}
 
+	// Preserve existing timezone when nil is passed (timezone is set at creation time)
+	timezoneVal := existing.Timezone
+	if timezone != nil {
+		timezoneVal = timezone
+	}
+
 	res, err := db.Exec(
 		`UPDATE medications SET
 			updated_by = ?, name = ?, dose = ?, frequency = ?,
@@ -120,7 +126,7 @@ func UpdateMedication(db *sql.DB, babyID, medID, updatedBy, name, dose, frequenc
 			updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ? AND baby_id = ?`,
 		updatedBy, name, dose, frequency,
-		schedule, timezone, activeVal,
+		schedule, timezoneVal, activeVal,
 		medID, babyID,
 	)
 	if err != nil {

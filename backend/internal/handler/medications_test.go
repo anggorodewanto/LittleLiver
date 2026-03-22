@@ -415,7 +415,7 @@ func TestUpdateMedicationHandler_SetsUpdatedBy(t *testing.T) {
 	}
 }
 
-func TestUpdateMedicationHandler_TimezoneUpdate(t *testing.T) {
+func TestUpdateMedicationHandler_TimezonePreserved(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	defer db.Close()
@@ -429,6 +429,7 @@ func TestUpdateMedicationHandler_TimezoneUpdate(t *testing.T) {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
 
+	// Update with a different X-Timezone header — timezone should NOT change
 	body := `{"name":"Ursodiol","dose":"50mg","frequency":"twice_daily"}`
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPut, "/api/babies/"+baby.ID+"/medications/"+med.ID)
 	req.Body = io.NopCloser(bytes.NewBufferString(body))
@@ -452,8 +453,9 @@ func TestUpdateMedicationHandler_TimezoneUpdate(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
-	if resp["timezone"] != "America/Los_Angeles" {
-		t.Errorf("expected timezone=America/Los_Angeles, got %v", resp["timezone"])
+	// Timezone should be preserved from creation, not overwritten by X-Timezone header
+	if resp["timezone"] != "America/New_York" {
+		t.Errorf("expected timezone=America/New_York (preserved), got %v", resp["timezone"])
 	}
 }
 

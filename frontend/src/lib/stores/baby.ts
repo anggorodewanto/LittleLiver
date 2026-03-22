@@ -94,7 +94,7 @@ export interface UpdateBabyInput {
 	diagnosis_date?: string | null;
 	kasai_date?: string | null;
 	default_cal_per_feed?: number;
-	notes?: string;
+	notes?: string | null;
 }
 
 interface RecalculateResponse {

@@ -8,7 +8,11 @@
 	async function handleLogout(): Promise<void> {
 		loggingOut = true;
 		try {
-			await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+			await fetch('/auth/logout', {
+			method: 'POST',
+			credentials: 'include',
+			headers: { 'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone }
+		});
 		} catch {
 			// ignore
 		}
@@ -29,6 +33,7 @@
 				/>
 				<a href="/trends">Trends</a>
 				<a href="/report">Report</a>
+				<a href="/medications">Medications</a>
 			{/if}
 
 			<a href="/settings">Settings</a>

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -65,6 +66,10 @@ func CreateInvite(db *sql.DB, babyID, createdBy string) (*model.Invite, error) {
 		)
 		if lastErr == nil {
 			break
+		}
+		// Only retry on UNIQUE constraint violations; other errors are fatal
+		if !strings.Contains(lastErr.Error(), "UNIQUE constraint") {
+			return nil, fmt.Errorf("create invite: insert: %w", lastErr)
 		}
 	}
 	if lastErr != nil {

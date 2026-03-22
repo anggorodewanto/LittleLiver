@@ -81,7 +81,7 @@
 				<button
 					type="button"
 					aria-pressed={colorRating === swatch.rating ? 'true' : 'false'}
-					style="background-color: {swatch.color}; width: 48px; height: 48px; border: {colorRating === swatch.rating ? '3px solid black' : '1px solid #ccc'}; border-radius: 8px; cursor: pointer;"
+					style="background-color: {swatch.color}; width: 64px; height: 64px; border: {colorRating === swatch.rating ? '3px solid black' : '1px solid #ccc'}; border-radius: 8px; cursor: pointer; font-size: 0.85rem;"
 					onclick={() => selectColor(swatch.rating)}
 				>
 					{swatch.label}

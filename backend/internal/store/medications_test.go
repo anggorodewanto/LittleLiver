@@ -300,6 +300,36 @@ func TestUpdateMedication_NotFound(t *testing.T) {
 	}
 }
 
+func TestUpdateMedication_PreservesTimezoneWhenNil(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	originalTZ := "America/New_York"
+	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, &originalTZ)
+	if err != nil {
+		t.Fatalf("CreateMedication failed: %v", err)
+	}
+
+	// Update with nil timezone — should preserve the original
+	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Ursodiol", "60mg", "twice_daily", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateMedication failed: %v", err)
+	}
+	if updated.Timezone == nil || *updated.Timezone != originalTZ {
+		t.Errorf("expected timezone=%q (preserved), got %v", originalTZ, updated.Timezone)
+	}
+}
+
 func TestMedicationsSchema_TableExists(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)

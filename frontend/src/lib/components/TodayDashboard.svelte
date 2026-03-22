@@ -292,6 +292,6 @@
 
 	<!-- Quick Log Buttons -->
 	<div class="quick-log-section">
-		<QuickLogButtons onselect={handleQuickLog} />
+		<QuickLogButtons onselect={handleQuickLog} onnavigate={(path) => goto(path)} />
 	</div>
 {/if}

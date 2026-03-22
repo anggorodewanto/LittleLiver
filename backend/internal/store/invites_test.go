@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 )
@@ -422,6 +423,55 @@ func TestRedeemInvite_LinksParentCorrectly(t *testing.T) {
 	}
 	if babies[0].ID != baby.ID {
 		t.Errorf("expected baby ID=%q, got %q", baby.ID, babies[0].ID)
+	}
+}
+
+// TestCreateInvite_NonUniqueErrorNotRetried tests that non-UNIQUE-constraint
+// errors are returned immediately rather than retried.
+func TestCreateInvite_NonUniqueErrorNotRetried(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	// Rename invites table and create a replacement with a CHECK constraint that
+	// always fails on INSERT, causing a non-UNIQUE error.
+	_, err = db.Exec("ALTER TABLE invites RENAME TO invites_bak")
+	if err != nil {
+		t.Fatalf("rename invites: %v", err)
+	}
+	_, err = db.Exec(`CREATE TABLE invites (
+		code TEXT PRIMARY KEY,
+		baby_id TEXT NOT NULL,
+		created_by TEXT NOT NULL,
+		expires_at TEXT NOT NULL,
+		used_by TEXT,
+		used_at TEXT,
+		CHECK(length(code) > 100)
+	)`)
+	if err != nil {
+		t.Fatalf("create fake invites table: %v", err)
+	}
+
+	_, err = CreateInvite(db, baby.ID, user.ID)
+	if err == nil {
+		t.Fatal("expected error from CHECK constraint, got nil")
+	}
+	// The error should be returned immediately (not retried),
+	// so it should mention "insert" not "max retries exceeded"
+	if strings.Contains(err.Error(), "max retries exceeded") {
+		t.Error("should not retry on non-UNIQUE errors; got 'max retries exceeded'")
+	}
+	if !strings.Contains(err.Error(), "create invite: insert") {
+		t.Errorf("expected 'create invite: insert' error, got: %v", err)
 	}
 }
 

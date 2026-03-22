@@ -41,28 +41,22 @@
 	let uploading = $state(false);
 	let photoKeys = $state<string[]>([]);
 
+	$effect(() => {
+		void metric;  // track the metric reactive dependency
+		photoKeys = [];
+		error = '';
+		submitting = false;
+		uploading = false;
+	});
+
 	// Query params for DoseLogForm
 	let medicationId = $derived($page.url.searchParams.get('medication_id') ?? '');
 	let scheduledTime = $derived($page.url.searchParams.get('scheduled_time') ?? undefined);
 
 	async function uploadPhoto(babyId: string, file: File): Promise<string> {
-		const csrfRes = await fetch('/api/csrf-token', { credentials: 'include' });
-		const { csrf_token } = await csrfRes.json();
-
 		const formData = new FormData();
 		formData.append('photo', file);
-		const res = await fetch(`/api/babies/${babyId}/upload`, {
-			method: 'POST',
-			body: formData,
-			credentials: 'include',
-			headers: {
-				'X-CSRF-Token': csrf_token,
-				'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone
-			}
-		});
-
-		if (!res.ok) throw new Error('Upload failed');
-		const data = await res.json();
+		const data = await apiClient.postForm<{ r2_key: string }>(`/babies/${babyId}/upload`, formData);
 		return data.r2_key;
 	}
 

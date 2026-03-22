@@ -7,6 +7,8 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
 // utcTimeFormat is the standard UTC time format used for scheduling timestamps.
@@ -127,6 +129,8 @@ func (s *Scheduler) processMedication(med activeMed, now time.Time) {
 
 // checkScheduleTime checks if a single schedule time is due (at 0, +15, or
 // +30 min offsets) and sends a notification if not suppressed.
+// It checks both today and yesterday in the medication's local timezone to
+// handle cross-midnight follow-ups (e.g., dose at 23:45, tick at 00:15).
 func (s *Scheduler) checkScheduleTime(med activeMed, schedTime string, nowUTC time.Time, loc *time.Location) {
 	nowLocal := nowUTC.In(loc)
 	parts := strings.SplitN(schedTime, ":", 2)
@@ -141,53 +145,41 @@ func (s *Scheduler) checkScheduleTime(med activeMed, schedTime string, nowUTC ti
 		return
 	}
 
-	// Compute the scheduled time in the medication's local timezone for today
-	scheduledLocal := time.Date(
-		nowLocal.Year(), nowLocal.Month(), nowLocal.Day(),
-		hour, minute, 0, 0, loc,
-	)
-	scheduledUTC := scheduledLocal.UTC()
+	// Check both yesterday and today to handle cross-midnight follow-ups
+	days := []time.Time{
+		nowLocal.AddDate(0, 0, -1),
+		nowLocal,
+	}
 
-	// Check offsets: 0, +15, +30 minutes
-	offsets := []time.Duration{0, 15 * time.Minute, 30 * time.Minute}
-	for _, offset := range offsets {
-		triggerTime := scheduledUTC.Add(offset)
-		// Check if "now" matches this trigger time (within the same minute)
-		if nowUTC.Hour() == triggerTime.Hour() && nowUTC.Minute() == triggerTime.Minute() &&
-			nowUTC.Year() == triggerTime.Year() && nowUTC.Month() == triggerTime.Month() &&
-			nowUTC.Day() == triggerTime.Day() {
-			// Check suppression: look for med_log within +/-30 min of scheduled time
-			if s.isDoseSuppressed(med.ID, med.BabyID, scheduledUTC) {
-				return
+	for _, day := range days {
+		scheduledLocal := time.Date(
+			day.Year(), day.Month(), day.Day(),
+			hour, minute, 0, 0, loc,
+		)
+		scheduledUTC := scheduledLocal.UTC()
+
+		// Check offsets: 0, +15, +30 minutes
+		offsets := []time.Duration{0, 15 * time.Minute, 30 * time.Minute}
+		for _, offset := range offsets {
+			triggerTime := scheduledUTC.Add(offset)
+			// Check if "now" matches this trigger time (within the same minute)
+			if nowUTC.Hour() == triggerTime.Hour() && nowUTC.Minute() == triggerTime.Minute() &&
+				nowUTC.Year() == triggerTime.Year() && nowUTC.Month() == triggerTime.Month() &&
+				nowUTC.Day() == triggerTime.Day() {
+				// Check suppression using shared IsDoseCovered
+				covered, err := store.IsDoseCovered(s.db, med.ID, scheduledUTC)
+				if err != nil {
+					log.Printf("scheduler: check suppression for med %s: %v", med.ID, err)
+					covered = false
+				}
+				if covered {
+					return
+				}
+				s.sendNotifications(med, scheduledUTC)
+				return // Only send once per schedule time per tick
 			}
-			s.sendNotifications(med, scheduledUTC)
-			return // Only send once per schedule time per tick
 		}
 	}
-}
-
-// isDoseSuppressed checks if a med_log exists for this medication within
-// +/-30 minutes of the original scheduled time.
-func (s *Scheduler) isDoseSuppressed(medID, babyID string, scheduledUTC time.Time) bool {
-	windowStart := scheduledUTC.Add(-30 * time.Minute).Format(utcTimeFormat)
-	windowEnd := scheduledUTC.Add(30 * time.Minute).Format(utcTimeFormat)
-
-	var count int
-	err := s.db.QueryRow(
-		`SELECT COUNT(*) FROM med_logs
-		 WHERE medication_id = ? AND baby_id = ?
-		   AND (
-		     (skipped = 0 AND given_at >= ? AND given_at <= ?)
-		     OR
-		     (skipped = 1 AND created_at >= ? AND created_at <= ?)
-		   )`,
-		medID, babyID, windowStart, windowEnd, windowStart, windowEnd,
-	).Scan(&count)
-	if err != nil {
-		log.Printf("scheduler: check suppression for med %s: %v", medID, err)
-		return false
-	}
-	return count > 0
 }
 
 // sendNotifications sends push notifications to all subscribed parents of the baby.

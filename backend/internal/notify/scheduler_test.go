@@ -926,6 +926,81 @@ func TestScheduler_DroppedMedLogsTableHandlesError(t *testing.T) {
 	}
 }
 
+// TestScheduler_CrossMidnightFollowUp tests that follow-up notifications fire
+// across midnight boundary. A dose scheduled at 23:45 with a +15 min follow-up
+// should fire at 00:00 the next day, and +30 min follow-up at 00:15.
+func TestScheduler_CrossMidnightFollowUp(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	seedUser(t, db, "u1", "g1", "u1@test.com")
+	seedBaby(t, db, "b1", "u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+
+	// Medication scheduled at 23:45 in America/New_York
+	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"23:45"}, "America/New_York", true)
+
+	loc, _ := time.LoadLocation("America/New_York")
+
+	// The scheduled time is 23:45 EDT on March 18 = 03:45 UTC on March 19
+	scheduledLocal := time.Date(2026, 3, 18, 23, 45, 0, 0, loc)
+	scheduledUTC := scheduledLocal.UTC()
+
+	// At exact scheduled time: should fire
+	mock := &MockPusher{}
+	s := NewScheduler(db, mock)
+	s.Tick(scheduledUTC)
+	if len(mock.Sends) != 1 {
+		t.Fatalf("expected 1 notification at scheduled time 23:45 EDT, got %d", len(mock.Sends))
+	}
+
+	// At +15 min: now is 00:00 EDT on March 19 (next day in local time)
+	// This crosses midnight — the old code would fail here
+	mock2 := &MockPusher{}
+	s2 := NewScheduler(db, mock2)
+	s2.Tick(scheduledUTC.Add(15 * time.Minute))
+	if len(mock2.Sends) != 1 {
+		t.Fatalf("expected 1 notification at +15 min cross-midnight follow-up, got %d", len(mock2.Sends))
+	}
+
+	// At +30 min: now is 00:15 EDT on March 19
+	mock3 := &MockPusher{}
+	s3 := NewScheduler(db, mock3)
+	s3.Tick(scheduledUTC.Add(30 * time.Minute))
+	if len(mock3.Sends) != 1 {
+		t.Fatalf("expected 1 notification at +30 min cross-midnight follow-up, got %d", len(mock3.Sends))
+	}
+}
+
+// TestScheduler_UsesSharedIsDoseCovered tests that the scheduler uses the shared
+// store.IsDoseCovered function with datetime() wrapping for consistent suppression.
+func TestScheduler_UsesSharedIsDoseCovered(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	seedUser(t, db, "u1", "g1", "u1@test.com")
+	seedBaby(t, db, "b1", "u1")
+	testutil.SeedPushSubscription(t, db, "u1", "https://push.example.com/u1")
+
+	seedMedication(t, db, "med1", "b1", "Ursodiol", []string{"08:00"}, "America/New_York", true)
+
+	loc, _ := time.LoadLocation("America/New_York")
+	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, loc).UTC()
+
+	// Log a dose — this should suppress via store.IsDoseCovered
+	seedMedLog(t, db, "med1", "b1", scheduledUTC, scheduledUTC.Add(-5*time.Minute))
+
+	mock := &MockPusher{}
+	s := NewScheduler(db, mock)
+	s.Tick(scheduledUTC)
+
+	if len(mock.Sends) != 0 {
+		t.Fatalf("expected 0 notifications (suppressed via IsDoseCovered), got %d", len(mock.Sends))
+	}
+}
+
 // TestScheduler_NotDueTimeNoNotification tests that at a time that is NOT
 // a scheduled time or follow-up, no notification is sent.
 func TestScheduler_NotDueTimeNoNotification(t *testing.T) {

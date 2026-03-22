@@ -81,7 +81,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		// Parse from/to, default to today
-		today := time.Now().UTC().Format(model.DateFormat)
+		today := time.Now().In(loc).Format(model.DateFormat)
 		from := r.URL.Query().Get("from")
 		if from == "" {
 			from = today

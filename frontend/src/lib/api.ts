@@ -35,7 +35,7 @@ async function buildRequest(path: string, options?: RequestInit): Promise<Respon
 		...(options?.headers as Record<string, string>)
 	};
 
-	if (options?.body) {
+	if (options?.body && typeof options.body === 'string') {
 		headers['Content-Type'] = 'application/json';
 	}
 
@@ -101,6 +101,13 @@ export const apiClient = {
 	del<T>(path: string): Promise<T> {
 		return request<T>(path, {
 			method: 'DELETE'
+		});
+	},
+
+	postForm<T>(path: string, formData: FormData): Promise<T> {
+		return request<T>(path, {
+			method: 'POST',
+			body: formData
 		});
 	},
 

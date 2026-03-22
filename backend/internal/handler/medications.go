@@ -207,9 +207,8 @@ func UpdateMedicationHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		schedule := scheduleTimesToJSON(req.ScheduleTimes)
-		tz := optionalTimezone(r)
 
-		med, err := store.UpdateMedication(db, baby.ID, medID, user.ID, req.Name, req.Dose, req.Frequency, schedule, tz, req.Active)
+		med, err := store.UpdateMedication(db, baby.ID, medID, user.ID, req.Name, req.Dose, req.Frequency, schedule, nil, req.Active)
 		if err != nil {
 			handleStoreError(w, err, "medication not found")
 			return

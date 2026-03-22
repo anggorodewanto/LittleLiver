@@ -23,7 +23,8 @@ vi.mock('$app/navigation', () => ({
 vi.mock('$lib/api', () => ({
 	apiClient: {
 		get: vi.fn().mockResolvedValue({ medications: [] }),
-		post: vi.fn()
+		post: vi.fn(),
+		postForm: vi.fn()
 	}
 }));
 

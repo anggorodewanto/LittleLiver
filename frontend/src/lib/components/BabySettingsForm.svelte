@@ -16,6 +16,7 @@
 	let diagnosisDate = $state(baby.diagnosis_date ?? '');
 	let kasaiDate = $state(baby.kasai_date ?? '');
 	let defaultCalPerFeed = $state(String(baby.default_cal_per_feed ?? 67));
+	let notes = $state(baby.notes ?? '');
 	let recalculate = $state(false);
 	let validationError = $state('');
 
@@ -38,7 +39,8 @@
 			sex,
 			diagnosis_date: diagnosisDate || null,
 			kasai_date: kasaiDate || null,
-			default_cal_per_feed: parseFloat(defaultCalPerFeed)
+			default_cal_per_feed: parseFloat(defaultCalPerFeed),
+			notes: notes.trim() || null
 		};
 
 		onsave(data, calChanged && recalculate);
@@ -77,6 +79,11 @@
 	<div>
 		<label for="settings-cal">Default cal per feed</label>
 		<input id="settings-cal" type="number" step="any" bind:value={defaultCalPerFeed} />
+	</div>
+
+	<div>
+		<label for="settings-notes">Notes</label>
+		<textarea id="settings-notes" bind:value={notes}></textarea>
 	</div>
 
 	{#if calChanged}
