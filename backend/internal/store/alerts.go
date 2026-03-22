@@ -114,7 +114,7 @@ func getAcholicStoolAlert(db *sql.DB, babyID string) ([]Alert, error) {
 	err := db.QueryRow(`
 		SELECT id, color_rating, timestamp FROM stools
 		WHERE baby_id = ?
-		ORDER BY timestamp DESC LIMIT 1`,
+		ORDER BY timestamp DESC, id DESC LIMIT 1`,
 		babyID,
 	).Scan(&id, &colorRating, &tsStr)
 	if err == sql.ErrNoRows {
@@ -145,7 +145,7 @@ func getFeverAlert(db *sql.DB, babyID string) (*Alert, error) {
 	err := db.QueryRow(`
 		SELECT id, value, method, timestamp FROM temperatures
 		WHERE baby_id = ?
-		ORDER BY timestamp DESC LIMIT 1`,
+		ORDER BY timestamp DESC, id DESC LIMIT 1`,
 		babyID,
 	).Scan(&id, &value, &method, &tsStr)
 	if err == sql.ErrNoRows {
@@ -178,7 +178,7 @@ func getJaundiceAlert(db *sql.DB, babyID string) (*Alert, error) {
 	err := db.QueryRow(`
 		SELECT id, jaundice_level, scleral_icterus, timestamp FROM skin_observations
 		WHERE baby_id = ?
-		ORDER BY timestamp DESC LIMIT 1`,
+		ORDER BY timestamp DESC, id DESC LIMIT 1`,
 		babyID,
 	).Scan(&id, &jaundiceLevel, &scleralIcterus, &tsStr)
 	if err == sql.ErrNoRows {

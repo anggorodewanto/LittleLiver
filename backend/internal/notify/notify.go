@@ -49,6 +49,8 @@ func NewWebPusher(cfg VAPIDConfig) *WebPusher {
 }
 
 // Send delivers a push notification using the Web Push protocol.
+// The response body is always closed before returning. The caller
+// should inspect the status code to detect stale subscriptions (410/404).
 func (wp *WebPusher) Send(sub Subscription, payload Payload) (*http.Response, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -67,10 +69,15 @@ func (wp *WebPusher) Send(sub Subscription, payload Payload) (*http.Response, er
 		Subscriber:      wp.config.Subscriber,
 		VAPIDPublicKey:  wp.config.PublicKey,
 		VAPIDPrivateKey: wp.config.PrivateKey,
-		TTL:             60,
+		TTL:             1800, // 30 minutes — matches the follow-up window
 	})
 	if err != nil {
 		return nil, fmt.Errorf("send push: %w", err)
+	}
+
+	// Always close the response body to prevent connection leaks.
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
 	}
 
 	return resp, nil

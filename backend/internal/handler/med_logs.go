@@ -1,11 +1,12 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
-	"database/sql"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
@@ -22,6 +23,7 @@ type medLogRequest struct {
 }
 
 // validate checks that the request is valid for create.
+// Note: given_at validation is lenient on create since the server overrides it with NOW().
 func (req *medLogRequest) validate() (string, bool) {
 	if req.MedicationID == "" {
 		return "medication_id is required", false
@@ -29,15 +31,6 @@ func (req *medLogRequest) validate() (string, bool) {
 	// Mutual exclusivity: skipped and given_at
 	if req.Skipped && req.GivenAt != nil {
 		return "given_at must be null when skipped is true", false
-	}
-	if !req.Skipped && req.GivenAt == nil {
-		return "given_at is required when skipped is false", false
-	}
-	// Validate given_at format if provided
-	if req.GivenAt != nil {
-		if msg, ok := validateTimestamp(*req.GivenAt); !ok {
-			return "invalid given_at: " + msg, false
-		}
 	}
 	// Validate scheduled_time format if provided
 	if req.ScheduledTime != nil {
@@ -141,6 +134,12 @@ func CreateMedLogHandler(db *sql.DB) http.HandlerFunc {
 		if msg, ok := req.validate(); !ok {
 			http.Error(w, msg, http.StatusBadRequest)
 			return
+		}
+
+		// Per spec §3.9: when logging as "given", server sets given_at to NOW()
+		if !req.Skipped {
+			now := time.Now().UTC().Format(model.DateTimeFormat)
+			req.GivenAt = &now
 		}
 
 		// Validate that the medication's baby_id matches

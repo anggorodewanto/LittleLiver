@@ -276,7 +276,7 @@ DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 
 Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/medications`, `/med-logs`, `/labs`, `/notes`
 
-**Photo signed URLs:** For metric types that support photos (see §5.4), the `photo_keys` array in API responses contains signed URLs (TTL: 1 hour) rather than raw R2 keys.
+**Photo signed URLs:** For metric types that support photos (see §5.4), API responses replace the `photo_keys` field with a `photos` array of objects: `[{ "url": "signed_url", "thumbnail_url": "signed_thumb_url" }]` (TTL: 1 hour). The raw `photo_keys` field is not exposed in responses.
 
 **Edit authorization:** Any linked parent can edit or delete any entry for that baby, regardless of who originally logged it (equal access). The `logged_by` field is immutable — it always reflects the original author. An `updated_by` field (nullable `TEXT REFERENCES users(id)`) is set to the editing user's ID on any update.
 
@@ -312,11 +312,11 @@ The medication resource includes both the drug definition and its schedule (no s
 
 ```
 POST   /api/babies/:id/medications           → Create medication (name, dose, frequency, schedule times)
-GET    /api/babies/:id/medications            → List medications (active and inactive)
+GET    /api/babies/:id/medications            → List medications (active and inactive). Returns all medications without pagination (no cursor) — medication counts are small enough per baby.
 GET    /api/babies/:id/medications/:id        → Get single medication by ID
-PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
-POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). `given_at` and `skipped` are mutually exclusive: when logging as "given", the server sets `given_at` to `NOW()` (current time, not `scheduled_time`); when logging as "skipped", `given_at` is null. `skip_reason` is optional even when `skipped=true`. Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
-GET    /api/babies/:id/med-logs?medication_id=&from=&to=&cursor=  → List med-logs, filterable by medication and date range
+PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate). The `timezone` field is mutable via PUT — it is set from the request's `X-Timezone` header (e.g., if the family moves timezones). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
+POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). `given_at` and `skipped` are mutually exclusive: when logging as "given", the server always sets `given_at` to `NOW()` (current time, not `scheduled_time`) — the client does not provide `given_at`; when logging as "skipped", `given_at` is null. `skip_reason` is optional even when `skipped=true`. Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
+GET    /api/babies/:id/med-logs?medication_id=&from=&to=&cursor=  → List med-logs, filterable by medication and date range. Date filtering uses `given_at` for given doses and `created_at` for skipped doses (since med-logs don't have a user-editable `timestamp` field).
 GET    /api/babies/:id/med-logs/:entryId      → Get single med-log entry
 PUT    /api/babies/:id/med-logs/:entryId     → Edit a med-log entry
 DELETE /api/babies/:id/med-logs/:entryId     → Hard-delete a med-log entry
@@ -408,8 +408,8 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
   - `acholic_stool` — stool entry with `color_rating <= 3`. Cleared when most recent stool has `color_rating >= 4`.
   - `fever` — temperature entry exceeding threshold for its method (see §3.6). Cleared when most recent temperature is sub-threshold.
   - `jaundice_worsening` — skin observation with `jaundice_level = 'severe_limbs_and_trunk'` OR `scleral_icterus = true`. Cleared when most recent skin observation has neither condition.
-  - `missed_medication` — checks all scheduled doses in the **last 24 hours** (expanding each active medication's `schedule` array into concrete UTC datetimes using the medication's stored timezone) that are **>30 min past due** with no corresponding `med_log` (given or skipped) with `given_at`/`created_at` within **±30 min** of the scheduled time. This uses the same ±30 min window as notification suppression (§6.4), ensuring consistent behavior. One alert per missed dose. Cleared when a `med_log` is logged for that scheduled time.
-  Alerts are based on the **most recent entry of that type across all time**, regardless of age — there is no lookback window or auto-expiry. `active_alerts` is always computed globally, ignoring any `from`/`to` date range on the dashboard request. **Temperature alerts:** Only one temperature alert exists at a time, based on the **single most recent temperature entry** regardless of method. If that entry exceeds the threshold for its method, the alert fires. If the most recent entry is sub-threshold for its own method, there is no alert — regardless of prior readings by other methods. Since only the most recent entry matters, "recovery" simply means the newest temperature entry is sub-threshold for its own method. The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
+  - `missed_medication` — `entry_id` is a synthetic key (`medication_id + "_" + scheduled_time`) for client-side dismissal tracking, not a real database row ID. Checks all scheduled doses in the **last 24 hours** (expanding each active medication's `schedule` array into concrete UTC datetimes using the medication's stored timezone) that are **>30 min past due** with no corresponding `med_log` (given or skipped) with `given_at`/`created_at` within **±30 min** of the scheduled time. This uses the same ±30 min window as notification suppression (§6.4), ensuring consistent behavior. One alert per missed dose. Cleared when a `med_log` is logged for that scheduled time.
+  Alert queries use `ORDER BY timestamp DESC, id DESC` for deterministic results on timestamp ties. Alerts are based on the **most recent entry of that type across all time**, regardless of age — there is no lookback window or auto-expiry. `active_alerts` is always computed globally, ignoring any `from`/`to` date range on the dashboard request. **Temperature alerts:** Only one temperature alert exists at a time, based on the **single most recent temperature entry** regardless of method. If that entry exceeds the threshold for its method, the alert fires. If the most recent entry is sub-threshold for its own method, there is no alert — regardless of prior readings by other methods. Since only the most recent entry matters, "recovery" simply means the newest temperature entry is sub-threshold for its own method. The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
 Uses the same `GET /api/babies/:id/dashboard?from=&to=` endpoint with the desired date range. Selectable date range (7d / 14d / 30d / 90d / custom). Charts for:
@@ -516,7 +516,7 @@ CREATE TABLE feedings (
     logged_by   TEXT REFERENCES users(id) NOT NULL,
     updated_by  TEXT REFERENCES users(id),  -- set on edit, null initially
     timestamp   DATETIME NOT NULL,
-    feed_type   TEXT NOT NULL,
+    feed_type   TEXT NOT NULL CHECK (feed_type IN ('breast_milk', 'formula', 'fortified_breast_milk', 'solid', 'other')),
     volume_ml   REAL,
     cal_density REAL,
     calories    REAL,              -- denormalized: computed on insert/update from cal_density × volume_ml / 29.5735, or default_cal_per_feed for breast-direct
@@ -699,7 +699,7 @@ CREATE TABLE med_logs (
 CREATE TABLE photo_uploads (
     id              TEXT PRIMARY KEY,
     baby_id         TEXT REFERENCES babies(id) ON DELETE SET NULL,
-    r2_key          TEXT NOT NULL,
+    r2_key          TEXT NOT NULL UNIQUE,
     thumbnail_key   TEXT,              -- R2 key for ~300px wide thumbnail (e.g., "photos/thumb_abc123.jpg")
     uploaded_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     linked_at       DATETIME           -- set when a metric entry references this photo
@@ -762,6 +762,9 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates imagemagick && rm -rf /var/lib/apt/lists/*
 COPY --from=backend /server /server
 COPY --from=frontend /app/frontend/build /static
+COPY --from=backend /app/backend/migrations /migrations
+ENV STATIC_DIR=/static
+ENV MIGRATIONS_DIR=/migrations
 EXPOSE 8080
 CMD ["/server"]
 ```
@@ -776,9 +779,9 @@ R2_ACCOUNT_ID=...
 R2_ACCESS_KEY_ID=...
 R2_SECRET_ACCESS_KEY=...
 R2_BUCKET_NAME=littleliver-photos
-R2_PUBLIC_URL=...           # If using custom domain or R2 public access
 VAPID_PUBLIC_KEY=...
 VAPID_PRIVATE_KEY=...
+VAPID_SUBSCRIBER=...       # Optional; defaults to BASE_URL. Recommended: mailto: URI per Web Push spec (e.g., mailto:you@example.com)
 BASE_URL=https://littleliver.fly.dev
 ```
 
@@ -790,20 +793,18 @@ primary_region = "iad"      # Choose closest region
 [http_service]
   internal_port = 8080
   force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
 
 [mounts]
   source = "littleliver_data"
   destination = "/data"
-
-[machines]
-  auto_stop_machines = "stop"
-  auto_start_machines = true
-  min_machines_running = 0
 ```
 
 ### 11.5 Backup Strategy
 - Daily automated backup of SQLite database via `fly ssh` + cron job or a simple script that copies the DB file to R2.
-- SQLite `.backup` command for consistent snapshots.
+- SQLite `VACUUM INTO` for consistent snapshots.
 
 ---
 

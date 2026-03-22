@@ -22,11 +22,20 @@
 			labels: data.map((d) => d.date),
 			datasets: [
 				{
-					label: 'Daily Calories',
+					label: 'Daily Calories (kcal)',
 					data: data.map((d) => d.total_calories),
 					backgroundColor: '#f59e0b',
 					borderColor: '#d97706',
-					borderWidth: 1
+					borderWidth: 1,
+					yAxisID: 'y'
+				},
+				{
+					label: 'Daily Volume (mL)',
+					data: data.map((d) => d.total_volume_ml),
+					backgroundColor: '#3b82f6',
+					borderColor: '#2563eb',
+					borderWidth: 1,
+					yAxisID: 'y1'
 				}
 			]
 		},
@@ -37,8 +46,17 @@
 					title: { display: true, text: 'Date' }
 				},
 				y: {
+					type: 'linear',
+					position: 'left',
 					title: { display: true, text: 'Calories (kcal)' },
 					beginAtZero: true
+				},
+				y1: {
+					type: 'linear',
+					position: 'right',
+					title: { display: true, text: 'Volume (mL)' },
+					beginAtZero: true,
+					grid: { drawOnChartArea: false }
 				}
 			}
 		}

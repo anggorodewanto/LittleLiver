@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -211,7 +212,8 @@ func (s *Scheduler) sendNotifications(med activeMed, scheduledUTC time.Time) {
 
 	payload := buildMedPayload(med, scheduledUTC)
 
-	// Send to all push subscriptions for each parent
+	// Send to all push subscriptions for each parent.
+	// Clean up stale subscriptions (410 Gone / 404 Not Found from push service).
 	for _, parentID := range parentIDs {
 		subs, err := s.queryPushSubscriptions(parentID)
 		if err != nil {
@@ -219,8 +221,16 @@ func (s *Scheduler) sendNotifications(med activeMed, scheduledUTC time.Time) {
 			continue
 		}
 		for _, sub := range subs {
-			if _, err := s.pusher.Send(sub, payload); err != nil {
+			resp, err := s.pusher.Send(sub, payload)
+			if err != nil {
 				log.Printf("scheduler: push send to %s: %v", sub.Endpoint, err)
+				continue
+			}
+			if resp != nil && (resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusNotFound) {
+				log.Printf("scheduler: removing stale subscription %s (HTTP %d)", sub.Endpoint, resp.StatusCode)
+				if delErr := store.DeletePushSubscriptionByEndpoint(s.db, sub.Endpoint); delErr != nil {
+					log.Printf("scheduler: failed to delete stale subscription: %v", delErr)
+				}
 			}
 		}
 	}

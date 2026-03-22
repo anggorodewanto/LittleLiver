@@ -166,7 +166,16 @@ func NewMux(opts ...Option) *http.ServeMux {
 	}
 	if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
 		fs := http.FileServer(http.Dir(staticDir))
-		mux.Handle("/", fs)
+		// SPA fallback: serve index.html for paths that don't match a static file,
+		// so client-side routing (SvelteKit) handles navigation.
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			path := staticDir + r.URL.Path
+			if _, err := os.Stat(path); err == nil {
+				fs.ServeHTTP(w, r)
+				return
+			}
+			http.ServeFile(w, r, staticDir+"/index.html")
+		})
 	}
 
 	return mux

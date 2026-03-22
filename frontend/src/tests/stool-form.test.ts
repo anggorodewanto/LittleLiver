@@ -11,6 +11,12 @@ describe('StoolForm', () => {
 		onphotoupload = vi.fn();
 	});
 
+	// Helper: find swatch button by label text (accessible name includes clinical meaning).
+	// Uses word boundary to avoid "Yellow" matching "Pale Yellow".
+	function getSwatchButton(label: string): HTMLElement {
+		return screen.getByRole('button', { name: new RegExp(`^${label} `, 'i') });
+	}
+
 	it('renders timestamp, consistency, volume, notes fields', () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
@@ -20,29 +26,36 @@ describe('StoolForm', () => {
 		expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
 	});
 
-	it('renders 7 tappable CSS color swatches with labels', () => {
+	it('renders 7 tappable CSS color swatches with labels and clinical meanings', () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
-		const swatches = screen.getAllByRole('button', { name: /^(White|Clay|Pale Yellow|Yellow|Light Green|Green|Brown)$/i });
-		expect(swatches).toHaveLength(7);
+		// Each button's accessible name includes both the label and clinical meaning
+		const labels = ['White', 'Clay', 'Pale Yellow', 'Yellow', 'Light Green', 'Green', 'Brown'];
+		for (const label of labels) {
+			expect(getSwatchButton(label)).toBeInTheDocument();
+		}
 	});
 
-	it('color swatches have correct labels', () => {
+	it('color swatches have correct labels and clinical meanings', () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
-		expect(screen.getByRole('button', { name: /^White$/i })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: /^Clay$/i })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: /^Pale Yellow$/i })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: /^Yellow$/i })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: /^Light Green$/i })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: /^Green$/i })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: /^Brown$/i })).toBeInTheDocument();
+		expect(getSwatchButton('White')).toBeInTheDocument();
+		expect(getSwatchButton('Clay')).toBeInTheDocument();
+		expect(getSwatchButton('Pale Yellow')).toBeInTheDocument();
+		expect(getSwatchButton('Yellow')).toBeInTheDocument();
+		expect(getSwatchButton('Light Green')).toBeInTheDocument();
+		expect(getSwatchButton('Green')).toBeInTheDocument();
+		expect(getSwatchButton('Brown')).toBeInTheDocument();
+
+		// Verify clinical meanings are displayed
+		expect(screen.getByText(/NO bile flow/i)).toBeInTheDocument();
+		expect(screen.getByText(/Normal bile flow/i)).toBeInTheDocument();
 	});
 
 	it('selecting a color swatch sets color_rating and color_label', async () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
-		await fireEvent.click(screen.getByRole('button', { name: /^Yellow$/i }));
+		await fireEvent.click(getSwatchButton('Yellow'));
 		await fireEvent.click(screen.getByRole('button', { name: /log stool/i }));
 
 		expect(onsubmit).toHaveBeenCalledTimes(1);
@@ -64,7 +77,7 @@ describe('StoolForm', () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
 		// Selecting swatch 1 (White) should produce rating 1
-		await fireEvent.click(screen.getByRole('button', { name: /^White$/i }));
+		await fireEvent.click(getSwatchButton('White'));
 		await fireEvent.click(screen.getByRole('button', { name: /log stool/i }));
 
 		const payload = onsubmit.mock.calls[0][0];
@@ -75,7 +88,7 @@ describe('StoolForm', () => {
 	it('submits correct payload with all fields', async () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
-		await fireEvent.click(screen.getByRole('button', { name: /^Green$/i }));
+		await fireEvent.click(getSwatchButton('Green'));
 		await fireEvent.change(screen.getByLabelText(/consistency/i), {
 			target: { value: 'soft' }
 		});
@@ -127,7 +140,7 @@ describe('StoolForm', () => {
 	it('highlights selected color swatch', async () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
-		const brownButton = screen.getByRole('button', { name: /^Brown$/i });
+		const brownButton = getSwatchButton('Brown');
 		await fireEvent.click(brownButton);
 
 		expect(brownButton.getAttribute('aria-pressed')).toBe('true');
@@ -148,8 +161,9 @@ describe('StoolForm', () => {
 	it('displays acholic warning when color 1-3 is selected', async () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
-		await fireEvent.click(screen.getByRole('button', { name: /^White$/i }));
+		await fireEvent.click(getSwatchButton('White'));
 
-		expect(screen.getByText(/acholic/i)).toBeInTheDocument();
+		// The warning banner text (separate from the swatch meaning text)
+		expect(screen.getByRole('alert')).toHaveTextContent(/acholic/i);
 	});
 });

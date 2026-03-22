@@ -52,9 +52,20 @@ describe('FeedingChart', () => {
 		const config = chartConstructorCalls[0][1] as {
 			data: { datasets: { data: number[]; label: string }[] };
 		};
-		const dataset = config.data.datasets.find((d) => d.label === 'Daily Calories');
+		const dataset = config.data.datasets.find((d) => d.label === 'Daily Calories (kcal)');
 		expect(dataset).toBeDefined();
 		expect(dataset!.data).toEqual([420, 455, 390]);
+	});
+
+	it('shows daily total volume as second dataset', () => {
+		render(FeedingChart, { props: { data: mockFeedingData } });
+
+		const config = chartConstructorCalls[0][1] as {
+			data: { datasets: { data: number[]; label: string }[] };
+		};
+		const dataset = config.data.datasets.find((d) => d.label === 'Daily Volume (mL)');
+		expect(dataset).toBeDefined();
+		expect(dataset!.data).toEqual([600, 650, 580]);
 	});
 
 	it('configures y-axis with kcal unit label', () => {

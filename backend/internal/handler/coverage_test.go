@@ -779,7 +779,7 @@ func TestCreateMedLogHandler_MedicationNotFound(t *testing.T) {
 	}
 }
 
-func TestCreateMedLogHandler_GivenAtRequiredWhenNotSkipped(t *testing.T) {
+func TestCreateMedLogHandler_ServerSetsGivenAtOnCreate(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	defer db.Close()
@@ -792,6 +792,8 @@ func TestCreateMedLogHandler_GivenAtRequiredWhenNotSkipped(t *testing.T) {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
 
+	// Per spec: server sets given_at to NOW() when skipped=false.
+	// Client does NOT need to provide given_at — it should succeed.
 	body := `{"medication_id":"` + med.ID + `","skipped":false}`
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/med-logs")
 	req.Body = io.NopCloser(bytes.NewBufferString(body))
@@ -806,8 +808,17 @@ func TestCreateMedLogHandler_GivenAtRequiredWhenNotSkipped(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d. Body: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify response contains a server-generated given_at
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["given_at"] == nil || resp["given_at"] == "" {
+		t.Fatal("expected given_at to be set by server")
 	}
 }
 

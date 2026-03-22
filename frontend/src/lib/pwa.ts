@@ -63,12 +63,14 @@ export async function initPushNotifications(): Promise<void> {
 			return;
 		}
 
-		// Fetch VAPID public key from server
-		const resp = await fetch('/api/push/vapid-key', { credentials: 'include' });
-		if (!resp.ok) {
-			return; // VAPID not configured
+		// Fetch VAPID public key from server (use apiClient for X-Timezone/auth headers)
+		let vapid_public_key: string;
+		try {
+			const data = await apiClient.get<{ vapid_public_key: string }>('/push/vapid-key');
+			vapid_public_key = data.vapid_public_key;
+		} catch {
+			return; // VAPID not configured or auth error
 		}
-		const { vapid_public_key } = await resp.json();
 		if (!vapid_public_key) {
 			return;
 		}

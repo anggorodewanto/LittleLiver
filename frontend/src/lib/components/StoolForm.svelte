@@ -81,10 +81,11 @@
 				<button
 					type="button"
 					aria-pressed={colorRating === swatch.rating ? 'true' : 'false'}
-					style="background-color: {swatch.color}; width: 64px; height: 64px; border: {colorRating === swatch.rating ? '3px solid black' : '1px solid #ccc'}; border-radius: 8px; cursor: pointer; font-size: 0.85rem;"
+					style="background-color: {swatch.color}; width: 80px; height: 80px; border: {colorRating === swatch.rating ? '3px solid black' : '1px solid #ccc'}; border-radius: 8px; cursor: pointer; font-size: 0.75rem; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px;"
 					onclick={() => selectColor(swatch.rating)}
 				>
-					{swatch.label}
+					<span style="font-weight: bold;">{swatch.label}</span>
+					<span style="font-size: 0.6rem; opacity: 0.8; text-align: center;">{swatch.meaning}</span>
 				</button>
 			{/each}
 		</div>

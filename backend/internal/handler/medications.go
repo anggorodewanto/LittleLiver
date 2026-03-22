@@ -16,6 +16,7 @@ type medicationRequest struct {
 	Dose          string   `json:"dose"`
 	Frequency     string   `json:"frequency"`
 	ScheduleTimes []string `json:"schedule_times,omitempty"`
+	Timezone      *string  `json:"timezone,omitempty"` // IANA timezone; on create defaults to X-Timezone header; mutable via PUT
 	Active        *bool    `json:"active,omitempty"`
 }
 
@@ -108,7 +109,11 @@ func CreateMedicationHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		schedule := scheduleTimesToJSON(req.ScheduleTimes)
-		tz := optionalTimezone(r)
+		// Timezone: use request body field if provided, else fall back to X-Timezone header
+		tz := req.Timezone
+		if tz == nil {
+			tz = optionalTimezone(r)
+		}
 
 		med, err := store.CreateMedication(db, baby.ID, user.ID, req.Name, req.Dose, req.Frequency, schedule, tz)
 		if err != nil {
@@ -208,7 +213,7 @@ func UpdateMedicationHandler(db *sql.DB) http.HandlerFunc {
 
 		schedule := scheduleTimesToJSON(req.ScheduleTimes)
 
-		med, err := store.UpdateMedication(db, baby.ID, medID, user.ID, req.Name, req.Dose, req.Frequency, schedule, nil, req.Active)
+		med, err := store.UpdateMedication(db, baby.ID, medID, user.ID, req.Name, req.Dose, req.Frequency, schedule, req.Timezone, req.Active)
 		if err != nil {
 			handleStoreError(w, err, "medication not found")
 			return

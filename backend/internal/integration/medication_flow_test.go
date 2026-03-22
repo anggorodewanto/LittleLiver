@@ -94,18 +94,25 @@ func TestMedicationNotificationLifecycle(t *testing.T) {
 		t.Errorf("step 2: wrong URL: got %q, want %q", p.URL, expectedURL)
 	}
 
-	// --- Step 3: Parent logs dose as "given" at 08:05 ---
-	givenAt := baseDate.Add(8*time.Hour + 5*time.Minute).Format("2006-01-02T15:04:05Z")
+	// --- Step 3: Parent logs dose as "given" ---
+	// Server sets given_at to NOW() per spec. We then update it via direct DB
+	// to the test time (08:05) so the suppression window check works.
 	scheduledTime := t0800.Format("2006-01-02T15:04:05Z")
 	medLogPath := fmt.Sprintf("/api/babies/%s/med-logs", babyID)
 	status, logResp := client.doJSON(http.MethodPost, medLogPath, map[string]any{
 		"medication_id":  medID,
 		"scheduled_time": scheduledTime,
-		"given_at":       givenAt,
 		"skipped":        false,
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("step 3: expected 201 creating med-log, got %d: %v", status, logResp)
+	}
+	// Override given_at to the controlled test time for deterministic suppression testing
+	givenAt := baseDate.Add(8*time.Hour + 5*time.Minute).Format("2006-01-02T15:04:05Z")
+	logID := logResp["id"].(string)
+	_, err := db.Exec("UPDATE med_logs SET given_at = ? WHERE id = ?", givenAt, logID)
+	if err != nil {
+		t.Fatalf("step 3: update given_at: %v", err)
 	}
 
 	// --- Step 4: Tick at 08:15 UTC -> suppressed (dose logged within window) ---
@@ -165,7 +172,7 @@ func TestMedicationNotificationLifecycle(t *testing.T) {
 	// --- Step 10: Verify adherence ratio ---
 	// adherence = given_count / total_count = 1 / 2 = 0.50
 	var totalLogs, givenLogs int
-	err := db.QueryRow(
+	err = db.QueryRow(
 		"SELECT COUNT(*) FROM med_logs WHERE medication_id = ? AND baby_id = ?",
 		medID, babyID,
 	).Scan(&totalLogs)

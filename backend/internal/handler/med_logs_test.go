@@ -633,9 +633,9 @@ func TestDeleteMedLog_NotFound(t *testing.T) {
 	}
 }
 
-// --- POST: invalid given_at format returns 400 ---
+// --- POST: skipped=true with given_at provided returns 400 ---
 
-func TestCreateMedLog_InvalidGivenAtFormat(t *testing.T) {
+func TestCreateMedLog_SkippedWithGivenAtRejects(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	defer db.Close()
@@ -648,7 +648,8 @@ func TestCreateMedLog_InvalidGivenAtFormat(t *testing.T) {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
 
-	body := `{"medication_id":"` + med.ID + `","given_at":"not-a-timestamp","skipped":false}`
+	// Mutual exclusivity: skipped=true with given_at should be rejected
+	body := `{"medication_id":"` + med.ID + `","given_at":"2026-03-18T08:00:00Z","skipped":true}`
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/med-logs")
 	req.Body = io.NopCloser(bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -663,7 +664,7 @@ func TestCreateMedLog_InvalidGivenAtFormat(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid given_at, got %d. Body: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 400 for skipped with given_at, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }
 

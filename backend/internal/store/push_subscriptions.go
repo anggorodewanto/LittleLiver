@@ -16,6 +16,7 @@ func UpsertPushSubscription(db *sql.DB, userID, endpoint, p256dh, auth string) (
 		`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT (endpoint) DO UPDATE SET
+		   user_id = excluded.user_id,
 		   p256dh = excluded.p256dh,
 		   auth = excluded.auth
 		 RETURNING id, user_id, endpoint, p256dh, auth, created_at`,
@@ -63,6 +64,16 @@ func GetPushSubscriptionsByUserID(db *sql.DB, userID string) ([]model.PushSubscr
 		subs = make([]model.PushSubscription, 0)
 	}
 	return subs, nil
+}
+
+// DeletePushSubscriptionByEndpoint removes a push subscription by endpoint (any user).
+// Used by the scheduler to clean up stale subscriptions after 410/404 responses.
+func DeletePushSubscriptionByEndpoint(db *sql.DB, endpoint string) error {
+	_, err := db.Exec("DELETE FROM push_subscriptions WHERE endpoint = ?", endpoint)
+	if err != nil {
+		return fmt.Errorf("delete push subscription by endpoint: %w", err)
+	}
+	return nil
 }
 
 // scanPushSubscription scans a single push subscription row from the given scanner.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/backup"
 	"github.com/ablankz/LittleLiver/backend/internal/cron"
@@ -88,10 +89,14 @@ func main() {
 	}
 
 	if vapidPublic != "" && vapidPrivate != "" {
+		vapidSubscriber := os.Getenv("VAPID_SUBSCRIBER")
+		if vapidSubscriber == "" {
+			vapidSubscriber = baseURL
+		}
 		pusher := notify.NewWebPusher(notify.VAPIDConfig{
 			PublicKey:  vapidPublic,
 			PrivateKey: vapidPrivate,
-			Subscriber: baseURL,
+			Subscriber: vapidSubscriber,
 		})
 
 		// Start medication reminder scheduler
@@ -124,13 +129,16 @@ func main() {
 	addr := fmt.Sprintf(":%s", port)
 	srv := &http.Server{Addr: addr, Handler: mux}
 
-	// Graceful shutdown on SIGTERM/SIGINT so deferred cleanup runs
+	// Graceful shutdown on SIGTERM/SIGINT so deferred cleanup runs.
+	// 5-second timeout ensures deferred db.Close/cron.Stop run before Fly.io SIGKILL.
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 		sig := <-sigCh
 		log.Printf("received %s, shutting down gracefully...", sig)
-		if err := srv.Shutdown(context.Background()); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
 			log.Printf("graceful shutdown error: %v", err)
 		}
 	}()
