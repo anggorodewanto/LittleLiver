@@ -10,17 +10,34 @@
 
 	let { baby, onsave, submitting = false, error = '' }: Props = $props();
 
-	let name = $state(baby.name);
-	let dateOfBirth = $state(baby.date_of_birth);
-	let sex: 'male' | 'female' = $state(baby.sex);
-	let diagnosisDate = $state(baby.diagnosis_date ?? '');
-	let kasaiDate = $state(baby.kasai_date ?? '');
-	let defaultCalPerFeed = $state(String(baby.default_cal_per_feed ?? 67));
-	let notes = $state(baby.notes ?? '');
+	let name = $state('');
+	let dateOfBirth = $state('');
+	let sex: 'male' | 'female' = $state('male');
+	let diagnosisDate = $state('');
+	let kasaiDate = $state('');
+	let defaultCalPerFeed = $state('67');
+	let notes = $state('');
 	let recalculate = $state(false);
 	let validationError = $state('');
 
-	const originalCalPerFeed = String(baby.default_cal_per_feed ?? 67);
+	// Sync form state from baby prop (handles initial load and baby switching)
+	let syncedBabyId = $state('');
+	$effect(() => {
+		if (baby.id !== syncedBabyId) {
+			syncedBabyId = baby.id;
+			name = baby.name;
+			dateOfBirth = baby.date_of_birth;
+			sex = baby.sex;
+			diagnosisDate = baby.diagnosis_date ?? '';
+			kasaiDate = baby.kasai_date ?? '';
+			defaultCalPerFeed = String(baby.default_cal_per_feed ?? 67);
+			notes = baby.notes ?? '';
+			recalculate = false;
+			validationError = '';
+		}
+	});
+
+	let originalCalPerFeed = $derived(String(baby.default_cal_per_feed ?? 67));
 
 	let calChanged = $derived(defaultCalPerFeed !== originalCalPerFeed);
 

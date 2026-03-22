@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -20,10 +21,23 @@ type R2Config struct {
 	BucketName      string
 }
 
+// s3API abstracts the S3 client operations for testability.
+type s3API interface {
+	PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+	HeadBucket(ctx context.Context, params *s3.HeadBucketInput, optFns ...func(*s3.Options)) (*s3.HeadBucketOutput, error)
+}
+
+// s3Presigner abstracts the S3 presign client for testability.
+type s3Presigner interface {
+	PresignGetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
+}
+
 // R2Client is a Cloudflare R2 implementation of ObjectStore using the S3-compatible API.
 type R2Client struct {
-	client     *s3.Client
-	presigner  *s3.PresignClient
+	client     s3API
+	presigner  s3Presigner
 	bucketName string
 }
 
@@ -54,6 +68,15 @@ func NewR2Client(ctx context.Context, cfg R2Config) (*R2Client, error) {
 		presigner:  s3.NewPresignClient(client),
 		bucketName: cfg.BucketName,
 	}, nil
+}
+
+// newR2ClientWithMocks creates an R2Client with injected mocks (for testing).
+func newR2ClientWithMocks(api s3API, presigner s3Presigner, bucket string) *R2Client {
+	return &R2Client{
+		client:     api,
+		presigner:  presigner,
+		bucketName: bucket,
+	}
 }
 
 // Put uploads data to R2 under the given key with the specified content type.

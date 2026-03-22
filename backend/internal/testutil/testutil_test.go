@@ -41,6 +41,41 @@ func TestSetupTestDB_ForeignKeysEnabled(t *testing.T) {
 	}
 }
 
+func TestSetupTestDB_AllMetricTablesExist(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	metricTables := []string{
+		"feedings", "stools", "urine", "weights", "temperatures",
+		"abdomen_observations", "skin_observations", "bruising",
+		"lab_results", "general_notes", "medications", "med_logs",
+		"photo_uploads", "push_subscriptions",
+	}
+	for _, table := range metricTables {
+		var name string
+		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name)
+		if err != nil {
+			t.Errorf("expected table %q to exist in migrated DB, got error: %v", table, err)
+		}
+	}
+}
+
+func TestSetupTestDB_SentinelUserExists(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	var id string
+	err := db.QueryRow("SELECT id FROM users WHERE id = 'deleted_user'").Scan(&id)
+	if err != nil {
+		t.Fatalf("sentinel user not found: %v", err)
+	}
+	if id != "deleted_user" {
+		t.Errorf("expected 'deleted_user', got %q", id)
+	}
+}
+
 func TestCreateTestUser_InsertsUserAndReturnsIt(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
@@ -139,6 +174,93 @@ func TestCreateTestBaby_MultipleCallsCreateDistinctBabies(t *testing.T) {
 	}
 }
 
+func TestCreateTestBaby_HasDefaultCalPerFeed(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	if baby.DefaultCalPerFeed != 67.0 {
+		t.Errorf("expected default_cal_per_feed=67.0, got %f", baby.DefaultCalPerFeed)
+	}
+}
+
+func TestSeedBabyWithKasai_HasKasaiDate(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
+
+	if baby.ID == "" {
+		t.Error("expected non-empty baby ID")
+	}
+	if baby.Name != "Report Baby" {
+		t.Errorf("expected name 'Report Baby', got %q", baby.Name)
+	}
+	if baby.KasaiDate == nil {
+		t.Fatal("expected kasai_date to be set")
+	}
+	kasaiStr := baby.KasaiDate.Format("2006-01-02")
+	if kasaiStr != "2025-07-01" {
+		t.Errorf("expected kasai_date='2025-07-01', got %q", kasaiStr)
+	}
+	dobStr := baby.DateOfBirth.Format("2006-01-02")
+	if dobStr != "2025-06-15" {
+		t.Errorf("expected date_of_birth='2025-06-15', got %q", dobStr)
+	}
+
+	// Verify linked to user
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM baby_parents WHERE baby_id = ? AND user_id = ?", baby.ID, user.ID).Scan(&count)
+	if err != nil {
+		t.Fatalf("query baby_parents failed: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 baby_parents row, got %d", count)
+	}
+}
+
+func TestSeedPushSubscription_InsertsSubscription(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	testutil.SeedPushSubscription(t, db, user.ID, "https://push.example.com/sub1")
+
+	var endpoint string
+	err := db.QueryRow("SELECT endpoint FROM push_subscriptions WHERE user_id = ?", user.ID).Scan(&endpoint)
+	if err != nil {
+		t.Fatalf("query push_subscriptions failed: %v", err)
+	}
+	if endpoint != "https://push.example.com/sub1" {
+		t.Errorf("expected endpoint 'https://push.example.com/sub1', got %q", endpoint)
+	}
+}
+
+func TestSeedPushSubscription_MultipleSubscriptions(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	testutil.SeedPushSubscription(t, db, user.ID, "https://push.example.com/device1")
+	testutil.SeedPushSubscription(t, db, user.ID, "https://push.example.com/device2")
+
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM push_subscriptions WHERE user_id = ?", user.ID).Scan(&count)
+	if err != nil {
+		t.Fatalf("query push_subscriptions failed: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 subscriptions, got %d", count)
+	}
+}
+
 func TestAuthenticatedRequest_HasSessionCookieAndCSRFToken(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
@@ -203,6 +325,62 @@ func TestAuthenticatedRequest_GET_NoCSRFToken(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedRequest_PUT_HasCSRFToken(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	req := testutil.AuthenticatedRequest(t, db, user.ID, "session_id", "test-secret", http.MethodPut, "/api/babies/123")
+
+	csrfToken := req.Header.Get("X-CSRF-Token")
+	if csrfToken == "" {
+		t.Error("expected CSRF token for PUT request")
+	}
+}
+
+func TestAuthenticatedRequest_DELETE_HasCSRFToken(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	req := testutil.AuthenticatedRequest(t, db, user.ID, "session_id", "test-secret", http.MethodDelete, "/api/babies/123")
+
+	csrfToken := req.Header.Get("X-CSRF-Token")
+	if csrfToken == "" {
+		t.Error("expected CSRF token for DELETE request")
+	}
+}
+
+func TestAuthenticatedRequest_HEAD_NoCSRFToken(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	req := testutil.AuthenticatedRequest(t, db, user.ID, "session_id", "test-secret", http.MethodHead, "/api/me")
+
+	csrfToken := req.Header.Get("X-CSRF-Token")
+	if csrfToken != "" {
+		t.Errorf("expected no CSRF token for HEAD request, got %q", csrfToken)
+	}
+}
+
+func TestAuthenticatedRequest_OPTIONS_NoCSRFToken(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	req := testutil.AuthenticatedRequest(t, db, user.ID, "session_id", "test-secret", http.MethodOptions, "/api/me")
+
+	csrfToken := req.Header.Get("X-CSRF-Token")
+	if csrfToken != "" {
+		t.Errorf("expected no CSRF token for OPTIONS request, got %q", csrfToken)
+	}
+}
+
 func TestAuthenticatedRequest_PassesThroughAuthAndCSRFMiddleware(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
@@ -237,5 +415,36 @@ func TestAuthenticatedRequest_PassesThroughAuthAndCSRFMiddleware(t *testing.T) {
 	}
 	if capturedUserID != user.ID {
 		t.Errorf("expected user ID=%q in context, got %q", user.ID, capturedUserID)
+	}
+}
+
+func TestTestFixture_StructFields(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	fixture := testutil.TestFixture{
+		DB:   db,
+		User: user,
+		Baby: baby,
+	}
+
+	if fixture.DB == nil {
+		t.Error("expected non-nil DB")
+	}
+	if fixture.User == nil {
+		t.Error("expected non-nil User")
+	}
+	if fixture.Baby == nil {
+		t.Error("expected non-nil Baby")
+	}
+	if fixture.User.ID != user.ID {
+		t.Errorf("expected user ID=%q, got %q", user.ID, fixture.User.ID)
+	}
+	if fixture.Baby.ID != baby.ID {
+		t.Errorf("expected baby ID=%q, got %q", baby.ID, fixture.Baby.ID)
 	}
 }
