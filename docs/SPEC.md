@@ -251,6 +251,7 @@ POST   /auth/logout                → Clear session
 GET    /api/me                     → Current user info + linked babies
 GET    /api/csrf-token             → Get per-session CSRF token (include as X-CSRF-Token header on state-changing requests)
 DELETE /api/users/me               → Delete own account (see §2.2 for cascade behavior)
+GET    /api/push/vapid-key         → Get VAPID public key for push subscription registration
 ```
 
 ### 5.2 Baby Profiles
@@ -312,9 +313,11 @@ The medication resource includes both the drug definition and its schedule (no s
 ```
 POST   /api/babies/:id/medications           → Create medication (name, dose, frequency, schedule times)
 GET    /api/babies/:id/medications            → List medications (active and inactive)
+GET    /api/babies/:id/medications/:id        → Get single medication by ID
 PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
 POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). `given_at` and `skipped` are mutually exclusive: when logging as "given", the server sets `given_at` to `NOW()` (current time, not `scheduled_time`); when logging as "skipped", `given_at` is null. `skip_reason` is optional even when `skipped=true`. Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
 GET    /api/babies/:id/med-logs?medication_id=&from=&to=&cursor=  → List med-logs, filterable by medication and date range
+GET    /api/babies/:id/med-logs/:entryId      → Get single med-log entry
 PUT    /api/babies/:id/med-logs/:entryId     → Edit a med-log entry
 DELETE /api/babies/:id/med-logs/:entryId     → Hard-delete a med-log entry
 POST   /api/push/subscribe                    → Register push subscription (per device)
@@ -748,7 +751,7 @@ COPY frontend/ .
 RUN npm ci && npm run build
 
 # Stage 2: Build backend
-FROM golang:1.22 AS backend
+FROM golang:1.26 AS backend
 WORKDIR /app
 COPY backend/ ./backend/
 WORKDIR /app/backend
@@ -791,6 +794,11 @@ primary_region = "iad"      # Choose closest region
 [mounts]
   source = "littleliver_data"
   destination = "/data"
+
+[machines]
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
 ```
 
 ### 11.5 Backup Strategy
