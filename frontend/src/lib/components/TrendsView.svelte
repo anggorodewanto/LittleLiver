@@ -81,10 +81,11 @@
 			const [dashboardData, percentileData] = await Promise.all([
 				apiClient.get<DashboardResponse>(`/babies/${babyId}/dashboard?from=${from}&to=${to}`),
 				apiClient.get<PercentileResponse>(`/who/percentiles?sex=${sex}&from_days=${fromDays}&to_days=${toDays}`)
+					.catch(() => null)
 			]);
 
 			dashboard = dashboardData;
-			percentiles = percentileData.percentiles;
+			percentiles = percentileData?.percentiles ?? null;
 		} catch {
 			error = 'Failed to load trends data';
 		} finally {
@@ -110,7 +111,7 @@
 		<div class="loading">Loading...</div>
 	{:else if error}
 		<div class="error">{error}</div>
-	{:else if dashboard && percentiles}
+	{:else if dashboard}
 		<div class="charts">
 			<section class="chart-section">
 				<h3>Stool Color</h3>

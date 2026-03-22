@@ -60,11 +60,12 @@ func NewHandlers(db *sql.DB, cfg Config) *Handlers {
 	return &Handlers{
 		DB: db,
 		Config: Config{
-			ClientID:     cfg.ClientID,
-			ClientSecret: cfg.ClientSecret,
-			RedirectURL:  cfg.RedirectURL,
-			TokenURL:     tokenURL,
-			UserInfoURL:  userInfoURL,
+			ClientID:      cfg.ClientID,
+			ClientSecret:  cfg.ClientSecret,
+			RedirectURL:   cfg.RedirectURL,
+			TokenURL:      tokenURL,
+			UserInfoURL:   userInfoURL,
+			SessionSecret: cfg.SessionSecret,
 		},
 		HTTPClient: &http.Client{Timeout: 10 * time.Second},
 		states:     make(map[string]time.Time),

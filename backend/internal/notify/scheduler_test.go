@@ -919,10 +919,10 @@ func TestScheduler_DroppedMedLogsTableHandlesError(t *testing.T) {
 
 	mock := &MockPusher{}
 	s := NewScheduler(db, mock)
-	s.Tick(now) // Should not panic, suppression check fails -> sends notification
+	s.Tick(now) // Should not panic, suppression check fails -> suppresses notification
 
-	if len(mock.Sends) != 1 {
-		t.Fatalf("expected 1 send (suppression check failed, defaults to not suppressed), got %d", len(mock.Sends))
+	if len(mock.Sends) != 0 {
+		t.Fatalf("expected 0 sends (suppression check failed, defaults to suppressed), got %d", len(mock.Sends))
 	}
 }
 

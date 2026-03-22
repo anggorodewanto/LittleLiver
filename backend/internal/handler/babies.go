@@ -265,24 +265,24 @@ func UpdateBabyHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		updated, err := store.UpdateBaby(db, baby.ID, req.Name, req.Sex, req.DateOfBirth,
-			req.DiagnosisDate, req.KasaiDate, req.DefaultCalPerFeed, req.Notes)
-		if err != nil {
-			log.Printf("update baby: %v", err)
-			http.Error(w, "failed to update baby", http.StatusInternalServerError)
-			return
-		}
-
 		recalculate := r.URL.Query().Get("recalculate_calories") == "true"
 		if !recalculate {
+			updated, err := store.UpdateBaby(db, baby.ID, req.Name, req.Sex, req.DateOfBirth,
+				req.DiagnosisDate, req.KasaiDate, req.DefaultCalPerFeed, req.Notes)
+			if err != nil {
+				log.Printf("update baby: %v", err)
+				http.Error(w, "failed to update baby", http.StatusInternalServerError)
+				return
+			}
 			writeJSON(w, http.StatusOK, toBabyResponse(updated))
 			return
 		}
 
-		count, err := store.RecalculateFeedingCalories(db, updated.ID, updated.DefaultCalPerFeed)
+		updated, count, err := store.UpdateBabyAndRecalculate(db, baby.ID, req.Name, req.Sex, req.DateOfBirth,
+			req.DiagnosisDate, req.KasaiDate, req.DefaultCalPerFeed, req.Notes)
 		if err != nil {
-			log.Printf("recalculate feeding calories: %v", err)
-			http.Error(w, "failed to recalculate calories", http.StatusInternalServerError)
+			log.Printf("update baby and recalculate: %v", err)
+			http.Error(w, "failed to update baby", http.StatusInternalServerError)
 			return
 		}
 

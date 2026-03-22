@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -83,6 +84,53 @@ func (rl *RateLimiter) Middleware(cookieName string) func(http.Handler) http.Han
 				return
 			}
 
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// IPRateLimiter tracks per-IP request counts within a fixed window.
+// It reuses the same bucket structure as RateLimiter but keys by IP address.
+type IPRateLimiter struct {
+	rl *RateLimiter
+}
+
+// NewIPRateLimiter creates an IP-based rate limiter that allows limit requests per window per IP.
+func NewIPRateLimiter(limit int, window time.Duration) *IPRateLimiter {
+	return &IPRateLimiter{
+		rl: NewRateLimiter(limit, window),
+	}
+}
+
+// extractIP returns the client IP from the request, stripping the port if present.
+func extractIP(r *http.Request) string {
+	// Check X-Forwarded-For first (common behind reverse proxies)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take the first IP (client IP)
+		for i, c := range xff {
+			if c == ',' {
+				return xff[:i]
+			}
+		}
+		return xff
+	}
+	// Fall back to RemoteAddr, stripping port
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// Middleware returns HTTP middleware that enforces per-IP rate limiting.
+func (ipl *IPRateLimiter) Middleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ip := extractIP(r)
+			if !ipl.rl.allow(ip) {
+				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+				return
+			}
 			next.ServeHTTP(w, r)
 		})
 	}

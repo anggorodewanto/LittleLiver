@@ -78,6 +78,20 @@ func toFeedingResponse(f *model.Feeding) feedingResponse {
 	}
 }
 
+// feedingResponseWithWarning wraps a feeding response with an optional warning.
+type feedingResponseWithWarning struct {
+	feedingResponse
+	Warning string `json:"warning,omitempty"`
+}
+
+// fortifiedBreastMilkWarning returns a warning if fortified_breast_milk has volume but no cal_density.
+func fortifiedBreastMilkWarning(req *feedingRequest) string {
+	if req.FeedType == "fortified_breast_milk" && req.VolumeMl != nil && req.CalDensity == nil {
+		return "fortified_breast_milk entries need cal_density for calorie calculation"
+	}
+	return ""
+}
+
 // CreateFeedingHandler handles POST /api/babies/{id}/feedings.
 func CreateFeedingHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +123,13 @@ func CreateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		if warning := fortifiedBreastMilkWarning(&req); warning != "" {
+			writeJSON(w, http.StatusCreated, feedingResponseWithWarning{
+				feedingResponse: toFeedingResponse(feeding),
+				Warning:         warning,
+			})
+			return
+		}
 		writeJSON(w, http.StatusCreated, toFeedingResponse(feeding))
 	}
 }
@@ -202,6 +223,13 @@ func UpdateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		if warning := fortifiedBreastMilkWarning(&req); warning != "" {
+			writeJSON(w, http.StatusOK, feedingResponseWithWarning{
+				feedingResponse: toFeedingResponse(feeding),
+				Warning:         warning,
+			})
+			return
+		}
 		writeJSON(w, http.StatusOK, toFeedingResponse(feeding))
 	}
 }

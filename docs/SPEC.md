@@ -274,7 +274,9 @@ PUT    /api/babies/:id/feedings/:entryId     → Edit entry
 DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 ```
 
-Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/medications`, `/med-logs`, `/labs`, `/notes`
+Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/labs`, `/notes`
+
+**Non-standard metric endpoints** (deviate from the generic CRUD pattern above): `/medications` (no DELETE — deactivation only, see §5.5), `/med-logs` (date filtering uses `given_at`/`created_at` instead of `timestamp`, see §5.5)
 
 **Photo signed URLs:** For metric types that support photos (see §5.4), API responses replace the `photo_keys` field with a `photos` array of objects: `[{ "url": "signed_url", "thumbnail_url": "signed_thumb_url" }]` (TTL: 1 hour). The raw `photo_keys` field is not exposed in responses.
 
@@ -308,13 +310,13 @@ Photos are stored as a **JSON array in a single `TEXT` column** (`photo_keys`) o
 
 ### 5.5 Medications & Reminders
 
-The medication resource includes both the drug definition and its schedule (no separate `/med-schedules` endpoint). Deactivate a medication by setting `active=false` via `PUT /api/babies/:id/medications/:id`. When a medication is deactivated, the scheduler skips it on its next tick — no further notifications are sent for that medication. Deactivated medications are also excluded from the `upcoming_meds` section of the dashboard response. **Creator deletion:** When a user who created an active medication deletes their account, the medication remains active and notifications continue to remaining parents' push subscriptions. Only `logged_by` is anonymized to `'deleted_user'` — no other side effects on the medication or its schedule.
+The medication resource includes both the drug definition and its schedule (no separate `/med-schedules` endpoint). Deactivate a medication by setting `active=false` via `PUT /api/babies/:id/medications/:medId`. When a medication is deactivated, the scheduler skips it on its next tick — no further notifications are sent for that medication. Deactivated medications are also excluded from the `upcoming_meds` section of the dashboard response. **Creator deletion:** When a user who created an active medication deletes their account, the medication remains active and notifications continue to remaining parents' push subscriptions. Only `logged_by` is anonymized to `'deleted_user'` — no other side effects on the medication or its schedule.
 
 ```
 POST   /api/babies/:id/medications           → Create medication (name, dose, frequency, schedule times)
 GET    /api/babies/:id/medications            → List medications (active and inactive). Returns all medications without pagination (no cursor) — medication counts are small enough per baby.
-GET    /api/babies/:id/medications/:id        → Get single medication by ID
-PUT    /api/babies/:id/medications/:id        → Update medication (including set active=false to deactivate). The `timezone` field is mutable via PUT — it is set from the request's `X-Timezone` header (e.g., if the family moves timezones). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
+GET    /api/babies/:id/medications/:medId     → Get single medication by ID
+PUT    /api/babies/:id/medications/:medId     → Update medication (including set active=false to deactivate). The `timezone` field is mutable via PUT — it is set from the request's `X-Timezone` header (e.g., if the family moves timezones). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
 POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). `given_at` and `skipped` are mutually exclusive: when logging as "given", the server always sets `given_at` to `NOW()` (current time, not `scheduled_time`) — the client does not provide `given_at`; when logging as "skipped", `given_at` is null. `skip_reason` is optional even when `skipped=true`. Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
 GET    /api/babies/:id/med-logs?medication_id=&from=&to=&cursor=  → List med-logs, filterable by medication and date range. Date filtering uses `given_at` for given doses and `created_at` for skipped doses (since med-logs don't have a user-editable `timestamp` field).
 GET    /api/babies/:id/med-logs/:entryId      → Get single med-log entry
@@ -383,7 +385,7 @@ GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PD
 Title: "💊 UDCA — Time for dose"
 Body:  "50mg for [Baby Name]. Tap to log."
 ```
-Clicking the notification opens the app to `/log/med?medication_id=<id>` with the medication pre-filled for logging. No action buttons — click-to-open only.
+Clicking the notification opens the app to `/log/med?medication_id=<id>` with the medication pre-filled for logging. The notification payload also includes `scheduled_time`, which the client appends as `&scheduled_time=<value>` for pre-filling the dose log. No action buttons — click-to-open only.
 
 ### 6.4 Suppression & Follow-ups
 - `scheduled_time` is a **full UTC datetime**, computed by the server from the medication's local schedule times + the medication's stored timezone at the moment the notification fires. Both `given_at` and `scheduled_time` are UTC datetimes, making the ±30 min suppression comparison straightforward.
@@ -834,7 +836,7 @@ The app should display a visual reference when logging stools:
 | 6 | 🟢 Green | `green` | Good bile flow |
 | 7 | 🟤 Brown | `brown` | Normal bile flow |
 
-The stool logging screen should show these colors as large tappable swatches with the reference images.
+The stool logging screen shows these colors as large tappable swatches with color-coded backgrounds and clinical meaning labels. **v2:** Add actual Infant Stool Color Card reference photographs alongside the swatches for improved clinical accuracy.
 
 ---
 
@@ -879,6 +881,7 @@ The stool logging screen should show these colors as large tappable swatches wit
 - **Multi-language** — if sharing with family/caregivers who speak another language
 - **Doctor view** — read-only link for hepatologist to see live dashboard (no login required, token-based)
 - **Integration** — direct upload of lab results from hospital portals (very stretch)
+- **Stool color reference photos** — clinical Infant Stool Color Card photographs alongside color swatches for improved accuracy
 
 ---
 

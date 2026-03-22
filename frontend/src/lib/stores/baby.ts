@@ -29,6 +29,24 @@ interface JoinResponse {
 	message: string;
 }
 
+const ACTIVE_BABY_KEY = 'littleliver_active_baby_id';
+
+function saveActiveBabyId(id: string): void {
+	try {
+		localStorage.setItem(ACTIVE_BABY_KEY, id);
+	} catch {
+		// localStorage unavailable (SSR, private browsing)
+	}
+}
+
+function loadActiveBabyId(): string | null {
+	try {
+		return localStorage.getItem(ACTIVE_BABY_KEY);
+	} catch {
+		return null;
+	}
+}
+
 export const babies = writable<Baby[]>([]);
 export const activeBaby = writable<Baby | null>(null);
 
@@ -53,7 +71,18 @@ export async function fetchBabies(): Promise<void> {
 		}
 	}
 
+	// Try to restore from localStorage
+	const savedId = loadActiveBabyId();
+	if (savedId) {
+		const saved = data.babies.find((b) => b.id === savedId);
+		if (saved) {
+			activeBaby.set(saved);
+			return;
+		}
+	}
+
 	activeBaby.set(data.babies[0]);
+	saveActiveBabyId(data.babies[0].id);
 }
 
 export function setActiveBaby(id: string): void {
@@ -65,12 +94,18 @@ export function setActiveBaby(id: string): void {
 	}
 
 	activeBaby.set(found);
+	saveActiveBabyId(id);
 }
 
 /** Reset stores to initial state. Exported for testing only. */
 export function _resetBabyStores(): void {
 	babies.set([]);
 	activeBaby.set(null);
+	try {
+		localStorage.removeItem(ACTIVE_BABY_KEY);
+	} catch {
+		// localStorage unavailable
+	}
 }
 
 export async function createBaby(input: CreateBabyInput): Promise<Baby> {

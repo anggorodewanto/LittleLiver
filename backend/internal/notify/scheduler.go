@@ -171,7 +171,7 @@ func (s *Scheduler) checkScheduleTime(med activeMed, schedTime string, nowUTC ti
 				covered, err := store.IsDoseCovered(s.db, med.ID, scheduledUTC)
 				if err != nil {
 					log.Printf("scheduler: check suppression for med %s: %v", med.ID, err)
-					covered = false
+					covered = true
 				}
 				if covered {
 					return

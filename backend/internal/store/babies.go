@@ -141,6 +141,66 @@ func UpdateBaby(db *sql.DB, id, name, sex, dob string, diagnosisDate, kasaiDate 
 	return GetBabyByID(db, id)
 }
 
+// UpdateBabyAndRecalculate updates a baby's fields and recalculates feeding
+// calories for breast-direct feeds in a single transaction.
+func UpdateBabyAndRecalculate(db *sql.DB, id, name, sex, dob string, diagnosisDate, kasaiDate *string, defaultCalPerFeed *float64, notes *string) (*model.Baby, int64, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, 0, fmt.Errorf("update baby and recalculate: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(
+		`UPDATE babies SET name = ?, sex = ?, date_of_birth = ?,
+		        diagnosis_date = ?, kasai_date = ?,
+		        default_cal_per_feed = COALESCE(?, default_cal_per_feed),
+		        notes = ?
+		 WHERE id = ?`,
+		name, sex, dob, diagnosisDate, kasaiDate, defaultCalPerFeed, notes, id,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("update baby and recalculate: update: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return nil, 0, fmt.Errorf("update baby and recalculate: rows affected: %w", err)
+	}
+	if rows == 0 {
+		return nil, 0, fmt.Errorf("update baby and recalculate: %w", sql.ErrNoRows)
+	}
+
+	// Read resolved default_cal_per_feed
+	var resolvedCal float64
+	err = tx.QueryRow("SELECT default_cal_per_feed FROM babies WHERE id = ?", id).Scan(&resolvedCal)
+	if err != nil {
+		return nil, 0, fmt.Errorf("update baby and recalculate: read cal: %w", err)
+	}
+
+	// Recalculate feedings with used_default_cal=true
+	recalcRes, err := tx.Exec(
+		`UPDATE feedings SET calories = ?, updated_at = CURRENT_TIMESTAMP
+		 WHERE baby_id = ? AND used_default_cal = 1`,
+		resolvedCal, id,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("update baby and recalculate: recalculate: %w", err)
+	}
+	count, err := recalcRes.RowsAffected()
+	if err != nil {
+		return nil, 0, fmt.Errorf("update baby and recalculate: recalculate rows: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, 0, fmt.Errorf("update baby and recalculate: commit: %w", err)
+	}
+
+	baby, err := GetBabyByID(db, id)
+	if err != nil {
+		return nil, 0, fmt.Errorf("update baby and recalculate: reload: %w", err)
+	}
+	return baby, count, nil
+}
+
 // UnlinkParent removes the link between a user and a baby.
 // If the user was the last parent, the baby is deleted (CASCADE removes associated data).
 func UnlinkParent(db *sql.DB, babyID, userID string) error {

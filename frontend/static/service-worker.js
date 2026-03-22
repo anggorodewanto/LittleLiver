@@ -88,13 +88,27 @@ self.addEventListener('notificationclick', (event) => {
 			event.notification.close();
 
 			const data = event.notification.data;
-			const medicationId = data?.medication_id;
-			const scheduledTime = data?.scheduled_time;
-			let url = medicationId ? `/log/med?medication_id=${medicationId}` : '/';
-			if (scheduledTime) {
-				url += `&scheduled_time=${encodeURIComponent(scheduledTime)}`;
+			let url;
+			if (data?.url) {
+				url = String(data.url);
+			} else {
+				const medicationId = data?.medication_id;
+				const scheduledTime = data?.scheduled_time;
+				url = medicationId ? `/log/med?medication_id=${medicationId}` : '/';
+				if (scheduledTime) {
+					const separator = url.includes('?') ? '&' : '?';
+					url += `${separator}scheduled_time=${encodeURIComponent(scheduledTime)}`;
+				}
 			}
 
+			const windowClients = await self.clients.matchAll({ type: 'window' });
+			for (const client of windowClients) {
+				if ('navigate' in client) {
+					await client.navigate(url);
+					await client.focus();
+					return;
+				}
+			}
 			await self.clients.openWindow(url);
 		})()
 	);

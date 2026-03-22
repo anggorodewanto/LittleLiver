@@ -100,13 +100,27 @@ export function initServiceWorker(sw: ServiceWorkerGlobalScope): void {
 				clickEvent.notification.close();
 
 				const data = clickEvent.notification.data as Record<string, unknown> | undefined;
-				const medicationId = data?.medication_id;
-				const scheduledTime = data?.scheduled_time;
-				let url = medicationId ? `/log/med?medication_id=${medicationId}` : '/';
-				if (scheduledTime) {
-					url += `&scheduled_time=${encodeURIComponent(String(scheduledTime))}`;
+				let url: string;
+				if (data?.url) {
+					url = String(data.url);
+				} else {
+					const medicationId = data?.medication_id;
+					const scheduledTime = data?.scheduled_time;
+					url = medicationId ? `/log/med?medication_id=${medicationId}` : '/';
+					if (scheduledTime) {
+						const separator = url.includes('?') ? '&' : '?';
+						url += `${separator}scheduled_time=${encodeURIComponent(String(scheduledTime))}`;
+					}
 				}
 
+				const windowClients = await sw.clients.matchAll({ type: 'window' });
+				for (const client of windowClients) {
+					if ('navigate' in client) {
+						await (client as WindowClient).navigate(url);
+						await (client as WindowClient).focus();
+						return;
+					}
+				}
 				await sw.clients.openWindow(url);
 			})()
 		);

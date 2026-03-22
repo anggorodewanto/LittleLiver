@@ -45,15 +45,20 @@ func NewMux(opts ...Option) *http.ServeMux {
 			}
 			sessionSecret = os.Getenv("SESSION_SECRET")
 			authCfg = auth.Config{
-				ClientID:     clientID,
-				ClientSecret: clientSecret,
-				RedirectURL:  baseURL + "/auth/google/callback",
+				ClientID:      clientID,
+				ClientSecret:  clientSecret,
+				RedirectURL:   baseURL + "/auth/google/callback",
+				SessionSecret: sessionSecret,
 			}
 		}
 
 		if authCfg.ClientID != "" && authCfg.ClientSecret != "" {
 			authHandlers := auth.NewHandlers(cfg.db, authCfg)
-			auth.RegisterRoutes(mux, authHandlers)
+
+			// IP-based rate limiter for unauthenticated OAuth endpoints: 10 requests per minute per IP
+			ipRateLimiter := middleware.NewIPRateLimiter(10, time.Minute)
+			ipRateMw := ipRateLimiter.Middleware()
+			auth.RegisterRoutes(mux, authHandlers, ipRateMw)
 
 			// Register API routes with auth middleware
 			cookieName := auth.CookieName
@@ -153,6 +158,12 @@ func NewMux(opts ...Option) *http.ServeMux {
 			// Photo upload endpoint
 			if cfg.objStore != nil {
 				mux.Handle("POST /api/babies/{id}/upload", rateMw(authMw(csrfMw(http.HandlerFunc(UploadPhotoHandler(cfg.db, cfg.objStore))))))
+			} else {
+				mux.Handle("POST /api/babies/{id}/upload", rateMw(authMw(csrfMw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusServiceUnavailable)
+					w.Write([]byte(`{"error":"Photo storage not configured"}`))
+				})))))
 			}
 
 			// Logout — behind rate limiting, auth, and CSRF middleware

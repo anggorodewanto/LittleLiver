@@ -11,7 +11,7 @@
 
 	interface Props {
 		data: WeightDataPoint[];
-		percentiles: Percentiles;
+		percentiles: Percentiles | null;
 		dateOfBirth: string;
 	}
 
@@ -31,6 +31,27 @@
 		'97th': '#ef444480'
 	};
 
+	function buildPercentileDatasets() {
+		if (!percentiles) return [];
+		return (
+			[
+				['3rd', 'p3', percentiles.p3],
+				['15th', 'p15', percentiles.p15],
+				['50th', 'p50', percentiles.p50],
+				['85th', 'p85', percentiles.p85],
+				['97th', 'p97', percentiles.p97]
+			] as [string, string, { age_days: number; value?: number; weight_kg?: number }[]][]
+		).map(([label, , points]) => ({
+			label,
+			data: points.map((p) => ({ x: p.age_days, y: p.value ?? p.weight_kg ?? 0 })),
+			borderColor: PERCENTILE_COLORS[label],
+			borderDash: [5, 5],
+			borderWidth: 1,
+			pointRadius: 0,
+			fill: false
+		}));
+	}
+
 	let config = $derived<ChartConfiguration>({
 		type: 'line',
 		data: {
@@ -47,23 +68,7 @@
 					pointRadius: 4,
 					fill: false
 				},
-				...(
-					[
-						['3rd', 'p3', percentiles.p3],
-						['15th', 'p15', percentiles.p15],
-						['50th', 'p50', percentiles.p50],
-						['85th', 'p85', percentiles.p85],
-						['97th', 'p97', percentiles.p97]
-					] as [string, string, { age_days: number; value?: number; weight_kg?: number }[]][]
-				).map(([label, , points]) => ({
-					label,
-					data: points.map((p) => ({ x: p.age_days, y: p.value ?? p.weight_kg ?? 0 })),
-					borderColor: PERCENTILE_COLORS[label],
-					borderDash: [5, 5],
-					borderWidth: 1,
-					pointRadius: 0,
-					fill: false
-				}))
+				...buildPercentileDatasets()
 			]
 		},
 		options: {

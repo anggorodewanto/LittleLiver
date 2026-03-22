@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -72,8 +73,11 @@ func main() {
 	// Validate SESSION_SECRET is set when OAuth is configured
 	sessionSecret := os.Getenv("SESSION_SECRET")
 	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
-	if googleClientID != "" && sessionSecret == "" {
-		log.Fatal("SESSION_SECRET environment variable is required when Google OAuth is configured")
+	if googleClientID != "" && strings.TrimSpace(sessionSecret) == "" {
+		log.Fatal("SESSION_SECRET environment variable must be non-empty when Google OAuth is configured")
+	}
+	if googleClientID == "" {
+		log.Println("WARNING: GOOGLE_CLIENT_ID not set - OAuth authentication disabled, app will not be usable in production")
 	}
 
 	// Initialize push notifications if VAPID keys are configured
