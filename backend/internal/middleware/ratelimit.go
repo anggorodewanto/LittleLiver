@@ -36,6 +36,16 @@ func (rl *RateLimiter) allow(key string) bool {
 	defer rl.mu.Unlock()
 
 	now := time.Now()
+
+	// Periodically evict stale sessions to prevent memory leak.
+	if len(rl.sessions) > 100 {
+		for k, b := range rl.sessions {
+			if now.Sub(b.windowStart) >= rl.window*2 {
+				delete(rl.sessions, k)
+			}
+		}
+	}
+
 	b, ok := rl.sessions[key]
 	if !ok {
 		rl.sessions[key] = &sessionBucket{count: 1, windowStart: now}

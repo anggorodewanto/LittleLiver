@@ -22,7 +22,7 @@ func TestDeleteAccountHandler_Returns204(t *testing.T) {
 
 	authMw := middleware.Auth(db, testCookieName)
 	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
-	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db))))
+	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db, nil))))
 
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodDelete, "/api/users/me")
 	rec := httptest.NewRecorder()
@@ -43,7 +43,7 @@ func TestDeleteAccountHandler_UserDeleted(t *testing.T) {
 
 	authMw := middleware.Auth(db, testCookieName)
 	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
-	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db))))
+	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db, nil))))
 
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodDelete, "/api/users/me")
 	rec := httptest.NewRecorder()
@@ -66,7 +66,7 @@ func TestDeleteAccountHandler_NoAuth_Returns401(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	defer db.Close()
 
-	h := http.HandlerFunc(handler.DeleteAccountHandler(db))
+	h := http.HandlerFunc(handler.DeleteAccountHandler(db, nil))
 	req := httptest.NewRequest(http.MethodDelete, "/api/users/me", nil)
 	rec := httptest.NewRecorder()
 
@@ -87,7 +87,7 @@ func TestDeleteAccountHandler_LastParentBabyDeleted(t *testing.T) {
 
 	authMw := middleware.Auth(db, testCookieName)
 	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
-	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db))))
+	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db, nil))))
 
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodDelete, "/api/users/me")
 	rec := httptest.NewRecorder()
@@ -129,7 +129,7 @@ func TestDeleteAccountHandler_InvitesCreatedByUserDeleted(t *testing.T) {
 
 	authMw := middleware.Auth(db, testCookieName)
 	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
-	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db))))
+	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db, nil))))
 
 	req := testutil.AuthenticatedRequest(t, db, user1.ID, testCookieName, testSecret, http.MethodDelete, "/api/users/me")
 	rec := httptest.NewRecorder()
@@ -167,7 +167,7 @@ func TestDeleteAccountHandler_StoreError_Returns500(t *testing.T) {
 	db2 := testutil.SetupTestDB(t)
 	db2.Close()
 
-	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db2))))
+	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db2, nil))))
 	rec := httptest.NewRecorder()
 
 	h.ServeHTTP(rec, req)
@@ -199,7 +199,7 @@ func TestDeleteAccountHandler_InvitesUsedByAnonymized(t *testing.T) {
 
 	authMw := middleware.Auth(db, testCookieName)
 	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
-	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db))))
+	h := authMw(csrfMw(http.HandlerFunc(handler.DeleteAccountHandler(db, nil))))
 
 	req := testutil.AuthenticatedRequest(t, db, user1.ID, testCookieName, testSecret, http.MethodDelete, "/api/users/me")
 	rec := httptest.NewRecorder()

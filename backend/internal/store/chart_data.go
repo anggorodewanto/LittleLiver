@@ -80,8 +80,8 @@ func GetFeedingDaily(db *sql.DB, babyID, from, to string, loc *time.Location) ([
 			COALESCE(SUM(volume_ml), 0) as total_volume_ml,
 			COALESCE(SUM(calories), 0) as total_calories,
 			COUNT(*) as feed_count,
-			SUM(CASE WHEN feed_type = 'breast_milk' THEN 1 ELSE 0 END) as breast_milk,
-			SUM(CASE WHEN feed_type = 'formula' OR feed_type = 'fortified_breast_milk' THEN 1 ELSE 0 END) as formula, -- fortified_breast_milk grouped with formula since by_type has no dedicated category
+			SUM(CASE WHEN feed_type = 'breast_milk' OR feed_type = 'fortified_breast_milk' THEN 1 ELSE 0 END) as breast_milk,
+			SUM(CASE WHEN feed_type = 'formula' THEN 1 ELSE 0 END) as formula,
 			SUM(CASE WHEN feed_type = 'solid' THEN 1 ELSE 0 END) as solid,
 			SUM(CASE WHEN feed_type = 'other' THEN 1 ELSE 0 END) as other_type
 		 FROM feedings

@@ -127,15 +127,19 @@ func GetDashboardSummary(db *sql.DB, babyID, from, to string, loc *time.Location
 
 // GetStoolColorTrend returns stool color entries for the last 7 days, regardless of any params.
 // Returns one entry per stool (multiple per day possible), ordered by date descending.
-func GetStoolColorTrend(db *sql.DB, babyID string) ([]StoolColorEntry, error) {
-	sevenDaysAgo := time.Now().UTC().AddDate(0, 0, -6).Format(model.DateFormat) + "T00:00:00Z"
+// loc specifies the user's timezone for computing the 7-day window and grouping by date.
+func GetStoolColorTrend(db *sql.DB, babyID string, loc *time.Location) ([]StoolColorEntry, error) {
+	now := time.Now().In(loc)
+	sevenDaysAgo := time.Date(now.Year(), now.Month(), now.Day()-6, 0, 0, 0, 0, loc)
+	sevenDaysAgoUTC := sevenDaysAgo.UTC().Format(model.DateTimeFormat)
+	offsetSec := tzOffsetSeconds(sevenDaysAgo.Format(model.DateFormat), loc)
 
 	rows, err := db.Query(
-		`SELECT DATE(timestamp) as date, color_label, color_rating
+		`SELECT DATE(datetime(timestamp, ? || ' seconds')) as date, color_label, color_rating
 		 FROM stools
 		 WHERE baby_id = ? AND timestamp >= ?
 		 ORDER BY timestamp DESC`,
-		babyID, sevenDaysAgo,
+		offsetSec, babyID, sevenDaysAgoUTC,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query stool color trend: %w", err)

@@ -134,6 +134,21 @@
 		}
 	}
 
+	function alertMessage(alert: Alert): string {
+		switch (alert.alert_type) {
+			case 'acholic_stool':
+				return 'Acholic stool detected (color rating: ' + alert.value + '). Contact your hepatology team — this may indicate bile flow failure.';
+			case 'fever':
+				return 'Fever detected' + (alert.method ? ` (${alert.method})` : '') + '. Contact your hepatology team immediately. Fever after Kasai can indicate cholangitis.';
+			case 'jaundice_worsening':
+				return 'Worsening jaundice detected. Contact your hepatology team.';
+			case 'missed_medication':
+				return 'A scheduled medication dose was missed. Tap to log.';
+			default:
+				return '';
+		}
+	}
+
 	let visibleAlerts = $derived(
 		(dashboard?.active_alerts ?? []).filter((a) => !dismissedAlertIds.has(a.entry_id))
 	);
@@ -196,7 +211,10 @@
 		<div class="alert-banners">
 			{#each visibleAlerts as alert (alert.entry_id)}
 				<div class="alert-banner alert-{alert.alert_type}">
-					<span class="alert-message">{alertLabel(alert.alert_type)}</span>
+					<div class="alert-content">
+						<strong class="alert-label">{alertLabel(alert.alert_type)}</strong>
+						<span class="alert-message">{alertMessage(alert)}</span>
+					</div>
 					<button type="button" onclick={() => dismissAlert(alert.entry_id)}>Dismiss</button>
 				</div>
 			{/each}

@@ -113,5 +113,18 @@ export const apiClient = {
 
 	getRaw(path: string): Promise<Response> {
 		return buildRequest(path);
+	},
+
+	async logout(): Promise<void> {
+		const token = await fetchCsrfToken();
+		await fetch('/auth/logout', {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'X-Timezone': userTimezone,
+				'X-CSRF-Token': token
+			}
+		});
+		clearCsrfToken();
 	}
 };

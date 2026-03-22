@@ -14,7 +14,8 @@ export async function subscribeToPush(subscription: PushSubscription): Promise<v
 	const subJson = subscription.toJSON();
 	await apiClient.post('/push/subscribe', {
 		endpoint: subJson.endpoint,
-		keys: subJson.keys
+		p256dh: subJson.keys?.p256dh ?? '',
+		auth: subJson.keys?.auth ?? ''
 	});
 }
 
@@ -34,6 +35,48 @@ export async function requestPushSubscription(
 
 	await subscribeToPush(subscription);
 	return subscription;
+}
+
+/**
+ * Initialize push notifications: request permission, subscribe, and register with backend.
+ * Should be called after the user is authenticated and the service worker is registered.
+ * Silently no-ops if push is not supported, permission is denied, or VAPID key is unavailable.
+ */
+export async function initPushNotifications(): Promise<void> {
+	if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+		return;
+	}
+
+	// Don't prompt if already denied
+	if (Notification.permission === 'denied') {
+		return;
+	}
+
+	try {
+		const registration = await navigator.serviceWorker.ready;
+
+		// Check if already subscribed
+		const existing = await registration.pushManager.getSubscription();
+		if (existing) {
+			// Re-register with backend in case the subscription was lost server-side
+			await subscribeToPush(existing);
+			return;
+		}
+
+		// Fetch VAPID public key from server
+		const resp = await fetch('/api/push/vapid-key', { credentials: 'include' });
+		if (!resp.ok) {
+			return; // VAPID not configured
+		}
+		const { vapid_public_key } = await resp.json();
+		if (!vapid_public_key) {
+			return;
+		}
+
+		await requestPushSubscription(registration, vapid_public_key);
+	} catch {
+		// Push notification setup failed — non-fatal
+	}
 }
 
 export function setupInstallPrompt(): void {

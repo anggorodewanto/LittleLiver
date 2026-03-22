@@ -461,13 +461,8 @@ func TestRegisterRoutes_RoutesExist(t *testing.T) {
 		t.Errorf("expected 400 for callback with bad state, got %d", rec.Code)
 	}
 
-	// Test logout route exists
-	req = httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
-	rec = httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
-		t.Errorf("expected 204 for logout, got %d", rec.Code)
-	}
+	// Note: POST /auth/logout is registered in router.go with full middleware chain,
+	// not via RegisterRoutes. It is tested in router_test.go and integration tests.
 }
 
 func TestLogin_ConcurrentRequests_NoRace(t *testing.T) {

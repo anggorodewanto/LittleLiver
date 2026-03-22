@@ -15,7 +15,7 @@
 	<MedicationList
 		babyId={baby.id}
 		oncreate={() => goto('/log/medication')}
-		onedit={(medicationId) => alert(`Edit medication ${medicationId} — coming soon`)}
+		onedit={(medicationId) => goto(`/log/medication?edit=${medicationId}`)}
 		onviewlogs={(medicationId) => goto(`/log/med?medication_id=${medicationId}`)}
 	/>
 {/if}

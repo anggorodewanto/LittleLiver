@@ -319,16 +319,27 @@ describe('TodayDashboard', () => {
 	it('renders alert banners for each active alert type', async () => {
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
-		expect(await screen.findByText(/acholic stool/i)).toBeInTheDocument();
-		expect(screen.getByText(/fever/i)).toBeInTheDocument();
-		expect(screen.getByText(/jaundice/i)).toBeInTheDocument();
-		expect(screen.getByText(/missed medication/i)).toBeInTheDocument();
+		// Use exact text matching on the alert-label elements to avoid matching both label and message
+		const labels = await screen.findAllByText(
+			(content, element) => element?.classList.contains('alert-label') && /acholic stool/i.test(content)
+		);
+		expect(labels.length).toBeGreaterThanOrEqual(1);
+
+		expect(screen.getAllByText((content, element) =>
+			element?.classList.contains('alert-label') && /fever/i.test(content)
+		).length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText((content, element) =>
+			element?.classList.contains('alert-label') && /jaundice/i.test(content)
+		).length).toBeGreaterThanOrEqual(1);
+		expect(screen.getAllByText((content, element) =>
+			element?.classList.contains('alert-label') && /missed medication/i.test(content)
+		).length).toBeGreaterThanOrEqual(1);
 	});
 
 	it('renders dismiss buttons on alert banners', async () => {
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
-		await screen.findByText(/acholic stool/i);
+		await screen.findByText('Acholic Stool');
 
 		const dismissButtons = screen.getAllByRole('button', { name: /dismiss/i });
 		expect(dismissButtons.length).toBe(4);
@@ -339,12 +350,12 @@ describe('TodayDashboard', () => {
 	it('dismissing an alert hides it and persists to localStorage', async () => {
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
-		await screen.findByText(/acholic stool/i);
+		await screen.findByText('Acholic Stool');
 
 		const dismissButtons = screen.getAllByRole('button', { name: /dismiss/i });
 		await fireEvent.click(dismissButtons[0]);
 
-		expect(screen.queryByText(/acholic stool/i)).not.toBeInTheDocument();
+		expect(screen.queryByText('Acholic Stool')).not.toBeInTheDocument();
 
 		const dismissed = JSON.parse(localStorage.getItem('dismissed_alerts') ?? '[]');
 		expect(dismissed).toContain('alert-1');
@@ -356,13 +367,13 @@ describe('TodayDashboard', () => {
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
 		// Wait for data to load
-		await screen.findByText(/fever/i);
+		await screen.findByText('Fever');
 
-		expect(screen.queryByText(/acholic stool/i)).not.toBeInTheDocument();
-		expect(screen.queryByText(/jaundice/i)).not.toBeInTheDocument();
+		expect(screen.queryByText('Acholic Stool')).not.toBeInTheDocument();
+		expect(screen.queryByText('Jaundice Worsening')).not.toBeInTheDocument();
 		// fever and missed medication should still show
-		expect(screen.getByText(/fever/i)).toBeInTheDocument();
-		expect(screen.getByText(/missed medication/i)).toBeInTheDocument();
+		expect(screen.getByText('Fever')).toBeInTheDocument();
+		expect(screen.getByText('Missed Medication')).toBeInTheDocument();
 	});
 
 	// --- Recovery clears dismissed IDs ---
@@ -388,7 +399,7 @@ describe('TodayDashboard', () => {
 
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
-		await screen.findByText(/fever/i);
+		await screen.findByText('Fever');
 
 		// After recovery, dismissed IDs for resolved alerts should be cleaned up
 		// Only IDs that match current active alerts should remain

@@ -53,6 +53,35 @@
 	let medicationId = $derived($page.url.searchParams.get('medication_id') ?? '');
 	let scheduledTime = $derived($page.url.searchParams.get('scheduled_time') ?? undefined);
 
+	// Medication edit mode
+	let editMedicationId = $derived($page.url.searchParams.get('edit') ?? '');
+	let editMedicationData = $state<import('$lib/components/MedicationForm.svelte').MedicationInitialData | undefined>(undefined);
+	let loadingEdit = $state(false);
+
+	$effect(() => {
+		if (metric === 'medication' && editMedicationId && baby) {
+			loadingEdit = true;
+			apiClient.get<{ id: string; name: string; dose: string; frequency: string; schedule: string | null; active: boolean }>(`/babies/${baby.id}/medications/${editMedicationId}`)
+				.then((med) => {
+					let scheduleTimes: string[] = [];
+					if (med.schedule) {
+						try { scheduleTimes = JSON.parse(med.schedule); } catch { /* empty */ }
+					}
+					editMedicationData = {
+						name: med.name,
+						dose: med.dose,
+						frequency: med.frequency,
+						schedule_times: scheduleTimes,
+						active: med.active
+					};
+				})
+				.catch(() => { error = 'Failed to load medication'; })
+				.finally(() => { loadingEdit = false; });
+		} else {
+			editMedicationData = undefined;
+		}
+	});
+
 	async function uploadPhoto(babyId: string, file: File): Promise<string> {
 		const formData = new FormData();
 		formData.append('photo', file);
@@ -78,8 +107,14 @@
 		submitting = true;
 		error = '';
 		try {
-			await apiClient.post(`/babies/${baby.id}/${config.endpoint}`, data);
-			goto('/');
+			// Medication edit mode: use PUT instead of POST
+			if (metric === 'medication' && editMedicationId) {
+				await apiClient.put(`/babies/${baby.id}/medications/${editMedicationId}`, data);
+				goto('/medications');
+			} else {
+				await apiClient.post(`/babies/${baby.id}/${config.endpoint}`, data);
+				goto('/');
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to save';
 		} finally {
@@ -95,7 +130,7 @@
 {:else if !config}
 	<p>Unknown metric type</p>
 {:else}
-	<h1>Log {config.label}</h1>
+	<h1>{editMedicationId ? 'Edit' : 'Log'} {config.label}</h1>
 
 	{#if metric === 'feeding'}
 		<FeedingForm onsubmit={handleSubmit} {submitting} {error} />
@@ -118,7 +153,11 @@
 	{:else if metric === 'notes'}
 		<NotesForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'medication'}
-		<MedicationForm onsubmit={handleSubmit} {submitting} {error} />
+		{#if loadingEdit}
+			<div class="loading">Loading medication...</div>
+		{:else}
+			<MedicationForm onsubmit={handleSubmit} initialData={editMedicationData} {submitting} {error} />
+		{/if}
 	{:else if metric === 'med'}
 		<DoseLogForm onsubmit={handleSubmit} babyId={baby.id} {medicationId} {scheduledTime} {submitting} {error} />
 	{/if}

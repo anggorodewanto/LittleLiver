@@ -52,8 +52,8 @@ func NewMux(opts ...Option) *http.ServeMux {
 		}
 
 		if authCfg.ClientID != "" && authCfg.ClientSecret != "" {
-			h := auth.NewHandlers(cfg.db, authCfg)
-			auth.RegisterRoutes(mux, h)
+			authHandlers := auth.NewHandlers(cfg.db, authCfg)
+			auth.RegisterRoutes(mux, authHandlers)
 
 			// Register API routes with auth middleware
 			cookieName := auth.CookieName
@@ -85,7 +85,7 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("DELETE /api/babies/{id}/parents/me", rateMw(authMw(csrfMw(http.HandlerFunc(UnlinkSelfHandler(cfg.db))))))
 
 			// Account deletion
-			mux.Handle("DELETE /api/users/me", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteAccountHandler(cfg.db))))))
+			mux.Handle("DELETE /api/users/me", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteAccountHandler(cfg.db, cfg.objStore))))))
 
 			// Metric CRUD endpoints
 			registerMetricCRUD(mux, "/api/babies/{id}/feedings", rateMw, authMw, csrfMw,
@@ -146,6 +146,7 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("GET /api/who/percentiles", rateMw(authMw(http.HandlerFunc(WHOPercentilesHandler()))))
 
 			// Push subscription endpoints
+			mux.Handle("GET /api/push/vapid-key", rateMw(authMw(http.HandlerFunc(VAPIDKeyHandler(cfg.vapidPublicKey)))))
 			mux.Handle("POST /api/push/subscribe", rateMw(authMw(csrfMw(http.HandlerFunc(SubscribePushHandler(cfg.db))))))
 			mux.Handle("DELETE /api/push/subscribe", rateMw(authMw(csrfMw(http.HandlerFunc(UnsubscribePushHandler(cfg.db))))))
 
@@ -153,6 +154,9 @@ func NewMux(opts ...Option) *http.ServeMux {
 			if cfg.objStore != nil {
 				mux.Handle("POST /api/babies/{id}/upload", rateMw(authMw(csrfMw(http.HandlerFunc(UploadPhotoHandler(cfg.db, cfg.objStore))))))
 			}
+
+			// Logout — behind rate limiting, auth, and CSRF middleware
+			mux.Handle("POST /auth/logout", rateMw(authMw(csrfMw(http.HandlerFunc(authHandlers.Logout)))))
 		}
 	}
 
@@ -172,9 +176,10 @@ func NewMux(opts ...Option) *http.ServeMux {
 type Option func(*options)
 
 type options struct {
-	db         *sql.DB
-	authConfig *auth.Config
-	objStore   storage.ObjectStore
+	db             *sql.DB
+	authConfig     *auth.Config
+	objStore       storage.ObjectStore
+	vapidPublicKey string
 }
 
 // WithDB provides a database connection for routes that need it.
@@ -195,6 +200,13 @@ func WithAuthConfig(cfg auth.Config) Option {
 func WithObjectStore(s storage.ObjectStore) Option {
 	return func(o *options) {
 		o.objStore = s
+	}
+}
+
+// WithVAPIDPublicKey provides the VAPID public key for push subscription registration.
+func WithVAPIDPublicKey(key string) Option {
+	return func(o *options) {
+		o.vapidPublicKey = key
 	}
 }
 

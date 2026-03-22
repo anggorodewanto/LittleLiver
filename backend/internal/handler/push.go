@@ -31,6 +31,20 @@ type pushUnsubscribeRequest struct {
 	Endpoint string `json:"endpoint"`
 }
 
+// VAPIDKeyHandler handles GET /api/push/vapid-key.
+// Returns the VAPID public key so the frontend can subscribe to push notifications.
+func VAPIDKeyHandler(vapidPublicKey string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if vapidPublicKey == "" {
+			http.Error(w, "push notifications not configured", http.StatusServiceUnavailable)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{
+			"vapid_public_key": vapidPublicKey,
+		})
+	}
+}
+
 // SubscribePushHandler handles POST /api/push/subscribe.
 func SubscribePushHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

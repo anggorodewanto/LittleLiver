@@ -295,7 +295,7 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 				}
 
 				alerts = append(alerts, Alert{
-					EntryID:   m.ID,
+					EntryID:   fmt.Sprintf("%s_%s", m.ID, scheduledUTC.Format("20060102T150405Z")),
 					AlertType: AlertTypeMissedMedication,
 					Value:     st,
 					Timestamp: scheduledUTC.Format(model.DateTimeFormat),

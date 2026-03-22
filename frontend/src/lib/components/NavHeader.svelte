@@ -2,19 +2,16 @@
 	import BabySelector from './BabySelector.svelte';
 	import { babies, activeBaby, setActiveBaby } from '$lib/stores/baby';
 	import { currentUser } from '$lib/stores/user';
+	import { apiClient } from '$lib/api';
 
 	let loggingOut = $state(false);
 
 	async function handleLogout(): Promise<void> {
 		loggingOut = true;
 		try {
-			await fetch('/auth/logout', {
-			method: 'POST',
-			credentials: 'include',
-			headers: { 'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone }
-		});
+			await apiClient.logout();
 		} catch {
-			// ignore
+			// ignore — redirect to login regardless
 		}
 		window.location.href = '/login';
 	}

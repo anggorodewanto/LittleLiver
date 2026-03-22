@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/ablankz/LittleLiver/backend/internal/backup"
 	"github.com/ablankz/LittleLiver/backend/internal/cron"
@@ -66,12 +68,23 @@ func main() {
 		log.Printf("WARNING: R2 not configured — photo uploads disabled")
 	}
 
+	// Validate SESSION_SECRET is set when OAuth is configured
+	sessionSecret := os.Getenv("SESSION_SECRET")
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	if googleClientID != "" && sessionSecret == "" {
+		log.Fatal("SESSION_SECRET environment variable is required when Google OAuth is configured")
+	}
+
 	// Initialize push notifications if VAPID keys are configured
 	vapidPublic := os.Getenv("VAPID_PUBLIC_KEY")
 	vapidPrivate := os.Getenv("VAPID_PRIVATE_KEY")
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
 		baseURL = "http://localhost:8080"
+	}
+
+	if vapidPublic != "" {
+		opts = append(opts, handler.WithVAPIDPublicKey(vapidPublic))
 	}
 
 	if vapidPublic != "" && vapidPrivate != "" {
@@ -109,8 +122,22 @@ func main() {
 	mux := handler.NewMux(opts...)
 
 	addr := fmt.Sprintf(":%s", port)
+	srv := &http.Server{Addr: addr, Handler: mux}
+
+	// Graceful shutdown on SIGTERM/SIGINT so deferred cleanup runs
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+		sig := <-sigCh
+		log.Printf("received %s, shutting down gracefully...", sig)
+		if err := srv.Shutdown(context.Background()); err != nil {
+			log.Printf("graceful shutdown error: %v", err)
+		}
+	}()
+
 	log.Printf("listening on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
+	log.Printf("server stopped")
 }

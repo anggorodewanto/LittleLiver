@@ -98,7 +98,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		trend, err := store.GetStoolColorTrend(db, baby.ID)
+		trend, err := store.GetStoolColorTrend(db, baby.ID, loc)
 		if err != nil {
 			log.Printf("stool color trend: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)

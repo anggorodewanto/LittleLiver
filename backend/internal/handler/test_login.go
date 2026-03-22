@@ -50,6 +50,7 @@ func TestLoginHandler(db *sql.DB) http.HandlerFunc {
 			Value:    session.ID,
 			Path:     "/",
 			HttpOnly: true,
+			Secure:   true,
 			SameSite: http.SameSiteLaxMode,
 			MaxAge:   int(store.SessionDuration.Seconds()),
 		})

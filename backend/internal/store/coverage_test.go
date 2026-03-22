@@ -214,7 +214,7 @@ func TestGetStoolColorTrend_NullColorLabel(t *testing.T) {
 		t.Fatalf("CreateStool: %v", err)
 	}
 
-	trend, err := GetStoolColorTrend(db, baby.ID)
+	trend, err := GetStoolColorTrend(db, baby.ID, time.UTC)
 	if err != nil {
 		t.Fatalf("GetStoolColorTrend: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestGetStoolColorTrend_EmptyData(t *testing.T) {
 		t.Fatalf("CreateBaby: %v", err)
 	}
 
-	trend, err := GetStoolColorTrend(db, baby.ID)
+	trend, err := GetStoolColorTrend(db, baby.ID, time.UTC)
 	if err != nil {
 		t.Fatalf("GetStoolColorTrend: %v", err)
 	}
@@ -647,7 +647,7 @@ func TestDeleteAccount_AnonymizesFeedingsTable(t *testing.T) {
 	}
 
 	// Delete account with feedings in anonymization list
-	err = DeleteAccount(db, user.ID, []string{"feedings"})
+	_, err = DeleteAccount(db, user.ID, []string{"feedings"})
 	if err != nil {
 		t.Fatalf("DeleteAccount: %v", err)
 	}
@@ -1206,7 +1206,7 @@ func TestGetStoolColorTrend_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := GetStoolColorTrend(db, "b1")
+	_, err := GetStoolColorTrend(db, "b1", time.UTC)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}

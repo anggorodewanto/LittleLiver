@@ -91,10 +91,8 @@ describe('push subscription', () => {
 				method: 'POST',
 				body: JSON.stringify({
 					endpoint: 'https://push.example.com/abc123',
-					keys: {
-						p256dh: 'test-p256dh-key',
-						auth: 'test-auth-key'
-					}
+					p256dh: 'test-p256dh-key',
+					auth: 'test-auth-key'
 				})
 			})
 		);
@@ -164,7 +162,8 @@ describe('requestPushSubscription', () => {
 				method: 'POST',
 				body: JSON.stringify({
 					endpoint: 'https://push.example.com/sub1',
-					keys: { p256dh: 'key1', auth: 'auth1' }
+					p256dh: 'key1',
+					auth: 'auth1'
 				})
 			})
 		);

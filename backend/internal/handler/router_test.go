@@ -301,9 +301,22 @@ func TestNewMux_Logout_ClearsSession_Integration(t *testing.T) {
 		return http.ErrUseLastResponse
 	}}
 
-	// POST /auth/logout with valid session
+	// Fetch CSRF token first (required since logout is now behind CSRF middleware)
+	csrfReq, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/csrf-token", nil)
+	csrfReq.AddCookie(&http.Cookie{Name: "session_id", Value: sess.ID})
+	csrfResp, err := client.Do(csrfReq)
+	if err != nil {
+		t.Fatalf("csrf-token request failed: %v", err)
+	}
+	var csrfBody map[string]string
+	json.NewDecoder(csrfResp.Body).Decode(&csrfBody)
+	csrfResp.Body.Close()
+	csrfToken := csrfBody["csrf_token"]
+
+	// POST /auth/logout with valid session and CSRF token
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/auth/logout", nil)
 	req.AddCookie(&http.Cookie{Name: "session_id", Value: sess.ID})
+	req.Header.Set("X-CSRF-Token", csrfToken)
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("logout request failed: %v", err)

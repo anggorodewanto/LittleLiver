@@ -16,7 +16,7 @@ func TestDeleteAccount_ReturnsNoErrorForValidUser(t *testing.T) {
 		t.Fatalf("insert user failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestDeleteAccount_UserRecordDeleted(t *testing.T) {
 		t.Fatalf("insert user failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestDeleteAccount_SentinelUserPreserved(t *testing.T) {
 		t.Fatalf("insert user failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestDeleteAccount_SessionsCascadeDeleted(t *testing.T) {
 		t.Fatalf("insert session failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestDeleteAccount_BabyParentsCascadeDeleted(t *testing.T) {
 		t.Fatalf("insert bp2 failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestDeleteAccount_PushSubscriptionsCascadeDeleted(t *testing.T) {
 		t.Fatalf("insert push sub failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestDeleteAccount_LastParentBabyDeleted(t *testing.T) {
 		t.Fatalf("insert bp failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestDeleteAccount_SharedBabyNotDeleted(t *testing.T) {
 		t.Fatalf("insert bp2 failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestDeleteAccount_InvitesCreatedByUserDeleted(t *testing.T) {
 		t.Fatalf("insert invite failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestDeleteAccount_InvitesUsedByAnonymized(t *testing.T) {
 		t.Fatalf("insert invite failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -375,7 +375,7 @@ func TestDeleteAccount_TableDrivenAnonymization(t *testing.T) {
 	}
 
 	// Pass the test table in the anonymization list
-	err = DeleteAccount(db, "u1", []string{"test_metrics"})
+	_, err = DeleteAccount(db, "u1", []string{"test_metrics"})
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -430,7 +430,7 @@ func TestDeleteAccount_TableDrivenAnonymizationMultipleTables(t *testing.T) {
 		t.Fatalf("insert stool failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", []string{"test_feedings", "test_stools"})
+	_, err = DeleteAccount(db, "u1", []string{"test_feedings", "test_stools"})
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -464,7 +464,7 @@ func TestDeleteAccount_NilAnonymizationTables(t *testing.T) {
 	}
 
 	// nil tables list should work fine (no anonymization needed)
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount with nil tables failed: %v", err)
 	}
@@ -481,7 +481,7 @@ func TestDeleteAccount_EmptyAnonymizationTables(t *testing.T) {
 	}
 
 	// empty tables list should work fine
-	err = DeleteAccount(db, "u1", []string{})
+	_, err = DeleteAccount(db, "u1", []string{})
 	if err != nil {
 		t.Fatalf("DeleteAccount with empty tables failed: %v", err)
 	}
@@ -519,7 +519,7 @@ func TestDeleteAccount_OtherUsersDataPreserved(t *testing.T) {
 		t.Fatalf("insert d2 failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", []string{"test_data"})
+	_, err = DeleteAccount(db, "u1", []string{"test_data"})
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -540,7 +540,7 @@ func TestDeleteAccount_ClosedDB(t *testing.T) {
 	db := setupTestDB(t)
 	db.Close()
 
-	err := DeleteAccount(db, "u1", nil)
+	_, err := DeleteAccount(db, "u1", nil)
 	if err == nil {
 		t.Fatal("expected error for closed DB, got nil")
 	}
@@ -584,7 +584,7 @@ func TestDeleteAccount_MixedBabies_LastParentDeletedSharedPreserved(t *testing.T
 		t.Fatalf("insert bp b2-u2 failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", nil)
+	_, err = DeleteAccount(db, "u1", nil)
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}
@@ -638,7 +638,7 @@ func TestDeleteAccount_AnonymizeOnlyAffectsDeletedUser(t *testing.T) {
 		t.Fatalf("insert log failed: %v", err)
 	}
 
-	err = DeleteAccount(db, "u1", []string{"test_logs"})
+	_, err = DeleteAccount(db, "u1", []string{"test_logs"})
 	if err != nil {
 		t.Fatalf("DeleteAccount failed: %v", err)
 	}

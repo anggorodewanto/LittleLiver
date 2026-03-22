@@ -195,10 +195,11 @@ func TestAuthFlow_FullLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create logout request: %v", err)
 	}
-	// Add cookies from jar
+	// Add cookies from jar and CSRF token
 	for _, c := range client.Jar.Cookies(srvURL) {
 		logoutReq.AddCookie(c)
 	}
+	logoutReq.Header.Set("X-CSRF-Token", csrfToken)
 	resp, err = client.Do(logoutReq)
 	if err != nil {
 		t.Fatalf("logout request failed: %v", err)

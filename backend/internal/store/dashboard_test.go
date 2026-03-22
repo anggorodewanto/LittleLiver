@@ -185,7 +185,7 @@ func TestGetStoolColorTrend_Always7Days(t *testing.T) {
 		store.CreateStool(db, baby.ID, user.ID, ts, 3, &label, nil, nil, nil)
 	}
 
-	trend, err := store.GetStoolColorTrend(db, baby.ID)
+	trend, err := store.GetStoolColorTrend(db, baby.ID, time.UTC)
 	if err != nil {
 		t.Fatalf("GetStoolColorTrend failed: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestGetStoolColorTrend_ReturnsDateAndColor(t *testing.T) {
 	green := "green"
 	store.CreateStool(db, baby.ID, user.ID, ts, 5, &green, nil, nil, nil)
 
-	trend, err := store.GetStoolColorTrend(db, baby.ID)
+	trend, err := store.GetStoolColorTrend(db, baby.ID, time.UTC)
 	if err != nil {
 		t.Fatalf("GetStoolColorTrend failed: %v", err)
 	}
