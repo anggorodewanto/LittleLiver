@@ -53,7 +53,9 @@ async function buildRequest(path: string, options?: RequestInit): Promise<Respon
 	if (!response.ok) {
 		if (response.status === 401) {
 			clearCsrfToken();
-			window.location.href = '/login';
+			if (window.location.pathname !== '/login') {
+				window.location.href = '/login';
+			}
 		}
 		throw new Error(`API error: ${response.status}`);
 	}
