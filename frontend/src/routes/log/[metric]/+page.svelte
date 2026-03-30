@@ -16,6 +16,7 @@
 	import NotesForm from '$lib/components/NotesForm.svelte';
 	import MedicationForm from '$lib/components/MedicationForm.svelte';
 	import DoseLogForm from '$lib/components/DoseLogForm.svelte';
+	import FluidLogForm from '$lib/components/FluidLogForm.svelte';
 
 	const METRIC_CONFIG: Record<string, { label: string; endpoint: string; hasPhoto: boolean; multiPhoto?: boolean }> = {
 		feeding: { label: 'Feeding', endpoint: 'feedings', hasPhoto: false },
@@ -29,7 +30,9 @@
 		lab: { label: 'Lab', endpoint: 'labs', hasPhoto: false },
 		notes: { label: 'Note', endpoint: 'notes', hasPhoto: true, multiPhoto: true },
 		medication: { label: 'Medication', endpoint: 'medications', hasPhoto: false },
-		med: { label: 'Dose', endpoint: 'med-logs', hasPhoto: false }
+		med: { label: 'Dose', endpoint: 'med-logs', hasPhoto: false },
+		other_intake: { label: 'Other Intake', endpoint: 'fluid-log', hasPhoto: false },
+		other_output: { label: 'Other Output', endpoint: 'fluid-log', hasPhoto: false }
 	};
 
 	let metric = $derived($page.params.metric);
@@ -160,6 +163,10 @@
 		{/if}
 	{:else if metric === 'med'}
 		<DoseLogForm onsubmit={handleSubmit} babyId={baby.id} {medicationId} {scheduledTime} {submitting} {error} />
+	{:else if metric === 'other_intake'}
+		<FluidLogForm direction="intake" onsubmit={handleSubmit} {submitting} {error} />
+	{:else if metric === 'other_output'}
+		<FluidLogForm direction="output" onsubmit={handleSubmit} {submitting} {error} />
 	{/if}
 {/if}
 

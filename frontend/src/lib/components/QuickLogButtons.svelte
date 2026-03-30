@@ -1,5 +1,5 @@
 <script lang="ts">
-	export type MetricType = 'feeding' | 'urine' | 'stool' | 'temperature' | 'med_given' | 'weight' | 'abdomen' | 'skin' | 'bruising' | 'lab' | 'notes' | 'medication';
+	export type MetricType = 'feeding' | 'urine' | 'stool' | 'temperature' | 'med_given' | 'weight' | 'abdomen' | 'skin' | 'bruising' | 'lab' | 'notes' | 'medication' | 'other_intake' | 'other_output';
 
 	interface Props {
 		onselect: (type: MetricType) => void;
@@ -32,6 +32,8 @@
 			<button type="button" onclick={() => onselect('bruising')}>Bruising</button>
 			<button type="button" onclick={() => onselect('lab')}>Lab</button>
 			<button type="button" onclick={() => onselect('notes')}>Notes</button>
+			<button type="button" onclick={() => onselect('other_intake')}>Other Intake</button>
+			<button type="button" onclick={() => onselect('other_output')}>Other Output</button>
 			<button type="button" onclick={() => onnavigate?.('/medications')}>Manage Medications</button>
 		</div>
 	{/if}

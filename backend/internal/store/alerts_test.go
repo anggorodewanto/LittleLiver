@@ -19,7 +19,7 @@ func TestGetActiveAlerts_AcholicStool_TriggersOnLowRating(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	ts := time.Now().UTC().Format(model.DateTimeFormat)
-	store.CreateStool(db, baby.ID, user.ID, ts, 2, strPtr("clay"), nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts, 2, strPtr("clay"), nil, nil, nil, nil)
 
 	alerts, err := store.GetActiveAlerts(db, baby.ID)
 	if err != nil {
@@ -47,7 +47,7 @@ func TestGetActiveAlerts_AcholicStool_Rating3Triggers(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	ts := time.Now().UTC().Format(model.DateTimeFormat)
-	store.CreateStool(db, baby.ID, user.ID, ts, 3, strPtr("pale_yellow"), nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts, 3, strPtr("pale_yellow"), nil, nil, nil, nil)
 
 	alerts, err := store.GetActiveAlerts(db, baby.ID)
 	if err != nil {
@@ -74,8 +74,8 @@ func TestGetActiveAlerts_AcholicStool_ClearedByPigmented(t *testing.T) {
 	ts1 := time.Now().UTC().Add(-1 * time.Hour).Format(model.DateTimeFormat)
 	ts2 := time.Now().UTC().Format(model.DateTimeFormat)
 
-	store.CreateStool(db, baby.ID, user.ID, ts1, 2, strPtr("clay"), nil, nil, nil)
-	store.CreateStool(db, baby.ID, user.ID, ts2, 5, strPtr("light_green"), nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts1, 2, strPtr("clay"), nil, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts2, 5, strPtr("light_green"), nil, nil, nil, nil)
 
 	alerts, err := store.GetActiveAlerts(db, baby.ID)
 	if err != nil {
@@ -98,8 +98,8 @@ func TestGetActiveAlerts_AcholicStool_Rating4Clears(t *testing.T) {
 	ts1 := time.Now().UTC().Add(-1 * time.Hour).Format(model.DateTimeFormat)
 	ts2 := time.Now().UTC().Format(model.DateTimeFormat)
 
-	store.CreateStool(db, baby.ID, user.ID, ts1, 1, strPtr("white"), nil, nil, nil)
-	store.CreateStool(db, baby.ID, user.ID, ts2, 4, strPtr("yellow"), nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts1, 1, strPtr("white"), nil, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts2, 4, strPtr("yellow"), nil, nil, nil, nil)
 
 	alerts, err := store.GetActiveAlerts(db, baby.ID)
 	if err != nil {

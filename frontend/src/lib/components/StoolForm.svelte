@@ -9,6 +9,7 @@
 		color_label: string;
 		consistency?: string;
 		volume_estimate?: string;
+		volume_ml?: number;
 		photo_keys?: string[];
 		notes?: string;
 	}
@@ -29,6 +30,7 @@
 	let colorLabel = $derived(COLOR_SWATCHES.find(s => s.rating === colorRating)?.ref ?? '');
 	let consistency = $state('');
 	let volumeEstimate = $state('');
+	let volumeMl = $state('');
 	let notes = $state('');
 	let validationError = $state('');
 
@@ -56,6 +58,9 @@
 		}
 		if (volumeEstimate) {
 			payload.volume_estimate = volumeEstimate;
+		}
+		if (volumeMl !== '' && !isNaN(Number(volumeMl))) {
+			payload.volume_ml = Number(volumeMl);
 		}
 		if (photoKeys.length > 0) {
 			payload.photo_keys = photoKeys;
@@ -118,6 +123,11 @@
 			<option value="medium">Medium</option>
 			<option value="large">Large</option>
 		</select>
+	</div>
+
+	<div>
+		<label for="stool-volume-ml">Volume (mL)</label>
+		<input id="stool-volume-ml" type="number" step="0.1" min="0" bind:value={volumeMl} placeholder="Optional" />
 	</div>
 
 	<PhotoUpload onupload={onphotoupload} {uploading} multiple={true} currentCount={photoKeys.length} />

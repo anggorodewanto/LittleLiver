@@ -200,7 +200,7 @@ func TestListUrineHandler_Success(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	for i := 0; i < 3; i++ {
-		_, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+		_, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateUrine failed: %v", err)
 		}
@@ -242,7 +242,7 @@ func TestGetUrineHandler_Success(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	color := "clear"
-	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", &color, nil)
+	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", &color, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestUpdateUrineHandler_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestUpdateUrineHandler_InvalidColor(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -405,7 +405,7 @@ func TestDeleteUrineHandler_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}

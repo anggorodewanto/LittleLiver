@@ -17,12 +17,13 @@ describe('StoolForm', () => {
 		return screen.getByRole('button', { name: new RegExp(`^${label} `, 'i') });
 	}
 
-	it('renders timestamp, consistency, volume, notes fields', () => {
+	it('renders timestamp, consistency, volume estimate, volume (mL), and notes fields', () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
 		expect(screen.getByLabelText(/timestamp/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/consistency/i)).toBeInTheDocument();
-		expect(screen.getByLabelText(/volume/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/volume estimate/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/volume \(mL\)/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
 	});
 
@@ -92,7 +93,7 @@ describe('StoolForm', () => {
 		await fireEvent.change(screen.getByLabelText(/consistency/i), {
 			target: { value: 'soft' }
 		});
-		await fireEvent.change(screen.getByLabelText(/volume/i), {
+		await fireEvent.change(screen.getByLabelText(/volume estimate/i), {
 			target: { value: 'medium' }
 		});
 		await fireEvent.input(screen.getByLabelText(/notes/i), {
@@ -121,10 +122,10 @@ describe('StoolForm', () => {
 		expect(options).toContain('hard');
 	});
 
-	it('volume selector has correct options', () => {
+	it('volume estimate selector has correct options', () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
-		const select = screen.getByLabelText(/volume/i) as HTMLSelectElement;
+		const select = screen.getByLabelText(/volume estimate/i) as HTMLSelectElement;
 		const options = Array.from(select.options).map((o) => o.value);
 		expect(options).toContain('small');
 		expect(options).toContain('medium');

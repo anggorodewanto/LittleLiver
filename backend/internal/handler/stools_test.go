@@ -311,7 +311,7 @@ func TestListStoolsHandler_Success(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	for i := 0; i < 3; i++ {
-		_, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+		_, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateStool failed: %v", err)
 		}
@@ -352,7 +352,7 @@ func TestGetStoolHandler_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil)
+	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -411,7 +411,7 @@ func TestUpdateStoolHandler_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -483,7 +483,7 @@ func TestDeleteStoolHandler_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}

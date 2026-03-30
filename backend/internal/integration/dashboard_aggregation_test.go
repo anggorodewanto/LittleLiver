@@ -220,15 +220,15 @@ func TestDashboardAggregation_Integration(t *testing.T) {
 	green := "green"
 	white := "white"
 	brown := "brown"
-	store.CreateStool(db, babyID, userID, today+"T09:00:00Z", 2, &clay, nil, nil, nil)
-	store.CreateStool(db, babyID, userID, yesterday+"T11:00:00Z", 5, &green, nil, nil, nil)
-	store.CreateStool(db, babyID, userID, threeDaysAgo+"T10:00:00Z", 1, &white, nil, nil, nil)
-	store.CreateStool(db, babyID, userID, sevenDaysAgo+"T10:00:00Z", 6, &brown, nil, nil, nil)
+	store.CreateStool(db, babyID, userID, today+"T09:00:00Z", 2, &clay, nil, nil, nil, nil)
+	store.CreateStool(db, babyID, userID, yesterday+"T11:00:00Z", 5, &green, nil, nil, nil, nil)
+	store.CreateStool(db, babyID, userID, threeDaysAgo+"T10:00:00Z", 1, &white, nil, nil, nil, nil)
+	store.CreateStool(db, babyID, userID, sevenDaysAgo+"T10:00:00Z", 6, &brown, nil, nil, nil, nil)
 
 	// Urine: 2 today, 1 yesterday
-	store.CreateUrine(db, babyID, userID, today+"T07:00:00Z", nil, nil)
-	store.CreateUrine(db, babyID, userID, today+"T15:00:00Z", nil, nil)
-	store.CreateUrine(db, babyID, userID, yesterday+"T08:00:00Z", nil, nil)
+	store.CreateUrine(db, babyID, userID, today+"T07:00:00Z", nil, nil, nil)
+	store.CreateUrine(db, babyID, userID, today+"T15:00:00Z", nil, nil, nil)
+	store.CreateUrine(db, babyID, userID, yesterday+"T08:00:00Z", nil, nil, nil)
 
 	// Temperatures: normal today, fever today (38.5 rectal), normal yesterday
 	store.CreateTemperature(db, babyID, userID, today+"T07:30:00Z", 37.0, "rectal", nil)

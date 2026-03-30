@@ -64,15 +64,15 @@ func TestGetDashboardSummary_WithData(t *testing.T) {
 	store.CreateFeeding(db, baby.ID, user.ID, ts2, "breast_milk", nil, nil, nil, nil, 67.0)
 
 	// Insert 3 urine entries
-	store.CreateUrine(db, baby.ID, user.ID, ts, nil, nil)
-	store.CreateUrine(db, baby.ID, user.ID, ts2, nil, nil)
-	store.CreateUrine(db, baby.ID, user.ID, today+"T16:00:00Z", nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, ts, nil, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, ts2, nil, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, today+"T16:00:00Z", nil, nil, nil)
 
 	// Insert 2 stools - most recent should be green
 	yellow := "yellow"
 	green := "green"
-	store.CreateStool(db, baby.ID, user.ID, ts, 3, &yellow, nil, nil, nil)
-	store.CreateStool(db, baby.ID, user.ID, ts2, 5, &green, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts, 3, &yellow, nil, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts2, 5, &green, nil, nil, nil, nil)
 
 	// Insert temperature and weight
 	store.CreateTemperature(db, baby.ID, user.ID, ts, 37.2, "rectal", nil)
@@ -182,7 +182,7 @@ func TestGetStoolColorTrend_Always7Days(t *testing.T) {
 		day := now.AddDate(0, 0, -i)
 		ts := day.Format("2006-01-02") + "T12:00:00Z"
 		label := "yellow"
-		store.CreateStool(db, baby.ID, user.ID, ts, 3, &label, nil, nil, nil)
+		store.CreateStool(db, baby.ID, user.ID, ts, 3, &label, nil, nil, nil, nil)
 	}
 
 	trend, err := store.GetStoolColorTrend(db, baby.ID, time.UTC)
@@ -210,7 +210,7 @@ func TestGetStoolColorTrend_ReturnsDateAndColor(t *testing.T) {
 	today := time.Now().UTC().Format("2006-01-02")
 	ts := today + "T12:00:00Z"
 	green := "green"
-	store.CreateStool(db, baby.ID, user.ID, ts, 5, &green, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts, 5, &green, nil, nil, nil, nil)
 
 	trend, err := store.GetStoolColorTrend(db, baby.ID, time.UTC)
 	if err != nil {

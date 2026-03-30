@@ -30,6 +30,8 @@ var (
 	bruisingSizeValues     = validSet("small_<1cm", "medium_1-3cm", "large_>3cm")
 	medFrequencyValues     = validSet("once_daily", "twice_daily", "three_times_daily", "as_needed", "custom")
 	noteCategoryValues     = validSet("behavior", "sleep", "vomiting", "irritability", "skin", "other")
+	fluidDirectionValues   = validSet("intake", "output")
+	fluidSourceTypeValues  = validSet("feeding", "urine", "stool")
 )
 
 // ValidSex reports whether v is a valid sex value.
@@ -70,3 +72,9 @@ func ValidMedFrequency(v string) bool { return medFrequencyValues[v] }
 
 // ValidNoteCategory reports whether v is a valid general note category.
 func ValidNoteCategory(v string) bool { return noteCategoryValues[v] }
+
+// ValidFluidDirection reports whether v is a valid fluid log direction.
+func ValidFluidDirection(v string) bool { return fluidDirectionValues[v] }
+
+// ValidFluidSourceType reports whether v is a valid fluid log source type.
+func ValidFluidSourceType(v string) bool { return fluidSourceTypeValues[v] }

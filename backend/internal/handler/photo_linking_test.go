@@ -201,7 +201,7 @@ func TestUpdateStoolHandler_RemovePhoto_UnlinksPhoto(t *testing.T) {
 	keys := setupPhotoFixture(t, fix, objStore, 2)
 
 	// Create stool with 2 photos
-	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil)
+	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestListStoolsHandler_ContainsSignedURLs(t *testing.T) {
 	keys := setupPhotoFixture(t, fix, objStore, 1)
 
 	// Create stool with photo
-	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil)
+	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestGetStoolHandler_ContainsSignedURLs(t *testing.T) {
 
 	keys := setupPhotoFixture(t, fix, objStore, 1)
 
-	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil)
+	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool: %v", err)
 	}
@@ -574,7 +574,7 @@ func TestGetStoolHandler_NoPhotos_EmptyArray(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	objStore := storage.NewMemoryStore()
 
-	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil)
+	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 5, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool: %v", err)
 	}

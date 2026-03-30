@@ -58,6 +58,7 @@ Each row represents a single wet diaper event (logged with a timestamp). Urine a
 |-------|------|-------|
 | Timestamp | datetime | Auto-filled, editable |
 | Color | enum | `clear`, `pale_yellow`, `dark_yellow`, `amber`, `brown` |
+| Volume (mL) | number | Optional. For fluid balance tracking |
 | Notes | text | |
 
 ### 3.3 Stool Output (multiple entries per day) ⭐ Critical
@@ -70,6 +71,7 @@ Each row represents a single wet diaper event (logged with a timestamp). Urine a
 | Photo | image | Uploaded from camera/gallery. Stored in R2. |
 | Consistency | enum | `watery`, `loose`, `soft`, `formed`, `hard` |
 | Volume estimate | enum | `small`, `medium`, `large` |
+| Volume (mL) | number | Optional. Measured volume for fluid balance tracking |
 | Notes | text | |
 
 **Alert logic:** If stool color ≤ 3 is logged, the app should display a prominent warning banner suggesting the parent contact their hepatology team. This is the primary indicator of bile flow failure.
@@ -189,6 +191,22 @@ The **UI** suggests common Kasai-relevant tests as quick-pick options: `total_bi
 | Category | enum | `behavior`, `sleep`, `vomiting`, `irritability`, `skin`, `other` |
 | Photos | image[] | Up to 4 per entry |
 
+### 3.12 Fluid I&O Log (as needed)
+
+Unified intake/output ledger for fluid balance tracking. Some entries are auto-created from feedings, urine, and stools (when volume is provided); others are standalone entries for sources not covered by the standard forms (e.g., IV fluids, stoma output, drain output).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| Timestamp | datetime | Auto-filled, editable |
+| Direction | enum | `intake`, `output` |
+| Method | text | Free-text description (e.g., "IV", "Stoma", "NG tube") |
+| Volume (mL) | number | Optional |
+| Notes | text | |
+
+**Auto-linking:** When a feeding is logged, a fluid_log entry is auto-created (direction=intake, method=feed_type). When urine or stool is logged with a volume, a fluid_log entry is auto-created (direction=output). These linked entries are updated/deleted when their source entry is modified. Linked entries cannot be edited directly via the fluid-log endpoint — they are managed through their source metric's endpoint.
+
+**Standalone entries:** Users can log "Other Intake" or "Other Output" directly via two dedicated buttons. These create fluid_log entries with no source link and can be freely edited/deleted.
+
 ---
 
 ## 4. Technology Stack
@@ -274,9 +292,9 @@ PUT    /api/babies/:id/feedings/:entryId     → Edit entry
 DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 ```
 
-Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/labs`, `/notes`
+Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/labs`, `/notes`, `/fluid-log`
 
-**Non-standard metric endpoints** (deviate from the generic CRUD pattern above): `/medications` (no DELETE — deactivation only, see §5.5), `/med-logs` (date filtering uses `given_at`/`created_at` instead of `timestamp`, see §5.5)
+**Non-standard metric endpoints** (deviate from the generic CRUD pattern above): `/medications` (no DELETE — deactivation only, see §5.5), `/med-logs` (date filtering uses `given_at`/`created_at` instead of `timestamp`, see §5.5), `/fluid-log` (PUT and DELETE reject linked entries where `source_type` is non-null with 400 — those are managed via their source metric endpoint)
 
 **Photo signed URLs:** For metric types that support photos (see §5.4), API responses replace the `photo_keys` field with a `photos` array of objects: `[{ "url": "signed_url", "thumbnail_url": "signed_thumb_url" }]` (TTL: 1 hour). The raw `photo_keys` field is not exposed in responses.
 
@@ -539,6 +557,7 @@ CREATE TABLE stools (
     color_label     TEXT,
     consistency     TEXT,
     volume_estimate TEXT,
+    volume_ml       REAL,           -- optional, for fluid balance tracking
     photo_keys      TEXT,           -- JSON array of R2 object keys
     notes           TEXT,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -553,10 +572,30 @@ CREATE TABLE urine (
     updated_by  TEXT REFERENCES users(id),  -- set on edit, null initially
     timestamp   DATETIME NOT NULL,
     color       TEXT,               -- clear, pale_yellow, dark_yellow, amber, brown
+    volume_ml   REAL,               -- optional, for fluid balance tracking
     notes       TEXT,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Fluid I&O ledger (unified intake/output tracking)
+CREATE TABLE fluid_log (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),
+    timestamp   DATETIME NOT NULL,
+    direction   TEXT NOT NULL CHECK (direction IN ('intake', 'output')),
+    method      TEXT NOT NULL,          -- free-text: "IV", "stoma", feed_type label, "urine", etc.
+    volume_ml   REAL,
+    source_type TEXT CHECK (source_type IN ('feeding', 'urine', 'stool')),  -- NULL for standalone
+    source_id   TEXT,                   -- FK to source entry (NULL for standalone)
+    notes       TEXT,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_fluid_log_baby_timestamp ON fluid_log (baby_id, timestamp);
+CREATE UNIQUE INDEX idx_fluid_log_source ON fluid_log (source_type, source_id) WHERE source_type IS NOT NULL;
 
 CREATE TABLE weights (
     id          TEXT PRIMARY KEY,

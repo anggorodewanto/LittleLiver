@@ -104,13 +104,13 @@ func TestGetDiaperDaily_CombinesStoolAndUrine(t *testing.T) {
 	ts1 := today + "T10:00:00Z"
 	ts2 := today + "T14:00:00Z"
 
-	store.CreateUrine(db, baby.ID, user.ID, ts1, nil, nil)
-	store.CreateUrine(db, baby.ID, user.ID, ts2, nil, nil)
-	store.CreateUrine(db, baby.ID, user.ID, today+"T16:00:00Z", nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, ts1, nil, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, ts2, nil, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, today+"T16:00:00Z", nil, nil, nil)
 
 	yellow := "yellow"
-	store.CreateStool(db, baby.ID, user.ID, ts1, 3, &yellow, nil, nil, nil)
-	store.CreateStool(db, baby.ID, user.ID, ts2, 5, &yellow, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts1, 3, &yellow, nil, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts2, 5, &yellow, nil, nil, nil, nil)
 
 	series, err := store.GetDiaperDaily(db, baby.ID, today, today, time.UTC)
 	if err != nil {
@@ -243,8 +243,8 @@ func TestGetStoolColorSeries_ColorCodedData(t *testing.T) {
 	today := time.Now().UTC().Format("2006-01-02")
 	green := "green"
 	yellow := "yellow"
-	store.CreateStool(db, baby.ID, user.ID, today+"T10:00:00Z", 5, &green, nil, nil, nil)
-	store.CreateStool(db, baby.ID, user.ID, today+"T14:00:00Z", 3, &yellow, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, today+"T10:00:00Z", 5, &green, nil, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, today+"T14:00:00Z", 3, &yellow, nil, nil, nil, nil)
 
 	series, err := store.GetStoolColorSeries(db, baby.ID, today, today, time.UTC)
 	if err != nil {

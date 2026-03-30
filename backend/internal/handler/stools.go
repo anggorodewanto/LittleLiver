@@ -17,9 +17,10 @@ type stoolRequest struct {
 	ColorRating    *int     `json:"color_rating"`
 	ColorLabel     *string  `json:"color_label,omitempty"`
 	Consistency    *string  `json:"consistency,omitempty"`
-	VolumeEstimate *string  `json:"volume_estimate,omitempty"`
-	PhotoKeys      []string `json:"photo_keys,omitempty"`
-	Notes          *string  `json:"notes,omitempty"`
+	VolumeEstimate *string   `json:"volume_estimate,omitempty"`
+	VolumeMl       *float64  `json:"volume_ml,omitempty"`
+	PhotoKeys      []string  `json:"photo_keys,omitempty"`
+	Notes          *string   `json:"notes,omitempty"`
 }
 
 // validate checks required fields for a stool request.
@@ -56,6 +57,7 @@ type stoolResponse struct {
 	ColorLabel     *string         `json:"color_label,omitempty"`
 	Consistency    *string         `json:"consistency,omitempty"`
 	VolumeEstimate *string         `json:"volume_estimate,omitempty"`
+	VolumeMl       *float64        `json:"volume_ml,omitempty"`
 	Photos         []photoResponse `json:"photos"`
 	Notes          *string         `json:"notes,omitempty"`
 	CreatedAt      string          `json:"created_at"`
@@ -73,6 +75,7 @@ func toStoolResponse(s *model.Stool) stoolResponse {
 		ColorLabel:     s.ColorLabel,
 		Consistency:    s.Consistency,
 		VolumeEstimate: s.VolumeEstimate,
+		VolumeMl:       s.VolumeMl,
 		Photos:         []photoResponse{},
 		Notes:          s.Notes,
 		CreatedAt:      s.CreatedAt.Format(model.DateTimeFormat),
@@ -118,7 +121,7 @@ func CreateStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Handl
 			return
 		}
 
-		stool, err := store.CreateStoolWithPhotos(db, baby.ID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, photoKeysStr, req.Notes)
+		stool, err := store.CreateStoolWithPhotos(db, baby.ID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, req.VolumeMl, photoKeysStr, req.Notes)
 		if err != nil {
 			log.Printf("create stool: %v", err)
 			http.Error(w, "failed to create stool", http.StatusInternalServerError)
@@ -235,7 +238,7 @@ func UpdateStoolHandler(db *sql.DB, objStores ...storage.ObjectStore) http.Handl
 			return
 		}
 
-		stool, err := store.UpdateStoolWithPhotos(db, baby.ID, entryID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, photoKeysStr, req.Notes)
+		stool, err := store.UpdateStoolWithPhotos(db, baby.ID, entryID, user.ID, req.Timestamp, *req.ColorRating, req.ColorLabel, req.Consistency, req.VolumeEstimate, req.VolumeMl, photoKeysStr, req.Notes)
 		if err != nil {
 			handleStoreError(w, err, "stool not found")
 			return

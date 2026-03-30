@@ -198,7 +198,7 @@ func TestUpdateUrineHandler_InvalidJSON(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestUpdateUrineHandler_ValidationError(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	urine, err := store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -600,7 +600,7 @@ func TestUpdateStoolHandler_InvalidJSON(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -631,7 +631,7 @@ func TestUpdateStoolHandler_ValidationError(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	stool, err := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -1427,8 +1427,8 @@ func TestDashboardHandler_WithDateRange(t *testing.T) {
 
 	// Seed data
 	store.CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", nil, nil, nil, nil, baby.DefaultCalPerFeed)
-	store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil)
-	store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T11:30:00Z", nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T11:30:00Z", nil, nil, nil)
 	store.CreateTemperature(db, baby.ID, user.ID, "2025-07-01T12:00:00Z", 37.0, "rectal", nil)
 	store.CreateWeight(db, baby.ID, user.ID, "2025-07-01T08:00:00Z", 4.5, nil, nil)
 	girthVal := 35.5
@@ -1486,7 +1486,7 @@ func TestListStoolsHandler_WithObjStore(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	objStore := storage.NewMemoryStore()
 
-	store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil, nil)
 
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, "/api/babies/"+baby.ID+"/stools")
 	authMw := middleware.Auth(db, testCookieName)
@@ -1508,7 +1508,7 @@ func TestGetStoolHandler_WithObjStore(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	objStore := storage.NewMemoryStore()
 
-	s, _ := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil)
+	s, _ := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil, nil)
 
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, "/api/babies/"+baby.ID+"/stools/"+s.ID)
 	authMw := middleware.Auth(db, testCookieName)

@@ -186,11 +186,11 @@ func TestDashboardHandler_WithData(t *testing.T) {
 	calDen := 20.0
 	store.CreateFeeding(db, baby.ID, user.ID, ts, "formula", &vol, &calDen, nil, nil, 67.0)
 	store.CreateFeeding(db, baby.ID, user.ID, ts2, "breast_milk", nil, nil, nil, nil, 67.0)
-	store.CreateUrine(db, baby.ID, user.ID, ts, nil, nil)
-	store.CreateUrine(db, baby.ID, user.ID, ts2, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, ts, nil, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, ts2, nil, nil, nil)
 
 	green := "green"
-	store.CreateStool(db, baby.ID, user.ID, ts2, 5, &green, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts2, 5, &green, nil, nil, nil, nil)
 
 	store.CreateTemperature(db, baby.ID, user.ID, ts, 37.5, "rectal", nil)
 	store.CreateWeight(db, baby.ID, user.ID, ts, 4.8, nil, nil)
@@ -252,7 +252,7 @@ func TestDashboardHandler_StoolColorTrend_Always7Days(t *testing.T) {
 		day := now.AddDate(0, 0, -i)
 		ts := day.Format("2006-01-02") + "T12:00:00Z"
 		label := "yellow"
-		store.CreateStool(db, baby.ID, user.ID, ts, 3, &label, nil, nil, nil)
+		store.CreateStool(db, baby.ID, user.ID, ts, 3, &label, nil, nil, nil, nil)
 	}
 
 	// Even when querying a narrow date range, stool_color_trend is always 7 days
@@ -345,10 +345,10 @@ func TestDashboardHandler_ChartDataSeries(t *testing.T) {
 	store.CreateFeeding(db, baby.ID, user.ID, ts2, "breast_milk", nil, nil, nil, nil, 67.0)
 
 	// Seed diaper data
-	store.CreateUrine(db, baby.ID, user.ID, ts1, nil, nil)
-	store.CreateUrine(db, baby.ID, user.ID, ts2, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, ts1, nil, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, ts2, nil, nil, nil)
 	green := "green"
-	store.CreateStool(db, baby.ID, user.ID, ts1, 5, &green, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts1, 5, &green, nil, nil, nil, nil)
 
 	// Seed vitals
 	store.CreateTemperature(db, baby.ID, user.ID, ts1, 37.2, "rectal", nil)
@@ -713,7 +713,7 @@ func TestDashboardHandler_ActiveAlerts_AcholicStool(t *testing.T) {
 
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	clay := "clay"
-	store.CreateStool(db, baby.ID, user.ID, ts, 2, &clay, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, ts, 2, &clay, nil, nil, nil, nil)
 
 	rec, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
 
@@ -803,7 +803,7 @@ func TestDashboardHandler_ActiveAlerts_IgnoresDateRange(t *testing.T) {
 	// Create an acholic stool entry from a week ago
 	weekAgo := time.Now().UTC().AddDate(0, 0, -7).Format("2006-01-02T15:04:05Z")
 	clay := "clay"
-	store.CreateStool(db, baby.ID, user.ID, weekAgo, 1, &clay, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, weekAgo, 1, &clay, nil, nil, nil, nil)
 
 	// Query only today — alerts should still appear (they're global)
 	today := time.Now().UTC().Format("2006-01-02")

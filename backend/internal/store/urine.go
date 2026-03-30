@@ -9,17 +9,18 @@ import (
 )
 
 const urineColumns = `id, baby_id, logged_by, updated_by, timestamp,
-	color, notes, created_at, updated_at`
+	color, volume_ml, notes, created_at, updated_at`
 
 // scanUrine scans a single urine row from the given scanner.
 func scanUrine(s scanner) (*model.Urine, error) {
 	var u model.Urine
 	var updatedBy, color, notes sql.NullString
+	var volumeMl sql.NullFloat64
 	var tsStr, createdStr, updatedStr string
 
 	err := s.Scan(
 		&u.ID, &u.BabyID, &u.LoggedBy, &updatedBy, &tsStr,
-		&color, &notes, &createdStr, &updatedStr,
+		&color, &volumeMl, &notes, &createdStr, &updatedStr,
 	)
 	if err != nil {
 		return nil, err
@@ -32,22 +33,42 @@ func scanUrine(s scanner) (*model.Urine, error) {
 
 	u.UpdatedBy = nullStr(updatedBy)
 	u.Color = nullStr(color)
+	u.VolumeMl = nullFloat(volumeMl)
 	u.Notes = nullStr(notes)
 
 	return &u, nil
 }
 
 // CreateUrine inserts a new urine entry and returns it.
-func CreateUrine(db *sql.DB, babyID, loggedBy, timestamp string, color, notes *string) (*model.Urine, error) {
+// If volumeMl is non-nil, also creates a linked fluid_log entry.
+func CreateUrine(db *sql.DB, babyID, loggedBy, timestamp string, color *string, volumeMl *float64, notes *string) (*model.Urine, error) {
 	id := model.NewULID()
 
-	_, err := db.Exec(
-		`INSERT INTO urine (id, baby_id, logged_by, timestamp, color, notes)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		id, babyID, loggedBy, timestamp, color, notes,
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("create urine: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(
+		`INSERT INTO urine (id, baby_id, logged_by, timestamp, color, volume_ml, notes)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, babyID, loggedBy, timestamp, color, volumeMl, notes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create urine: %w", err)
+	}
+
+	if volumeMl != nil {
+		srcType := "urine"
+		fluidID := model.NewULID()
+		if err := createFluidLogTx(tx, fluidID, babyID, loggedBy, timestamp, "output", "urine", volumeMl, &srcType, &id, notes); err != nil {
+			return nil, fmt.Errorf("create urine: fluid_log: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("create urine: commit: %w", err)
 	}
 
 	return GetUrineByID(db, babyID, id)
@@ -72,16 +93,27 @@ func ListUrineWithTZ(db *sql.DB, babyID string, from, to, cursor *string, limit 
 	return listMetricWithTZ(db, "urine", urineColumns, babyID, from, to, cursor, limit, loc, scanUrine, func(u *model.Urine) string { return u.ID })
 }
 
-// UpdateUrine updates a urine entry.
-func UpdateUrine(db *sql.DB, babyID, urineID, updatedBy, timestamp string, color, notes *string) (*model.Urine, error) {
-	res, err := db.Exec(
+// UpdateUrine updates a urine entry. Also updates the linked fluid_log entry.
+func UpdateUrine(db *sql.DB, babyID, urineID, updatedBy, timestamp string, color *string, volumeMl *float64, notes *string) (*model.Urine, error) {
+	existing, err := GetUrineByID(db, babyID, urineID)
+	if err != nil {
+		return nil, fmt.Errorf("update urine: %w", err)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("update urine: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(
 		`UPDATE urine SET
 			updated_by = ?, timestamp = ?,
-			color = ?, notes = ?,
+			color = ?, volume_ml = ?, notes = ?,
 			updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ? AND baby_id = ?`,
 		updatedBy, timestamp,
-		color, notes,
+		color, volumeMl, notes,
 		urineID, babyID,
 	)
 	if err != nil {
@@ -92,10 +124,48 @@ func UpdateUrine(db *sql.DB, babyID, urineID, updatedBy, timestamp string, color
 		return nil, err
 	}
 
+	// Delete old fluid_log, recreate if volume present
+	if err := deleteFluidLogBySourceTx(tx, "urine", urineID); err != nil {
+		return nil, fmt.Errorf("update urine: fluid_log delete: %w", err)
+	}
+	if volumeMl != nil {
+		srcType := "urine"
+		fluidID := model.NewULID()
+		user := existing.LoggedBy
+		if updatedBy != "" {
+			user = updatedBy
+		}
+		if err := createFluidLogTx(tx, fluidID, babyID, user, timestamp, "output", "urine", volumeMl, &srcType, &urineID, notes); err != nil {
+			return nil, fmt.Errorf("update urine: fluid_log create: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("update urine: commit: %w", err)
+	}
+
 	return GetUrineByID(db, babyID, urineID)
 }
 
-// DeleteUrine hard-deletes a urine entry.
+// DeleteUrine hard-deletes a urine entry and its linked fluid_log entry.
 func DeleteUrine(db *sql.DB, babyID, urineID string) error {
-	return deleteByID(db, "urine", babyID, urineID)
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("delete urine: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if err := deleteFluidLogBySourceTx(tx, "urine", urineID); err != nil {
+		return fmt.Errorf("delete urine: fluid_log: %w", err)
+	}
+
+	res, err := tx.Exec("DELETE FROM urine WHERE id = ? AND baby_id = ?", urineID, babyID)
+	if err != nil {
+		return fmt.Errorf("delete urine: %w", err)
+	}
+	if err := checkRowsAffected(res, "delete urine"); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

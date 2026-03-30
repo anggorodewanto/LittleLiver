@@ -183,3 +183,29 @@ func TestValidNoteCategory(t *testing.T) {
 		t.Error("ValidNoteCategory(\"feeding\") = true, want false")
 	}
 }
+
+func TestValidFluidDirection(t *testing.T) {
+	t.Parallel()
+	valid := []string{"intake", "output"}
+	for _, v := range valid {
+		if !model.ValidFluidDirection(v) {
+			t.Errorf("ValidFluidDirection(%q) = false, want true", v)
+		}
+	}
+	if model.ValidFluidDirection("both") {
+		t.Error("ValidFluidDirection(\"both\") = true, want false")
+	}
+}
+
+func TestValidFluidSourceType(t *testing.T) {
+	t.Parallel()
+	valid := []string{"feeding", "urine", "stool"}
+	for _, v := range valid {
+		if !model.ValidFluidSourceType(v) {
+			t.Errorf("ValidFluidSourceType(%q) = false, want true", v)
+		}
+	}
+	if model.ValidFluidSourceType("iv") {
+		t.Error("ValidFluidSourceType(\"iv\") = true, want false")
+	}
+}

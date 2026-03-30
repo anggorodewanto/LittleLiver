@@ -23,7 +23,7 @@ func TestCreateUrine_StoresFieldsCorrectly(t *testing.T) {
 	color := "pale_yellow"
 	notes := "normal output"
 
-	urine, err := CreateUrine(db, baby.ID, user.ID, ts, &color, &notes)
+	urine, err := CreateUrine(db, baby.ID, user.ID, ts, &color, nil, &notes)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestCreateUrine_NilOptionalFields(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	urine, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	urine, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestGetUrineByID_ReturnsSingleEntry(t *testing.T) {
 	}
 
 	color := "clear"
-	created, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", &color, nil)
+	created, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", &color, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestGetUrineByID_WrongBaby(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	urine, err := CreateUrine(db, baby1.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	urine, err := CreateUrine(db, baby1.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestListUrine_CursorPagination(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		_, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+		_, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateUrine %d failed: %v", i, err)
 		}
@@ -256,15 +256,15 @@ func TestListUrine_DateFiltering(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	_, err = CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	_, err = CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
-	_, err = CreateUrine(db, baby.ID, user.ID, "2025-07-02T10:30:00Z", nil, nil)
+	_, err = CreateUrine(db, baby.ID, user.ID, "2025-07-02T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
-	_, err = CreateUrine(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", nil, nil)
+	_, err = CreateUrine(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -294,14 +294,14 @@ func TestUpdateUrine_SetsUpdatedAt(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	created, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	created, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
 
 	newColor := "dark_yellow"
 	newNotes := "updated notes"
-	updated, err := UpdateUrine(db, baby.ID, created.ID, user.ID, "2025-07-01T11:00:00Z", &newColor, &newNotes)
+	updated, err := UpdateUrine(db, baby.ID, created.ID, user.ID, "2025-07-01T11:00:00Z", &newColor, nil, &newNotes)
 	if err != nil {
 		t.Fatalf("UpdateUrine failed: %v", err)
 	}
@@ -334,7 +334,7 @@ func TestUpdateUrine_NotFound(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	_, err = UpdateUrine(db, baby.ID, "nonexistent", user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	_, err = UpdateUrine(db, baby.ID, "nonexistent", user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for nonexistent urine, got nil")
 	}
@@ -354,7 +354,7 @@ func TestDeleteUrine_RemovesEntry(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	urine, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
+	urine, err := CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateUrine failed: %v", err)
 	}
@@ -411,7 +411,7 @@ func TestUrineTable_Columns(t *testing.T) {
 
 	expected := []string{
 		"id", "baby_id", "logged_by", "updated_by", "timestamp",
-		"color", "notes", "created_at", "updated_at",
+		"color", "volume_ml", "notes", "created_at", "updated_at",
 	}
 	assertColumns(t, db, "urine", expected)
 }
@@ -421,7 +421,7 @@ func TestCreateUrine_ClosedDB(t *testing.T) {
 	db := setupTestDB(t)
 	db.Close()
 
-	_, err := CreateUrine(db, "b1", "u1", "2025-07-01T10:30:00Z", nil, nil)
+	_, err := CreateUrine(db, "b1", "u1", "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for closed DB, got nil")
 	}
@@ -454,7 +454,7 @@ func TestUpdateUrine_ClosedDB(t *testing.T) {
 	db := setupTestDB(t)
 	db.Close()
 
-	_, err := UpdateUrine(db, "b1", "u1", "user1", "2025-07-01T10:30:00Z", nil, nil)
+	_, err := UpdateUrine(db, "b1", "u1", "user1", "2025-07-01T10:30:00Z", nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for closed DB, got nil")
 	}

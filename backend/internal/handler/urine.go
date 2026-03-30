@@ -12,9 +12,10 @@ import (
 
 // urineRequest is the JSON request body for creating/updating a urine entry.
 type urineRequest struct {
-	Timestamp string  `json:"timestamp"`
-	Color     *string `json:"color,omitempty"`
-	Notes     *string `json:"notes,omitempty"`
+	Timestamp string   `json:"timestamp"`
+	Color     *string  `json:"color,omitempty"`
+	VolumeMl  *float64 `json:"volume_ml"`
+	Notes     *string  `json:"notes,omitempty"`
 }
 
 // validate checks required fields for a urine request.
@@ -30,15 +31,16 @@ func (req *urineRequest) validate() (string, bool) {
 
 // urineResponse is the JSON response for a urine entry.
 type urineResponse struct {
-	ID        string  `json:"id"`
-	BabyID    string  `json:"baby_id"`
-	LoggedBy  string  `json:"logged_by"`
-	UpdatedBy *string `json:"updated_by,omitempty"`
-	Timestamp string  `json:"timestamp"`
-	Color     *string `json:"color,omitempty"`
-	Notes     *string `json:"notes,omitempty"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
+	ID        string   `json:"id"`
+	BabyID    string   `json:"baby_id"`
+	LoggedBy  string   `json:"logged_by"`
+	UpdatedBy *string  `json:"updated_by,omitempty"`
+	Timestamp string   `json:"timestamp"`
+	Color     *string  `json:"color,omitempty"`
+	VolumeMl  *float64 `json:"volume_ml,omitempty"`
+	Notes     *string  `json:"notes,omitempty"`
+	CreatedAt string   `json:"created_at"`
+	UpdatedAt string   `json:"updated_at"`
 }
 
 func toUrineResponse(u *model.Urine) urineResponse {
@@ -49,6 +51,7 @@ func toUrineResponse(u *model.Urine) urineResponse {
 		UpdatedBy: u.UpdatedBy,
 		Timestamp: u.Timestamp.Format(model.DateTimeFormat),
 		Color:     u.Color,
+		VolumeMl:  u.VolumeMl,
 		Notes:     u.Notes,
 		CreatedAt: u.CreatedAt.Format(model.DateTimeFormat),
 		UpdatedAt: u.UpdatedAt.Format(model.DateTimeFormat),
@@ -79,7 +82,7 @@ func CreateUrineHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		urine, err := store.CreateUrine(db, baby.ID, user.ID, req.Timestamp, req.Color, req.Notes)
+		urine, err := store.CreateUrine(db, baby.ID, user.ID, req.Timestamp, req.Color, req.VolumeMl, req.Notes)
 		if err != nil {
 			log.Printf("create urine: %v", err)
 			http.Error(w, "failed to create urine entry", http.StatusInternalServerError)
@@ -173,7 +176,7 @@ func UpdateUrineHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		urine, err := store.UpdateUrine(db, baby.ID, entryID, user.ID, req.Timestamp, req.Color, req.Notes)
+		urine, err := store.UpdateUrine(db, baby.ID, entryID, user.ID, req.Timestamp, req.Color, req.VolumeMl, req.Notes)
 		if err != nil {
 			handleStoreError(w, err, "urine entry not found")
 			return

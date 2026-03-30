@@ -86,6 +86,7 @@ type Stool struct {
 	ColorLabel     *string   `json:"color_label,omitempty"`
 	Consistency    *string   `json:"consistency,omitempty"`
 	VolumeEstimate *string   `json:"volume_estimate,omitempty"`
+	VolumeMl       *float64  `json:"volume_ml,omitempty"`
 	PhotoKeys      *string   `json:"photo_keys,omitempty"`
 	Notes          *string   `json:"notes,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
@@ -100,9 +101,27 @@ type Urine struct {
 	UpdatedBy *string   `json:"updated_by,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
 	Color     *string   `json:"color,omitempty"`
+	VolumeMl  *float64  `json:"volume_ml,omitempty"`
 	Notes     *string   `json:"notes,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// FluidLog represents a single fluid intake or output entry for fluid balance tracking.
+type FluidLog struct {
+	ID         string    `json:"id"`
+	BabyID     string    `json:"baby_id"`
+	LoggedBy   string    `json:"logged_by"`
+	UpdatedBy  *string   `json:"updated_by,omitempty"`
+	Timestamp  time.Time `json:"timestamp"`
+	Direction  string    `json:"direction"`
+	Method     string    `json:"method"`
+	VolumeMl   *float64  `json:"volume_ml,omitempty"`
+	SourceType *string   `json:"source_type,omitempty"`
+	SourceID   *string   `json:"source_id,omitempty"`
+	Notes      *string   `json:"notes,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Weight represents a single weight measurement for a baby.

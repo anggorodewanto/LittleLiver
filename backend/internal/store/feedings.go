@@ -45,6 +45,7 @@ const feedingColumns = `id, baby_id, logged_by, updated_by, timestamp,
 	used_default_cal, duration_min, notes, created_at, updated_at`
 
 // CreateFeeding inserts a new feeding entry with calorie calculation and returns it.
+// Also creates a linked fluid_log entry (direction=intake) within the same transaction.
 func CreateFeeding(db *sql.DB, babyID, loggedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string, defaultCalPerFeed float64) (*model.Feeding, error) {
 	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCalPerFeed)
 	if err != nil {
@@ -53,13 +54,29 @@ func CreateFeeding(db *sql.DB, babyID, loggedBy, timestamp, feedType string, vol
 
 	id := model.NewULID()
 
-	_, err = db.Exec(
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("create feeding: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(
 		`INSERT INTO feedings (id, baby_id, logged_by, timestamp, feed_type, volume_ml, cal_density, calories, used_default_cal, duration_min, notes)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, babyID, loggedBy, timestamp, feedType, volumeMl, calResult.CalDensity, calResult.Calories, calResult.UsedDefaultCal, durationMin, notes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create feeding: %w", err)
+	}
+
+	srcType := "feeding"
+	fluidID := model.NewULID()
+	if err := createFluidLogTx(tx, fluidID, babyID, loggedBy, timestamp, "intake", feedType, volumeMl, &srcType, &id, notes); err != nil {
+		return nil, fmt.Errorf("create feeding: fluid_log: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("create feeding: commit: %w", err)
 	}
 
 	return GetFeedingByID(db, babyID, id)
@@ -87,15 +104,26 @@ func ListFeedingsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, lim
 }
 
 // UpdateFeeding updates a feeding entry with calorie recalculation.
-// Sets updated_at = CURRENT_TIMESTAMP.
-// Returns sql.ErrNoRows if the feeding doesn't exist for the given baby.
+// Also updates the linked fluid_log entry within the same transaction.
 func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string, defaultCalPerFeed float64) (*model.Feeding, error) {
 	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCalPerFeed)
 	if err != nil {
 		return nil, fmt.Errorf("update feeding: %w", err)
 	}
 
-	res, err := db.Exec(
+	// Get original logged_by for fluid_log upsert
+	existing, err := GetFeedingByID(db, babyID, feedingID)
+	if err != nil {
+		return nil, fmt.Errorf("update feeding: %w", err)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("update feeding: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(
 		`UPDATE feedings SET
 			updated_by = ?, timestamp = ?, feed_type = ?,
 			volume_ml = ?, cal_density = ?, calories = ?,
@@ -113,6 +141,14 @@ func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType
 
 	if err := checkRowsAffected(res, "update feeding"); err != nil {
 		return nil, err
+	}
+
+	if err := upsertFluidLogBySourceTx(tx, babyID, existing.LoggedBy, updatedBy, timestamp, "intake", feedType, volumeMl, "feeding", feedingID, notes); err != nil {
+		return nil, fmt.Errorf("update feeding: fluid_log: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("update feeding: commit: %w", err)
 	}
 
 	return GetFeedingByID(db, babyID, feedingID)
@@ -139,8 +175,25 @@ func RecalculateFeedingCalories(db *sql.DB, babyID string, newDefault float64) (
 	return count, nil
 }
 
-// DeleteFeeding hard-deletes a feeding entry.
-// Returns an error wrapping sql.ErrNoRows if the feeding doesn't exist for the given baby.
+// DeleteFeeding hard-deletes a feeding entry and its linked fluid_log entry.
 func DeleteFeeding(db *sql.DB, babyID, feedingID string) error {
-	return deleteByID(db, "feedings", babyID, feedingID)
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("delete feeding: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if err := deleteFluidLogBySourceTx(tx, "feeding", feedingID); err != nil {
+		return fmt.Errorf("delete feeding: fluid_log: %w", err)
+	}
+
+	res, err := tx.Exec("DELETE FROM feedings WHERE id = ? AND baby_id = ?", feedingID, babyID)
+	if err != nil {
+		return fmt.Errorf("delete feeding: %w", err)
+	}
+	if err := checkRowsAffected(res, "delete feeding"); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

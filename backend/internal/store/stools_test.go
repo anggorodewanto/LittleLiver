@@ -25,7 +25,7 @@ func TestCreateStool_StoresFieldsCorrectly(t *testing.T) {
 	volume := "medium"
 	notes := "normal stool"
 
-	stool, err := CreateStool(db, baby.ID, user.ID, ts, 5, &colorLabel, &consistency, &volume, &notes)
+	stool, err := CreateStool(db, baby.ID, user.ID, ts, 5, &colorLabel, &consistency, &volume, nil, &notes)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestCreateStool_NilOptionalFields(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	stool, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	stool, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -116,13 +116,13 @@ func TestCreateStool_InvalidColorRating(t *testing.T) {
 	}
 
 	// color_rating = 0 should fail (CHECK constraint)
-	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 0, nil, nil, nil, nil)
+	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 0, nil, nil, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for color_rating=0, got nil")
 	}
 
 	// color_rating = 8 should fail
-	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 8, nil, nil, nil, nil)
+	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 8, nil, nil, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for color_rating=8, got nil")
 	}
@@ -143,7 +143,7 @@ func TestCreateStool_ValidColorRatingBounds(t *testing.T) {
 	}
 
 	// color_rating = 1 (min)
-	s1, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 1, nil, nil, nil, nil)
+	s1, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 1, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool with color_rating=1 failed: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestCreateStool_ValidColorRatingBounds(t *testing.T) {
 	}
 
 	// color_rating = 7 (max)
-	s7, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T11:30:00Z", 7, nil, nil, nil, nil)
+	s7, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T11:30:00Z", 7, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool with color_rating=7 failed: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestGetStoolByID_ReturnsSingleEntry(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	created, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 4, nil, nil, nil, nil)
+	created, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 4, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestGetStoolByID_WrongBaby(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	stool, err := CreateStool(db, baby1.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	stool, err := CreateStool(db, baby1.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestListStools_CursorPagination(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		_, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+		_, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("CreateStool %d failed: %v", i, err)
 		}
@@ -333,15 +333,15 @@ func TestListStools_DateFiltering(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
-	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-02T10:30:00Z", 4, nil, nil, nil, nil)
+	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-02T10:30:00Z", 4, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
-	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", 5, nil, nil, nil, nil)
+	_, err = CreateStool(db, baby.ID, user.ID, "2025-07-03T10:30:00Z", 5, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -371,14 +371,14 @@ func TestUpdateStool_SetsUpdatedAt(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	created, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	created, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
 
 	newLabel := "brown"
 	newNotes := "updated notes"
-	updated, err := UpdateStool(db, baby.ID, created.ID, user.ID, "2025-07-01T11:00:00Z", 6, &newLabel, nil, nil, &newNotes)
+	updated, err := UpdateStool(db, baby.ID, created.ID, user.ID, "2025-07-01T11:00:00Z", 6, &newLabel, nil, nil, nil, &newNotes)
 	if err != nil {
 		t.Fatalf("UpdateStool failed: %v", err)
 	}
@@ -414,7 +414,7 @@ func TestUpdateStool_NotFound(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	_, err = UpdateStool(db, baby.ID, "nonexistent", user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	_, err = UpdateStool(db, baby.ID, "nonexistent", user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for nonexistent stool, got nil")
 	}
@@ -434,7 +434,7 @@ func TestDeleteStool_RemovesEntry(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	stool, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	stool, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool failed: %v", err)
 	}
@@ -492,7 +492,7 @@ func TestStoolsTable_Columns(t *testing.T) {
 	expected := []string{
 		"id", "baby_id", "logged_by", "updated_by", "timestamp",
 		"color_rating", "color_label", "consistency", "volume_estimate",
-		"photo_keys", "notes", "created_at", "updated_at",
+		"volume_ml", "photo_keys", "notes", "created_at", "updated_at",
 	}
 	assertColumns(t, db, "stools", expected)
 }
@@ -502,7 +502,7 @@ func TestCreateStool_ClosedDB(t *testing.T) {
 	db := setupTestDB(t)
 	db.Close()
 
-	_, err := CreateStool(db, "b1", "u1", "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	_, err := CreateStool(db, "b1", "u1", "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for closed DB, got nil")
 	}
@@ -535,7 +535,7 @@ func TestUpdateStool_ClosedDB(t *testing.T) {
 	db := setupTestDB(t)
 	db.Close()
 
-	_, err := UpdateStool(db, "b1", "s1", "u1", "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil)
+	_, err := UpdateStool(db, "b1", "s1", "u1", "2025-07-01T10:30:00Z", 3, nil, nil, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for closed DB, got nil")
 	}

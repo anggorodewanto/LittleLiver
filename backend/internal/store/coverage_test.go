@@ -209,7 +209,7 @@ func TestGetStoolColorTrend_NullColorLabel(t *testing.T) {
 	// Create stool with nil color_label
 	today := time.Now().UTC().Format("2006-01-02")
 	ts := today + "T12:00:00Z"
-	_, err = CreateStool(db, baby.ID, user.ID, ts, 5, nil, nil, nil, nil)
+	_, err = CreateStool(db, baby.ID, user.ID, ts, 5, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateStool: %v", err)
 	}
@@ -424,7 +424,7 @@ func TestCreateStool_AllFieldsPopulated(t *testing.T) {
 	consistency := "soft"
 	volumeEstimate := "medium"
 	notes := "some notes"
-	stool, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:00:00Z", 5, &colorLabel, &consistency, &volumeEstimate, &notes)
+	stool, err := CreateStool(db, baby.ID, user.ID, "2025-07-01T10:00:00Z", 5, &colorLabel, &consistency, &volumeEstimate, nil, &notes)
 	if err != nil {
 		t.Fatalf("CreateStool: %v", err)
 	}
@@ -443,7 +443,7 @@ func TestCreateStool_AllFieldsPopulated(t *testing.T) {
 	}
 
 	// Update to exercise updatedBy branch
-	updatedStool, err := UpdateStool(db, baby.ID, stool.ID, user.ID, "2025-07-01T10:00:00Z", 4, &colorLabel, &consistency, &volumeEstimate, &notes)
+	updatedStool, err := UpdateStool(db, baby.ID, stool.ID, user.ID, "2025-07-01T10:00:00Z", 4, &colorLabel, &consistency, &volumeEstimate, nil, &notes)
 	if err != nil {
 		t.Fatalf("UpdateStool: %v", err)
 	}
@@ -646,8 +646,8 @@ func TestDeleteAccount_AnonymizesFeedingsTable(t *testing.T) {
 		t.Fatalf("CreateFeeding: %v", err)
 	}
 
-	// Delete account with feedings in anonymization list
-	_, err = DeleteAccount(db, user.ID, []string{"feedings"})
+	// Delete account with feedings and fluid_log in anonymization list
+	_, err = DeleteAccount(db, user.ID, []string{"feedings", "fluid_log"})
 	if err != nil {
 		t.Fatalf("DeleteAccount: %v", err)
 	}
@@ -940,7 +940,7 @@ func TestCreateStoolWithPhotos_PhotoKeysSet(t *testing.T) {
 
 	colorLabel := "brown"
 	photoKeys := "photo1.jpg,photo2.jpg"
-	stool, err := CreateStoolWithPhotos(db, baby.ID, user.ID, "2025-07-01T10:00:00Z", 5, &colorLabel, nil, nil, &photoKeys, nil)
+	stool, err := CreateStoolWithPhotos(db, baby.ID, user.ID, "2025-07-01T10:00:00Z", 5, &colorLabel, nil, nil, nil, &photoKeys, nil)
 	if err != nil {
 		t.Fatalf("CreateStoolWithPhotos: %v", err)
 	}

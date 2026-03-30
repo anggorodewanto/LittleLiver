@@ -4,6 +4,7 @@
 	export interface UrinePayload {
 		timestamp: string;
 		color?: string;
+		volume_ml?: number;
 		notes?: string;
 	}
 
@@ -17,6 +18,7 @@
 
 	let timestamp = $state(defaultTimestamp());
 	let color = $state('');
+	let volumeMl = $state('');
 	let notes = $state('');
 
 	function handleSubmit(event: SubmitEvent) {
@@ -26,6 +28,9 @@
 
 		if (color) {
 			payload.color = color;
+		}
+		if (volumeMl !== '' && !isNaN(Number(volumeMl))) {
+			payload.volume_ml = Number(volumeMl);
 		}
 		if (notes.trim()) {
 			payload.notes = notes.trim();
@@ -51,6 +56,11 @@
 			<option value="amber">Amber</option>
 			<option value="brown">Brown</option>
 		</select>
+	</div>
+
+	<div>
+		<label for="urine-volume">Volume (mL)</label>
+		<input id="urine-volume" type="number" step="0.1" min="0" bind:value={volumeMl} placeholder="Optional" />
 	</div>
 
 	<div>

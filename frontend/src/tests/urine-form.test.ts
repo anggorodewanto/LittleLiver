@@ -9,11 +9,12 @@ describe('UrineForm', () => {
 		onsubmit = vi.fn();
 	});
 
-	it('renders timestamp, color, and notes fields', () => {
+	it('renders timestamp, color, volume, and notes fields', () => {
 		render(UrineForm, { props: { onsubmit } });
 
 		expect(screen.getByLabelText(/timestamp/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/color/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/volume/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
 	});
 
@@ -38,6 +39,7 @@ describe('UrineForm', () => {
 		const payload = onsubmit.mock.calls[0][0];
 		expect(payload.timestamp).toBeDefined();
 		expect(payload.color).toBeUndefined();
+		expect(payload.volume_ml).toBeUndefined();
 		expect(payload.notes).toBeUndefined();
 	});
 
@@ -56,6 +58,18 @@ describe('UrineForm', () => {
 		const payload = onsubmit.mock.calls[0][0];
 		expect(payload.color).toBe('pale_yellow');
 		expect(payload.notes).toBe('normal');
+	});
+
+	it('submits volume_ml when provided', async () => {
+		render(UrineForm, { props: { onsubmit } });
+
+		await fireEvent.input(screen.getByLabelText(/volume/i), {
+			target: { value: '50.5' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: /log urine/i }));
+
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.volume_ml).toBe(50.5);
 	});
 
 	it('disables submit button when submitting', () => {

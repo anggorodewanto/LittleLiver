@@ -90,8 +90,8 @@ func TestListUrineHandler_WithFromTo(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil)
-	store.CreateUrine(db, baby.ID, user.ID, "2025-07-02T10:30:00Z", nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", nil, nil, nil)
+	store.CreateUrine(db, baby.ID, user.ID, "2025-07-02T10:30:00Z", nil, nil, nil)
 
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, "/api/babies/"+baby.ID+"/urine?from=2025-07-01&to=2025-07-01")
 	req.Header.Set("X-Timezone", "UTC")
@@ -206,8 +206,8 @@ func TestListStoolsHandler_WithFromTo(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	objStore := storage.NewMemoryStore()
 
-	store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil)
-	store.CreateStool(db, baby.ID, user.ID, "2025-07-02T11:00:00Z", 3, nil, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil, nil)
+	store.CreateStool(db, baby.ID, user.ID, "2025-07-02T11:00:00Z", 3, nil, nil, nil, nil, nil)
 
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, "/api/babies/"+baby.ID+"/stools?from=2025-07-01&to=2025-07-01")
 	req.Header.Set("X-Timezone", "UTC")
@@ -1519,7 +1519,7 @@ func TestDeleteStoolHandler_WithObjStore(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	objStore := storage.NewMemoryStore()
 
-	s, _ := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil)
+	s, _ := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil, nil)
 
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodDelete, "/api/babies/"+baby.ID+"/stools/"+s.ID)
 	authMw := middleware.Auth(db, testCookieName)
@@ -1643,7 +1643,7 @@ func TestUpdateStoolHandler_WithObjStore(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	objStore := storage.NewMemoryStore()
 
-	s, _ := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil)
+	s, _ := store.CreateStool(db, baby.ID, user.ID, "2025-07-01T11:00:00Z", 5, nil, nil, nil, nil, nil)
 
 	body := `{"timestamp":"2025-07-01T12:00:00Z","color_rating":4}`
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPut, "/api/babies/"+baby.ID+"/stools/"+s.ID)
