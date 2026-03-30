@@ -21,8 +21,8 @@
 		loading = true;
 		error = null;
 		try {
-			const data = await apiClient.get<MedicationsResponse>(`/babies/${babyId}/medications`);
-			medications = data.medications;
+			const data = await apiClient.get<MedicationsResponse | Medication[]>(`/babies/${babyId}/medications`);
+			medications = Array.isArray(data) ? data : (data.medications ?? []);
 		} catch {
 			error = 'Failed to load medications';
 		} finally {
