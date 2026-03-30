@@ -402,12 +402,13 @@ func TestListMedLogs_FilterByFromTo(t *testing.T) {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
 
-	// Create two logs — the created_at will be "now" so both share the same date
-	_, err = store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, strPtr("2026-03-17T08:00:00Z"), false, nil, nil)
+	// Create two logs with timestamps relative to now so the test doesn't go stale
+	today := time.Now().UTC().Format("2006-01-02")
+	_, err = store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, strPtr(today+"T08:00:00Z"), false, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedLog failed: %v", err)
 	}
-	_, err = store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, strPtr("2026-03-17T20:00:00Z"), false, nil, nil)
+	_, err = store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, strPtr(today+"T20:00:00Z"), false, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedLog failed: %v", err)
 	}
