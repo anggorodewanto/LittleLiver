@@ -5,7 +5,7 @@
 // The .ts version is the testable source of truth; this .js file is the
 // production deployment copy. When modifying logic, update both files.
 
-const CACHE_NAME = 'littleliver-v1';
+const CACHE_NAME = 'littleliver-v3';
 const APP_SHELL_URLS = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
@@ -36,19 +36,31 @@ self.addEventListener('fetch', (event) => {
 		return;
 	}
 
-	// Do not intercept API requests
-	if (url.pathname.startsWith('/api')) {
+	// Do not intercept API or auth requests
+	if (url.pathname.startsWith('/api') || url.pathname.startsWith('/auth')) {
 		return;
 	}
+
+	const isImmutableAsset = url.pathname.startsWith('/_app/immutable/');
 
 	event.respondWith(
 		(async () => {
 			const cache = await caches.open(CACHE_NAME);
-			const cachedResponse = await cache.match(event.request);
-			if (cachedResponse) {
-				return cachedResponse;
+
+			// Immutable hashed assets: cache-first (safe because filenames change on rebuild)
+			if (isImmutableAsset) {
+				const cachedResponse = await cache.match(event.request);
+				if (cachedResponse) {
+					return cachedResponse;
+				}
+				const networkResponse = await fetch(event.request);
+				if (networkResponse.ok) {
+					await cache.put(event.request, networkResponse.clone());
+				}
+				return networkResponse;
 			}
 
+			// Navigation and other requests: network-first (prevents stale index.html)
 			try {
 				const networkResponse = await fetch(event.request);
 				if (networkResponse.ok) {
@@ -56,6 +68,10 @@ self.addEventListener('fetch', (event) => {
 				}
 				return networkResponse;
 			} catch {
+				const cachedResponse = await cache.match(event.request);
+				if (cachedResponse) {
+					return cachedResponse;
+				}
 				const fallback = await cache.match('/');
 				if (fallback) {
 					return fallback;

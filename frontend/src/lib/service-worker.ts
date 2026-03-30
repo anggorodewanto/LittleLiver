@@ -2,7 +2,7 @@
 // This .ts version is the testable source of truth; the .js file is the
 // production deployment copy. When modifying logic, update both files.
 
-const CACHE_NAME = 'littleliver-v1';
+const CACHE_NAME = 'littleliver-v3';
 const APP_SHELL_URLS = ['/', '/index.html'];
 
 interface PushPayload {
@@ -45,19 +45,31 @@ export function initServiceWorker(sw: ServiceWorkerGlobalScope): void {
 			return;
 		}
 
-		// Do not intercept API requests
-		if (url.pathname.startsWith('/api')) {
+		// Do not intercept API or auth requests
+		if (url.pathname.startsWith('/api') || url.pathname.startsWith('/auth')) {
 			return;
 		}
+
+		const isImmutableAsset = url.pathname.startsWith('/_app/immutable/');
 
 		fetchEvent.respondWith(
 			(async () => {
 				const cache = await sw.caches.open(CACHE_NAME);
-				const cachedResponse = await cache.match(fetchEvent.request);
-				if (cachedResponse) {
-					return cachedResponse;
+
+				// Immutable hashed assets: cache-first (safe because filenames change on rebuild)
+				if (isImmutableAsset) {
+					const cachedResponse = await cache.match(fetchEvent.request);
+					if (cachedResponse) {
+						return cachedResponse;
+					}
+					const networkResponse = await sw.fetch(fetchEvent.request);
+					if (networkResponse.ok) {
+						await cache.put(fetchEvent.request, networkResponse.clone());
+					}
+					return networkResponse;
 				}
 
+				// Navigation and other requests: network-first (prevents stale index.html)
 				try {
 					const networkResponse = await sw.fetch(fetchEvent.request);
 					if (networkResponse.ok) {
@@ -65,7 +77,10 @@ export function initServiceWorker(sw: ServiceWorkerGlobalScope): void {
 					}
 					return networkResponse;
 				} catch {
-					// Return a basic offline page for navigation requests
+					const cachedResponse = await cache.match(fetchEvent.request);
+					if (cachedResponse) {
+						return cachedResponse;
+					}
 					const fallback = await cache.match('/');
 					if (fallback) {
 						return fallback;

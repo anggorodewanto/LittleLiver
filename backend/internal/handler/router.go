@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/auth"
@@ -182,9 +183,15 @@ func NewMux(opts ...Option) *http.ServeMux {
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			path := staticDir + r.URL.Path
 			if _, err := os.Stat(path); err == nil {
+				// Immutable hashed assets can be cached aggressively
+				if strings.HasPrefix(r.URL.Path, "/_app/immutable/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				}
 				fs.ServeHTTP(w, r)
 				return
 			}
+			// SPA fallback: always revalidate index.html to prevent stale JS chunk references
+			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFile(w, r, staticDir+"/index.html")
 		})
 	}

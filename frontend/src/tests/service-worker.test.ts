@@ -182,7 +182,7 @@ describe('service worker install and activate', () => {
 		const { initServiceWorker } = await import('$lib/service-worker');
 		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
 
-		sw.caches.keys = vi.fn(() => Promise.resolve(['littleliver-v1', 'old-cache']));
+		sw.caches.keys = vi.fn(() => Promise.resolve(['littleliver-v3', 'old-cache']));
 
 		const activateEvent = {
 			waitUntil: vi.fn((p: Promise<unknown>) => p)
@@ -195,7 +195,7 @@ describe('service worker install and activate', () => {
 
 		expect(sw.clients.claim).toHaveBeenCalled();
 		expect(sw.caches.delete).toHaveBeenCalledWith('old-cache');
-		expect(sw.caches.delete).not.toHaveBeenCalledWith('littleliver-v1');
+		expect(sw.caches.delete).not.toHaveBeenCalledWith('littleliver-v3');
 	});
 
 	it('serves cached responses for app shell requests via fetch', async () => {
@@ -240,6 +240,174 @@ describe('service worker install and activate', () => {
 		sw._trigger('fetch', fetchEvent);
 
 		// API requests should NOT be intercepted by the service worker
+		expect(fetchEvent.respondWith).not.toHaveBeenCalled();
+	});
+});
+
+describe('service worker fetch caching strategy', () => {
+	let sw: ReturnType<typeof createMockSwScope>;
+
+	beforeEach(() => {
+		vi.resetModules();
+		sw = createMockSwScope();
+	});
+
+	it('uses cache-first for immutable hashed assets', async () => {
+		const { initServiceWorker } = await import('$lib/service-worker');
+		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
+
+		const cachedResponse = new Response('cached-asset');
+		const mockCache = {
+			addAll: vi.fn(() => Promise.resolve()),
+			match: vi.fn(() => Promise.resolve(cachedResponse)),
+			put: vi.fn(() => Promise.resolve()),
+			keys: vi.fn(() => Promise.resolve([]))
+		};
+		sw.caches.open = vi.fn(() => Promise.resolve(mockCache));
+
+		const request = { url: 'http://localhost/_app/immutable/entry/start.abc123.js', method: 'GET' };
+		const fetchEvent = {
+			request,
+			respondWith: vi.fn(),
+			waitUntil: vi.fn()
+		};
+
+		sw._trigger('fetch', fetchEvent);
+
+		expect(fetchEvent.respondWith).toHaveBeenCalled();
+		const response = await fetchEvent.respondWith.mock.calls[0][0];
+		expect(response).toBe(cachedResponse);
+		// Network should NOT be called since cache had a hit
+		expect(sw.fetch).not.toHaveBeenCalled();
+	});
+
+	it('falls back to network for immutable assets not in cache', async () => {
+		const { initServiceWorker } = await import('$lib/service-worker');
+		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
+
+		const networkResponse = new Response('network-asset', { status: 200 });
+		Object.defineProperty(networkResponse, 'ok', { value: true });
+		const mockCache = {
+			addAll: vi.fn(() => Promise.resolve()),
+			match: vi.fn(() => Promise.resolve(undefined)),
+			put: vi.fn(() => Promise.resolve()),
+			keys: vi.fn(() => Promise.resolve([]))
+		};
+		sw.caches.open = vi.fn(() => Promise.resolve(mockCache));
+		sw.fetch = vi.fn(() => Promise.resolve(networkResponse));
+
+		const request = { url: 'http://localhost/_app/immutable/entry/start.xyz789.js', method: 'GET' };
+		const fetchEvent = {
+			request,
+			respondWith: vi.fn(),
+			waitUntil: vi.fn()
+		};
+
+		sw._trigger('fetch', fetchEvent);
+
+		const response = await fetchEvent.respondWith.mock.calls[0][0];
+		expect(sw.fetch).toHaveBeenCalledWith(request);
+		expect(mockCache.put).toHaveBeenCalled();
+		expect(response).toBe(networkResponse);
+	});
+
+	it('uses network-first for navigation requests (prevents stale index.html)', async () => {
+		const { initServiceWorker } = await import('$lib/service-worker');
+		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
+
+		const cachedResponse = new Response('stale-html');
+		const networkResponse = new Response('fresh-html', { status: 200 });
+		Object.defineProperty(networkResponse, 'ok', { value: true });
+		const mockCache = {
+			addAll: vi.fn(() => Promise.resolve()),
+			match: vi.fn(() => Promise.resolve(cachedResponse)),
+			put: vi.fn(() => Promise.resolve()),
+			keys: vi.fn(() => Promise.resolve([]))
+		};
+		sw.caches.open = vi.fn(() => Promise.resolve(mockCache));
+		sw.fetch = vi.fn(() => Promise.resolve(networkResponse));
+
+		const request = { url: 'http://localhost/log/feeding', method: 'GET' };
+		const fetchEvent = {
+			request,
+			respondWith: vi.fn(),
+			waitUntil: vi.fn()
+		};
+
+		sw._trigger('fetch', fetchEvent);
+
+		const response = await fetchEvent.respondWith.mock.calls[0][0];
+		// Should return network response, NOT the cached one
+		expect(response).toBe(networkResponse);
+		expect(sw.fetch).toHaveBeenCalledWith(request);
+	});
+
+	it('falls back to cache when network fails for navigation requests', async () => {
+		const { initServiceWorker } = await import('$lib/service-worker');
+		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
+
+		const cachedResponse = new Response('cached-html');
+		const mockCache = {
+			addAll: vi.fn(() => Promise.resolve()),
+			match: vi.fn(() => Promise.resolve(cachedResponse)),
+			put: vi.fn(() => Promise.resolve()),
+			keys: vi.fn(() => Promise.resolve([]))
+		};
+		sw.caches.open = vi.fn(() => Promise.resolve(mockCache));
+		sw.fetch = vi.fn(() => Promise.reject(new Error('offline')));
+
+		const request = { url: 'http://localhost/trends', method: 'GET' };
+		const fetchEvent = {
+			request,
+			respondWith: vi.fn(),
+			waitUntil: vi.fn()
+		};
+
+		sw._trigger('fetch', fetchEvent);
+
+		const response = await fetchEvent.respondWith.mock.calls[0][0];
+		// Offline: should fall back to cached response
+		expect(response).toBe(cachedResponse);
+	});
+
+	it('returns offline response when both network and cache fail', async () => {
+		const { initServiceWorker } = await import('$lib/service-worker');
+		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
+
+		const mockCache = {
+			addAll: vi.fn(() => Promise.resolve()),
+			match: vi.fn(() => Promise.resolve(undefined)),
+			put: vi.fn(() => Promise.resolve()),
+			keys: vi.fn(() => Promise.resolve([]))
+		};
+		sw.caches.open = vi.fn(() => Promise.resolve(mockCache));
+		sw.fetch = vi.fn(() => Promise.reject(new Error('offline')));
+
+		const request = { url: 'http://localhost/settings', method: 'GET' };
+		const fetchEvent = {
+			request,
+			respondWith: vi.fn(),
+			waitUntil: vi.fn()
+		};
+
+		sw._trigger('fetch', fetchEvent);
+
+		const response = await fetchEvent.respondWith.mock.calls[0][0];
+		expect(response.status).toBe(503);
+	});
+
+	it('does not intercept auth requests', async () => {
+		const { initServiceWorker } = await import('$lib/service-worker');
+		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
+
+		const request = { url: 'http://localhost/auth/google/login', method: 'GET' };
+		const fetchEvent = {
+			request,
+			respondWith: vi.fn(),
+			waitUntil: vi.fn()
+		};
+
+		sw._trigger('fetch', fetchEvent);
 		expect(fetchEvent.respondWith).not.toHaveBeenCalled();
 	});
 });
