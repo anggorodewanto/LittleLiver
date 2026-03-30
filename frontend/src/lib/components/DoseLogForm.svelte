@@ -33,8 +33,9 @@
 	async function fetchMedications(): Promise<void> {
 		loadError = '';
 		try {
-			const data = await apiClient.get<MedicationsResponse>(`/babies/${babyId}/medications`);
-			medications = data.medications.filter((m) => m.active);
+			const data = await apiClient.get<MedicationsResponse | Medication[]>(`/babies/${babyId}/medications`);
+			const meds = Array.isArray(data) ? data : (data.medications ?? []);
+			medications = meds.filter((m) => m.active);
 		} catch {
 			loadError = 'Failed to load medications';
 		}

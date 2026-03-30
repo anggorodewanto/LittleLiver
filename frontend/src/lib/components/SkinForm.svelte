@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
 	import PhotoUpload from './PhotoUpload.svelte';
 
 	export interface SkinPayload {
@@ -34,7 +34,7 @@
 		event.preventDefault();
 
 		const payload: SkinPayload = {
-			timestamp,
+			timestamp: toISO8601(timestamp),
 			scleral_icterus: scleralIcterus
 		};
 

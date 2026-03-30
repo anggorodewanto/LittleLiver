@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
 
 	export interface UrinePayload {
 		timestamp: string;
@@ -22,7 +22,7 @@
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 
-		const payload: UrinePayload = { timestamp };
+		const payload: UrinePayload = { timestamp: toISO8601(timestamp) };
 
 		if (color) {
 			payload.color = color;

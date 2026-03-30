@@ -32,7 +32,13 @@
 
 	async function toggleActive(med: Medication): Promise<void> {
 		try {
-			await apiClient.put(`/babies/${babyId}/medications/${med.id}`, { active: !med.active });
+			await apiClient.put(`/babies/${babyId}/medications/${med.id}`, {
+				name: med.name,
+				dose: med.dose,
+				frequency: med.frequency,
+				schedule_times: med.schedule_times ?? [],
+				active: !med.active
+			});
 			await fetchMedications();
 		} catch {
 			error = 'Failed to update medication';

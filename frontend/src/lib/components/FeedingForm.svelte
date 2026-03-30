@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
 
 	export interface FeedingPayload {
 		timestamp: string;
@@ -36,7 +36,7 @@
 
 		validationError = '';
 		const payload: FeedingPayload = {
-			timestamp,
+			timestamp: toISO8601(timestamp),
 			feed_type: feedType
 		};
 

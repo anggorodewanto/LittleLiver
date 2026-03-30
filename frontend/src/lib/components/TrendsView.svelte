@@ -32,8 +32,30 @@
 		[key: string]: unknown;
 	}
 
+	interface CurvePoint {
+		age_days: number;
+		weight_kg: number;
+	}
+
+	interface PercentileCurve {
+		percentile: number;
+		points: CurvePoint[];
+	}
+
 	interface PercentileResponse {
-		percentiles: Percentiles;
+		curves: PercentileCurve[];
+	}
+
+	function transformCurves(curves: PercentileCurve[]): Percentiles {
+		const keyMap: Record<number, keyof Percentiles> = { 3: 'p3', 15: 'p15', 50: 'p50', 85: 'p85', 97: 'p97' };
+		const result: Percentiles = { p3: [], p15: [], p50: [], p85: [], p97: [] };
+		for (const curve of curves) {
+			const key = keyMap[curve.percentile];
+			if (key) {
+				result[key] = curve.points.map(p => ({ age_days: p.age_days, value: p.weight_kg }));
+			}
+		}
+		return result;
 	}
 
 	let { babyId, sex, dateOfBirth }: Props = $props();
@@ -85,7 +107,7 @@
 			]);
 
 			dashboard = dashboardData;
-			percentiles = percentileData?.percentiles ?? null;
+			percentiles = percentileData?.curves ? transformCurves(percentileData.curves) : null;
 		} catch {
 			error = 'Failed to load trends data';
 		} finally {

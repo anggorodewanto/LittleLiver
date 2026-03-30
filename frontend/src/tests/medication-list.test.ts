@@ -106,7 +106,13 @@ describe('MedicationList', () => {
 		const deactivateButtons = screen.getAllByRole('button', { name: /deactivate/i });
 		await fireEvent.click(deactivateButtons[0]);
 
-		expect(mockPut).toHaveBeenCalledWith('/babies/baby-1/medications/med-1', { active: false });
+		expect(mockPut).toHaveBeenCalledWith('/babies/baby-1/medications/med-1', {
+			name: 'UDCA (ursodiol)',
+			dose: '50mg',
+			frequency: 'twice_daily',
+			schedule_times: [],
+			active: false
+		});
 	});
 
 	it('deactivation updates the display to show inactive', async () => {
@@ -191,6 +197,12 @@ describe('MedicationList', () => {
 		const reactivateButton = screen.getByRole('button', { name: /reactivate/i });
 		await fireEvent.click(reactivateButton);
 
-		expect(mockPut).toHaveBeenCalledWith('/babies/baby-1/medications/med-2', { active: true });
+		expect(mockPut).toHaveBeenCalledWith('/babies/baby-1/medications/med-2', {
+			name: 'Vitamin D',
+			dose: '400IU',
+			frequency: 'once_daily',
+			schedule_times: [],
+			active: true
+		});
 	});
 });

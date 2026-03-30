@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
 	import PhotoUpload from './PhotoUpload.svelte';
 
 	export interface AbdomenPayload {
@@ -39,7 +39,7 @@
 
 		validationError = '';
 		const payload: AbdomenPayload = {
-			timestamp,
+			timestamp: toISO8601(timestamp),
 			firmness,
 			tenderness
 		};

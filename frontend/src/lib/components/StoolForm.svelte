@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
 	import { COLOR_SWATCHES } from '$lib/stool-colors';
 	import PhotoUpload from './PhotoUpload.svelte';
 
@@ -46,7 +46,7 @@
 
 		validationError = '';
 		const payload: StoolPayload = {
-			timestamp,
+			timestamp: toISO8601(timestamp),
 			color_rating: colorRating,
 			color_label: colorLabel
 		};

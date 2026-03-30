@@ -228,7 +228,7 @@
 			<div class="card-label">Feeds</div>
 		</div>
 		<div class="card">
-			<div class="card-value">{dashboard.summary_cards.total_calories}</div>
+			<div class="card-value">{Math.round(dashboard.summary_cards.total_calories)}</div>
 			<div class="card-label">Calories</div>
 		</div>
 		<div class="card">
@@ -274,7 +274,7 @@
 		<div class="stool-color-trend">
 			<h3>Stool Color Trend (7 days)</h3>
 			<div class="trend-dots">
-				{#each dashboard.stool_color_trend as entry (entry.date)}
+				{#each dashboard.stool_color_trend as entry, i (entry.date + '-' + i)}
 					<div
 						class="stool-trend-dot"
 						data-rating={entry.color_rating}

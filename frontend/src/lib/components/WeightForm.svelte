@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
 
 	export interface WeightPayload {
 		timestamp: string;
@@ -32,7 +32,7 @@
 
 		validationError = '';
 		const payload: WeightPayload = {
-			timestamp,
+			timestamp: toISO8601(timestamp),
 			weight_kg: Number(weightKg)
 		};
 

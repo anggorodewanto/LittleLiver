@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
 
 	export interface TemperaturePayload {
 		timestamp: string;
@@ -53,7 +53,7 @@
 
 		validationError = '';
 		const payload: TemperaturePayload = {
-			timestamp,
+			timestamp: toISO8601(timestamp),
 			value: Number(value),
 			method
 		};
