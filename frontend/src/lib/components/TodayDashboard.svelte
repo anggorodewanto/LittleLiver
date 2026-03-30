@@ -211,7 +211,23 @@
 	{#if visibleAlerts.length > 0}
 		<div class="alert-banners">
 			{#each visibleAlerts as alert (alert.entry_id)}
-				<div class="alert-banner" data-alert-type={alert.alert_type}>
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class="alert-banner"
+					class:alert-tappable={alert.alert_type === 'missed_medication'}
+					data-alert-type={alert.alert_type}
+					onclick={(e: MouseEvent) => {
+						if (alert.alert_type === 'missed_medication' && !(e.target as HTMLElement).closest('button')) {
+							void goto('/log/med');
+						}
+					}}
+					onkeydown={(e: KeyboardEvent) => {
+						if (alert.alert_type === 'missed_medication' && (e.key === 'Enter' || e.key === ' ') && !(e.target as HTMLElement).closest('button')) {
+							e.preventDefault();
+							void goto('/log/med');
+						}
+					}}
+				>
 					<div class="alert-content">
 						<strong class="alert-label">{alertLabel(alert.alert_type)}</strong>
 						<span class="alert-message">{alertMessage(alert)}</span>
@@ -357,6 +373,10 @@
 	.alert-banner[data-alert-type="missed_medication"] {
 		background: var(--color-alert-missed-med-bg);
 		border-color: var(--color-alert-missed-med);
+	}
+
+	.alert-tappable {
+		cursor: pointer;
 	}
 
 	.alert-content {

@@ -15,6 +15,7 @@ vi.mock('$app/navigation', () => ({
 }));
 
 import { apiClient } from '$lib/api';
+import { goto } from '$app/navigation';
 
 const mockDashboardResponse = {
 	summary_cards: {
@@ -406,6 +407,21 @@ describe('TodayDashboard', () => {
 		const dismissed = JSON.parse(localStorage.getItem('dismissed_alerts') ?? '[]');
 		expect(dismissed).not.toContain('alert-1');
 		expect(dismissed).not.toContain('stale-id');
+	});
+
+	// --- Missed medication alert tap-to-log ---
+
+	it('navigates to med log page when tapping a missed_medication alert banner', async () => {
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		await screen.findByText('Missed Medication');
+
+		// Find the missed_medication alert banner and click it
+		const missedMedBanner = screen.getByText('Missed Medication').closest('.alert-banner');
+		expect(missedMedBanner).not.toBeNull();
+		await fireEvent.click(missedMedBanner!);
+
+		expect(goto).toHaveBeenCalledWith('/log/med');
 	});
 
 	// --- API call ---
