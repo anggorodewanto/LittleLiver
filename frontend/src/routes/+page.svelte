@@ -1,10 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { currentUser, fetchCurrentUser } from '$lib/stores/user';
+	import { currentUser } from '$lib/stores/user';
 	import {
 		activeBaby,
 		hasBabies,
-		fetchBabies,
 		createBaby,
 		joinBaby
 	} from '$lib/stores/baby';
@@ -12,24 +10,10 @@
 	import FirstLogin from '$lib/components/FirstLogin.svelte';
 	import TodayDashboard from '$lib/components/TodayDashboard.svelte';
 
-	let loading = $state(true);
 	let createSubmitting = $state(false);
 	let joinSubmitting = $state(false);
 	let createError = $state('');
 	let joinError = $state('');
-
-	onMount(async () => {
-		try {
-			await fetchCurrentUser();
-			if ($currentUser) {
-				await fetchBabies();
-			}
-		} catch (err) {
-			console.error('Failed to initialize:', err);
-		} finally {
-			loading = false;
-		}
-	});
 
 	async function handleCreate(data: CreateBabyInput): Promise<void> {
 		createSubmitting = true;
@@ -58,9 +42,7 @@
 
 <h1>LittleLiver</h1>
 
-{#if loading}
-	<p>Loading...</p>
-{:else if !$currentUser}
+{#if !$currentUser}
 	<p>Post-Kasai baby health tracking</p>
 	<a href="/login">Sign in to get started</a>
 {:else if !$hasBabies}

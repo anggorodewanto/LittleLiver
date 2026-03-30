@@ -2,14 +2,26 @@
 	import { onMount } from 'svelte';
 	import favicon from '$lib/assets/favicon.svg';
 	import { registerServiceWorker, setupInstallPrompt, initPushNotifications } from '$lib/pwa';
-	import { currentUser } from '$lib/stores/user';
+	import { currentUser, fetchCurrentUser } from '$lib/stores/user';
+	import { fetchBabies } from '$lib/stores/baby';
 	import NavHeader from '$lib/components/NavHeader.svelte';
 
 	let { children } = $props();
+	let initialized = $state(false);
 
-	onMount(() => {
+	onMount(async () => {
 		registerServiceWorker();
 		setupInstallPrompt();
+		try {
+			await fetchCurrentUser();
+			if ($currentUser) {
+				await fetchBabies();
+			}
+		} catch (err) {
+			console.error('Failed to initialize:', err);
+		} finally {
+			initialized = true;
+		}
 	});
 
 	// Initialize push notifications when user is authenticated
