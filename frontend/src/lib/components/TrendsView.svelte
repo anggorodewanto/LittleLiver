@@ -176,3 +176,23 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.trends-view {
+		padding-top: var(--space-2);
+	}
+
+	.charts {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.chart-section {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+		box-shadow: var(--shadow-sm);
+	}
+</style>

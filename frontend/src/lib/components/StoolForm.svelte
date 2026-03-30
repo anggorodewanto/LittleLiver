@@ -76,23 +76,24 @@
 
 	<fieldset>
 		<legend>Stool Color</legend>
-		<div style="display: flex; gap: 8px; flex-wrap: wrap;">
+		<div class="color-swatches">
 			{#each COLOR_SWATCHES as swatch (swatch.rating)}
 				<button
 					type="button"
+					class="color-swatch"
 					aria-pressed={colorRating === swatch.rating ? 'true' : 'false'}
-					style="background-color: {swatch.color}; width: 80px; height: 80px; border: {colorRating === swatch.rating ? '3px solid black' : '1px solid #ccc'}; border-radius: 8px; cursor: pointer; font-size: 0.75rem; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px;"
+					style="background-color: {swatch.color}"
 					onclick={() => selectColor(swatch.rating)}
 				>
-					<span style="font-weight: bold;">{swatch.label}</span>
-					<span style="font-size: 0.6rem; opacity: 0.8; text-align: center;">{swatch.meaning}</span>
+					<span class="swatch-label">{swatch.label}</span>
+					<span class="swatch-meaning">{swatch.meaning}</span>
 				</button>
 			{/each}
 		</div>
 	</fieldset>
 
 	{#if colorRating >= 1 && colorRating <= 3}
-		<p role="alert" style="color: red; font-weight: bold;">
+		<p role="alert">
 			Warning: Acholic stool detected (color {colorRating}). Contact your hepatology team.
 		</p>
 	{/if}
@@ -139,3 +140,46 @@
 		{submitting ? 'Logging...' : 'Log Stool'}
 	</button>
 </form>
+
+<style>
+	.color-swatches {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+		gap: var(--space-2);
+	}
+
+	.color-swatch {
+		aspect-ratio: 1;
+		border-radius: var(--radius-md);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-1);
+		border: 2px solid var(--color-border);
+		cursor: pointer;
+		min-height: auto;
+		transition: border-color 0.15s, box-shadow 0.15s;
+	}
+
+	.color-swatch[aria-pressed="true"] {
+		border: 3px solid var(--color-text);
+		box-shadow: var(--shadow-md);
+	}
+
+	.color-swatch:hover {
+		background: inherit !important;
+		border-color: var(--color-text-muted);
+	}
+
+	.swatch-label {
+		font-weight: 600;
+		font-size: var(--font-size-xs);
+	}
+
+	.swatch-meaning {
+		font-size: 0.6rem;
+		opacity: 0.8;
+		text-align: center;
+	}
+</style>

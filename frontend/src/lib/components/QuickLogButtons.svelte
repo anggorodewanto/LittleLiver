@@ -36,3 +36,64 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.quick-log-buttons {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-2);
+		margin-bottom: var(--space-3);
+	}
+
+	.quick-log-buttons button {
+		min-height: 52px;
+		font-weight: 600;
+		font-size: var(--font-size-sm);
+		background: var(--color-primary);
+		color: var(--color-text-inverse);
+		border-radius: var(--radius-md);
+	}
+
+	.quick-log-buttons button:hover {
+		background: var(--color-primary-dark);
+	}
+
+	.more-entries {
+		text-align: center;
+	}
+
+	.toggle-more {
+		font-size: var(--font-size-sm);
+		background: transparent;
+		color: var(--color-text-muted);
+		border: 1px dashed var(--color-border);
+		width: 100%;
+		border-radius: var(--radius-sm);
+	}
+
+	.toggle-more:hover {
+		background: var(--color-primary-light);
+		color: var(--color-primary-dark);
+	}
+
+	.extra-buttons {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-2);
+		margin-top: var(--space-2);
+	}
+
+	.extra-buttons button {
+		min-height: 48px;
+		font-size: var(--font-size-sm);
+		background: var(--color-surface);
+		color: var(--color-text);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-md);
+	}
+
+	.extra-buttons button:hover {
+		border-color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+</style>

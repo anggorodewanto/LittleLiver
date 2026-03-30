@@ -201,6 +201,7 @@
 	});
 </script>
 
+<div class="dashboard">
 {#if loading}
 	<div class="loading">Loading...</div>
 {:else if error}
@@ -210,7 +211,7 @@
 	{#if visibleAlerts.length > 0}
 		<div class="alert-banners">
 			{#each visibleAlerts as alert (alert.entry_id)}
-				<div class="alert-banner alert-{alert.alert_type}">
+				<div class="alert-banner" data-alert-type={alert.alert_type}>
 					<div class="alert-content">
 						<strong class="alert-label">{alertLabel(alert.alert_type)}</strong>
 						<span class="alert-message">{alertMessage(alert)}</span>
@@ -313,3 +314,183 @@
 		<QuickLogButtons onselect={handleQuickLog} onnavigate={(path) => goto(path)} />
 	</div>
 {/if}
+</div>
+
+<style>
+	.dashboard {
+		padding-top: var(--space-2);
+	}
+
+	.alert-banners {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-bottom: var(--space-4);
+	}
+
+	.alert-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-3);
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-md);
+		border-left: 4px solid;
+		background: var(--color-warning-bg);
+		border-color: var(--color-warning);
+	}
+
+	.alert-banner[data-alert-type="acholic_stool"] {
+		background: var(--color-alert-acholic-bg);
+		border-color: var(--color-alert-acholic);
+	}
+
+	.alert-banner[data-alert-type="fever"] {
+		background: var(--color-alert-fever-bg);
+		border-color: var(--color-alert-fever);
+	}
+
+	.alert-banner[data-alert-type="jaundice_worsening"] {
+		background: var(--color-alert-jaundice-bg);
+		border-color: var(--color-alert-jaundice);
+	}
+
+	.alert-banner[data-alert-type="missed_medication"] {
+		background: var(--color-alert-missed-med-bg);
+		border-color: var(--color-alert-missed-med);
+	}
+
+	.alert-content {
+		flex: 1;
+	}
+
+	.alert-label {
+		display: block;
+		font-size: var(--font-size-sm);
+		margin-bottom: var(--space-1);
+	}
+
+	.alert-message {
+		font-size: var(--font-size-sm);
+		color: var(--color-text-muted);
+		line-height: 1.4;
+	}
+
+	.alert-banner button {
+		flex-shrink: 0;
+		font-size: var(--font-size-xs);
+		padding: var(--space-1) var(--space-2);
+		min-height: 32px;
+		background: transparent;
+		color: var(--color-text-muted);
+		border: 1px solid var(--color-border);
+	}
+
+	.summary-cards {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-3);
+		margin-bottom: var(--space-6);
+	}
+
+	.card {
+		background: var(--color-surface);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+		text-align: center;
+		box-shadow: var(--shadow-sm);
+		border: 1px solid var(--color-border);
+	}
+
+	.card-value {
+		font-size: var(--font-size-2xl);
+		font-weight: 700;
+		color: var(--color-text);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
+	}
+
+	.card-label {
+		font-size: var(--font-size-sm);
+		color: var(--color-text-muted);
+		margin-top: var(--space-1);
+	}
+
+	.stool-color-indicator {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border-radius: var(--radius-full);
+		border: 1px solid rgba(0, 0, 0, 0.1);
+	}
+
+	.stool-color-trend {
+		background: var(--color-surface);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+		margin-bottom: var(--space-6);
+		border: 1px solid var(--color-border);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.trend-dots {
+		display: flex;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+		padding-top: var(--space-2);
+	}
+
+	.stool-trend-dot {
+		width: 24px;
+		height: 24px;
+		border-radius: var(--radius-full);
+		border: 1px solid rgba(0, 0, 0, 0.1);
+	}
+
+	.upcoming-meds {
+		background: var(--color-surface);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+		margin-bottom: var(--space-6);
+		border: 1px solid var(--color-border);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.med-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-3) 0;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.med-item:last-child {
+		border-bottom: none;
+	}
+
+	.med-info {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.med-name {
+		font-weight: 600;
+	}
+
+	.med-dose {
+		font-size: var(--font-size-sm);
+		color: var(--color-text-muted);
+	}
+
+	.med-countdown {
+		font-size: var(--font-size-sm);
+		font-weight: 500;
+		color: var(--color-primary);
+		text-align: right;
+	}
+
+	.quick-log-section {
+		margin-bottom: var(--space-4);
+	}
+</style>

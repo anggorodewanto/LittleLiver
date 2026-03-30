@@ -103,3 +103,47 @@
 		{/if}
 	</button>
 </div>
+
+<style>
+	.date-picker {
+		display: flex;
+		gap: var(--space-3);
+		margin-bottom: var(--space-4);
+	}
+
+	.date-picker label {
+		flex: 1;
+	}
+
+	.preview-summary {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-4);
+		margin-bottom: var(--space-4);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.preview-summary ul {
+		padding-left: var(--space-5);
+	}
+
+	.preview-summary li {
+		margin-bottom: var(--space-1);
+		font-size: var(--font-size-sm);
+		color: var(--color-text-muted);
+	}
+
+	.report-page button {
+		width: 100%;
+		background: var(--color-primary);
+		color: var(--color-text-inverse);
+		min-height: 48px;
+		font-weight: 600;
+		border-radius: var(--radius-md);
+	}
+
+	.report-page button:hover {
+		background: var(--color-primary-dark);
+	}
+</style>

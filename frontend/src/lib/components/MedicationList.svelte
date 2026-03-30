@@ -90,3 +90,68 @@
 {#if oncreate}
 	<button type="button" class="add-medication" onclick={oncreate}>Add Medication</button>
 {/if}
+
+<style>
+	.medication-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.medication-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-3) var(--space-4);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.medication-item.inactive {
+		opacity: 0.5;
+	}
+
+	.med-info {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.med-name {
+		font-weight: 600;
+	}
+
+	.med-dose,
+	.med-frequency {
+		font-size: var(--font-size-sm);
+		color: var(--color-text-muted);
+	}
+
+	.med-actions {
+		display: flex;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+
+	.med-actions button {
+		font-size: var(--font-size-xs);
+		min-height: 36px;
+		padding: var(--space-1) var(--space-2);
+	}
+
+	.add-medication {
+		width: 100%;
+		margin-top: var(--space-4);
+		background: var(--color-primary);
+		color: var(--color-text-inverse);
+		min-height: 48px;
+		font-weight: 600;
+		border-radius: var(--radius-md);
+	}
+
+	.add-medication:hover {
+		background: var(--color-primary-dark);
+	}
+</style>

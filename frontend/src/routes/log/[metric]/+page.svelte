@@ -123,7 +123,7 @@
 	}
 </script>
 
-<a href="/">Back</a>
+<a href="/" class="back-link">&larr; Back</a>
 
 {#if !baby}
 	<p>No baby selected</p>
@@ -162,3 +162,20 @@
 		<DoseLogForm onsubmit={handleSubmit} babyId={baby.id} {medicationId} {scheduledTime} {submitting} {error} />
 	{/if}
 {/if}
+
+<style>
+	.back-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		font-size: var(--font-size-sm);
+		color: var(--color-text-muted);
+		margin-bottom: var(--space-3);
+		min-height: var(--touch-target);
+		text-decoration: none;
+	}
+
+	.back-link:hover {
+		color: var(--color-primary);
+	}
+</style>

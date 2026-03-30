@@ -8,12 +8,25 @@
 		unlinkFromBaby,
 		deleteAccount
 	} from '$lib/stores/baby';
+	import { apiClient } from '$lib/api';
 	import type { UpdateBabyInput, InviteResponse } from '$lib/stores/baby';
 	import BabySettingsForm from './BabySettingsForm.svelte';
 	import BabySelector from './BabySelector.svelte';
 	import InviteSection from './InviteSection.svelte';
 	import UnlinkSection from './UnlinkSection.svelte';
 	import AccountDeletion from './AccountDeletion.svelte';
+
+	let loggingOut = $state(false);
+
+	async function handleLogout(): Promise<void> {
+		loggingOut = true;
+		try {
+			await apiClient.logout();
+		} catch {
+			// ignore — redirect to login regardless
+		}
+		window.location.href = '/login';
+	}
 
 	function extractError(err: unknown, fallback: string): string {
 		return err instanceof Error ? err.message : fallback;
@@ -126,4 +139,55 @@
 	<p>No baby selected. Please create or join a baby profile first.</p>
 {/if}
 
+{#if baby}
+	<section>
+		<h2>Reports</h2>
+		<a href="/report" class="settings-link">Generate Clinical Report</a>
+	</section>
+{/if}
+
 <AccountDeletion ondelete={handleDeleteAccount} error={deleteError} />
+
+<section class="logout-section">
+	<button class="logout-btn" onclick={handleLogout} disabled={loggingOut}>
+		{loggingOut ? 'Logging out...' : 'Log Out'}
+	</button>
+</section>
+
+<style>
+	.settings-link {
+		display: block;
+		padding: var(--space-3) var(--space-4);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		color: var(--color-primary);
+		font-weight: 500;
+		text-decoration: none;
+	}
+
+	.settings-link:hover {
+		background: var(--color-primary-light);
+		text-decoration: none;
+	}
+
+	.logout-section {
+		padding-top: var(--space-4);
+		border-top: 1px solid var(--color-border);
+	}
+
+	.logout-btn {
+		width: 100%;
+		min-height: 48px;
+		background: var(--color-surface);
+		color: var(--color-error);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-md);
+		font-weight: 600;
+	}
+
+	.logout-btn:hover {
+		background: var(--color-error-bg);
+		border-color: var(--color-error);
+	}
+</style>

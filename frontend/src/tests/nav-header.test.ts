@@ -1,13 +1,27 @@
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import NavHeader from '$lib/components/NavHeader.svelte';
 import { currentUser } from '$lib/stores/user';
 import { babies, activeBaby, _resetBabyStores } from '$lib/stores/baby';
 
+const { pageStore } = vi.hoisted(() => {
+	const { writable } = require('svelte/store') as typeof import('svelte/store');
+	return {
+		pageStore: writable({
+			url: new URL('http://localhost/')
+		})
+	};
+});
+
+vi.mock('$app/stores', () => ({
+	page: pageStore
+}));
+
 vi.mock('$lib/api', () => ({
 	apiClient: {
 		get: vi.fn(),
-		post: vi.fn()
+		post: vi.fn(),
+		logout: vi.fn()
 	}
 }));
 
@@ -26,15 +40,15 @@ describe('NavHeader', () => {
 	it('does not render when no user is logged in', () => {
 		const { container } = render(NavHeader);
 
-		expect(container.querySelector('header')).toBeNull();
+		expect(container.querySelector('nav')).toBeNull();
 	});
 
-	it('shows app name link when user is logged in', () => {
+	it('shows home link when user is logged in', () => {
 		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
 
 		render(NavHeader);
 
-		const link = screen.getByRole('link', { name: /littleliver/i });
+		const link = screen.getByRole('link', { name: /home/i });
 		expect(link).toBeInTheDocument();
 		expect(link.getAttribute('href')).toBe('/');
 	});
@@ -74,11 +88,17 @@ describe('NavHeader', () => {
 		expect(screen.getByText('Alice')).toBeInTheDocument();
 	});
 
-	it('shows logout button when user is logged in', () => {
+	it('shows navigation tabs when user has babies', () => {
 		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
+		babies.set([
+			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null }
+		]);
+		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
 
 		render(NavHeader);
 
-		expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /trends/i })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /meds/i })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /log/i })).toBeInTheDocument();
 	});
 });

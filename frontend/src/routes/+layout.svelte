@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '../app.css';
 	import { onMount } from 'svelte';
 	import favicon from '$lib/assets/favicon.svg';
 	import { registerServiceWorker, setupInstallPrompt, initPushNotifications } from '$lib/pwa';
@@ -39,4 +40,6 @@
 </svelte:head>
 
 <NavHeader />
-{@render children()}
+<main class="page-content">
+	{@render children()}
+</main>

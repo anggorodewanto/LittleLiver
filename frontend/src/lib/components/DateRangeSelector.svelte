@@ -57,3 +57,51 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.date-range-selector {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		margin-bottom: var(--space-4);
+	}
+
+	.date-range-selector button {
+		min-height: 36px;
+		padding: var(--space-1) var(--space-3);
+		border-radius: var(--radius-full);
+		font-size: var(--font-size-sm);
+		background: var(--color-surface);
+		border: 1.5px solid var(--color-border);
+		color: var(--color-text);
+	}
+
+	.date-range-selector button:hover {
+		border-color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+
+	.date-range-selector button.active {
+		background: var(--color-primary);
+		color: var(--color-text-inverse);
+		border-color: var(--color-primary);
+	}
+
+	.custom-range {
+		display: flex;
+		gap: var(--space-2);
+		width: 100%;
+		align-items: flex-end;
+		flex-wrap: wrap;
+		margin-top: var(--space-2);
+	}
+
+	.custom-range label {
+		flex: 1;
+		min-width: 120px;
+	}
+
+	.custom-range button {
+		min-height: var(--touch-target);
+	}
+</style>

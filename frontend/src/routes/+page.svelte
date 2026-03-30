@@ -43,8 +43,10 @@
 <h1>LittleLiver</h1>
 
 {#if !$currentUser}
-	<p>Post-Kasai baby health tracking</p>
-	<a href="/login">Sign in to get started</a>
+	<div class="landing">
+		<p>Post-Kasai baby health tracking</p>
+		<a href="/login" class="cta-link">Sign in to get started</a>
+	</div>
 {:else if !$hasBabies}
 	<FirstLogin
 		oncreate={handleCreate}
@@ -55,6 +57,45 @@
 		{joinError}
 	/>
 {:else if $activeBaby}
-	<p data-testid="active-baby-name">{$activeBaby.name}</p>
+	<span data-testid="active-baby-name" class="sr-only">{$activeBaby.name}</span>
 	<TodayDashboard babyId={$activeBaby.id} />
 {/if}
+
+<style>
+	.landing {
+		text-align: center;
+		padding-top: var(--space-12);
+	}
+
+	.landing p {
+		color: var(--color-text-muted);
+		margin-bottom: var(--space-6);
+	}
+
+	.cta-link {
+		display: inline-block;
+		background: var(--color-primary);
+		color: var(--color-text-inverse);
+		padding: var(--space-3) var(--space-6);
+		border-radius: var(--radius-md);
+		font-weight: 600;
+		text-decoration: none;
+	}
+
+	.cta-link:hover {
+		background: var(--color-primary-dark);
+		text-decoration: none;
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border-width: 0;
+	}
+</style>

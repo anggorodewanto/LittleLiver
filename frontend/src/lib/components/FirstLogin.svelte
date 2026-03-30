@@ -44,3 +44,27 @@
 		<button onclick={() => (mode = 'choice')}>Back</button>
 	{/if}
 </div>
+
+<style>
+	div {
+		text-align: center;
+	}
+
+	h1 {
+		margin-bottom: var(--space-2);
+	}
+
+	p {
+		color: var(--color-text-muted);
+		margin-bottom: var(--space-6);
+	}
+
+	button {
+		display: block;
+		width: 100%;
+		margin-bottom: var(--space-3);
+		min-height: 52px;
+		font-size: var(--font-size-lg);
+		border-radius: var(--radius-md);
+	}
+</style>

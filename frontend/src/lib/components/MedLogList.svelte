@@ -89,3 +89,64 @@
 		{/each}
 	</div>
 {/if}
+
+<style>
+	.med-log-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.med-log-item {
+		padding: var(--space-3) var(--space-4);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.log-status {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+
+	.status-given {
+		display: inline-block;
+		padding: 2px var(--space-2);
+		border-radius: var(--radius-full);
+		font-size: var(--font-size-xs);
+		font-weight: 600;
+		background: var(--color-success-bg);
+		color: var(--color-success);
+	}
+
+	.status-skipped {
+		display: inline-block;
+		padding: 2px var(--space-2);
+		border-radius: var(--radius-full);
+		font-size: var(--font-size-xs);
+		font-weight: 600;
+		background: var(--color-warning-bg);
+		color: var(--color-warning);
+	}
+
+	.skip-reason,
+	.given-time {
+		font-size: var(--font-size-sm);
+		color: var(--color-text-muted);
+	}
+
+	.log-notes {
+		font-size: var(--font-size-sm);
+		color: var(--color-text);
+		margin-top: var(--space-2);
+	}
+
+	.log-scheduled {
+		font-size: var(--font-size-xs);
+		color: var(--color-text-muted);
+		margin-top: var(--space-1);
+	}
+</style>
