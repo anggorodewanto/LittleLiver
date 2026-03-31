@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
 	"github.com/ablankz/LittleLiver/backend/internal/middleware"
@@ -1771,6 +1772,55 @@ func TestUpdateGeneralNoteHandler_WithObjStore(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// ============================================================
+// Bug fix: computeNextDoseAt should return recently-passed dose
+// time (within 60-min overdue window) instead of skipping to
+// tomorrow.
+// ============================================================
+
+func TestDashboardHandler_NextDoseAt_RecentlyPassedDoseStillReturned(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	now := time.Now().UTC()
+
+	// Schedule a single dose 30 minutes ago — should still be returned as
+	// next_dose_at (within the 60-min overdue grace window), NOT skipped to
+	// tomorrow.
+	thirtyMinAgo := now.Add(-30 * time.Minute).Format("15:04")
+	sched := `["` + thirtyMinAgo + `"]`
+	store.CreateMedication(db, baby.ID, user.ID, "RecentlyDueMed", "5mg", "once_daily", &sched, &tz, nil, nil)
+
+	rec, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	if len(resp.UpcomingMeds) != 1 {
+		t.Fatalf("expected 1 upcoming med, got %d", len(resp.UpcomingMeds))
+	}
+
+	med := resp.UpcomingMeds[0]
+	if med.NextDoseAt == nil {
+		t.Fatal("expected non-nil next_dose_at")
+	}
+
+	nextDose, err := time.Parse(time.RFC3339, *med.NextDoseAt)
+	if err != nil {
+		t.Fatalf("failed to parse next_dose_at %q: %v", *med.NextDoseAt, err)
+	}
+
+	// The returned next_dose_at should be today, not tomorrow.
+	if nextDose.Day() != now.Day() || nextDose.Month() != now.Month() {
+		t.Errorf("expected next_dose_at to be today (%s), got %s", now.Format("2006-01-02"), nextDose.Format("2006-01-02"))
 	}
 }
 

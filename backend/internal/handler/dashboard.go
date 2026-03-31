@@ -269,17 +269,20 @@ func computeNextDoseAt(scheduleTimes []string, tz *string) *string {
 
 	now := time.Now().In(loc)
 	todayStr := now.Format(model.DateFormat)
+	overdueGrace := 60 * time.Minute
 
 	var earliest time.Time
 	found := false
 
-	// Check today's remaining schedule times
+	// Check today's schedule times that are either upcoming or recently
+	// passed (within the overdue grace window so the frontend can still
+	// show them as "due now").
 	for _, st := range scheduleTimes {
 		t, err := time.ParseInLocation(model.DateFormat+" 15:04", todayStr+" "+st, loc)
 		if err != nil {
 			continue
 		}
-		if t.After(now) && (!found || t.Before(earliest)) {
+		if now.Sub(t) <= overdueGrace && (!found || t.Before(earliest)) {
 			earliest = t
 			found = true
 		}

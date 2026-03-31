@@ -265,21 +265,22 @@ func nextDoseTime(m UpcomingMed) time.Time {
 	now := time.Now().In(loc)
 	today := now.Format("2006-01-02")
 	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
+	overdueGrace := 60 * time.Minute
 
 	var earliest time.Time
 	for _, st := range times {
-		// Check today first
+		// Check today first — include times within the overdue grace window
 		t, err := time.ParseInLocation("2006-01-02 15:04", today+" "+st, loc)
 		if err != nil {
 			continue
 		}
-		if t.After(now) {
+		if now.Sub(t) <= overdueGrace {
 			if earliest.IsZero() || t.Before(earliest) {
 				earliest = t
 			}
 			continue
 		}
-		// Already passed today, use tomorrow
+		// Outside grace window, use tomorrow
 		t, err = time.ParseInLocation("2006-01-02 15:04", tomorrow+" "+st, loc)
 		if err != nil {
 			continue
