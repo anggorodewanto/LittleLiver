@@ -21,13 +21,13 @@ func TestGetFeedingDaily_AggregatesCorrectly(t *testing.T) {
 
 	// Two feedings today: formula 120ml + breast_milk (no vol)
 	vol := 120.0
-	calDen := 20.0
+	calDen := 0.676
 	store.CreateFeeding(db, baby.ID, user.ID, today+"T10:00:00Z", "formula", &vol, &calDen, nil, nil, 67.0)
 	store.CreateFeeding(db, baby.ID, user.ID, today+"T14:00:00Z", "breast_milk", nil, nil, nil, nil, 67.0)
 
 	// One feeding yesterday
 	vol2 := 100.0
-	calDen2 := 20.0
+	calDen2 := 0.676
 	store.CreateFeeding(db, baby.ID, user.ID, yesterday+"T08:00:00Z", "formula", &vol2, &calDen2, nil, nil, 67.0)
 
 	series, err := store.GetFeedingDaily(db, baby.ID, yesterday, today, time.UTC)
@@ -440,7 +440,7 @@ func TestGetFeedingDaily_DateFiltering(t *testing.T) {
 	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
 
 	vol := 100.0
-	calDen := 20.0
+	calDen := 0.676
 	store.CreateFeeding(db, baby.ID, user.ID, yesterday+"T10:00:00Z", "formula", &vol, &calDen, nil, nil, 67.0)
 	store.CreateFeeding(db, baby.ID, user.ID, today+"T10:00:00Z", "formula", &vol, &calDen, nil, nil, 67.0)
 

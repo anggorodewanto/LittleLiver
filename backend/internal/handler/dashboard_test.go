@@ -183,7 +183,7 @@ func TestDashboardHandler_WithData(t *testing.T) {
 
 	// Seed data
 	vol := 120.0
-	calDen := 20.0
+	calDen := 0.676
 	store.CreateFeeding(db, baby.ID, user.ID, ts, "formula", &vol, &calDen, nil, nil, 67.0)
 	store.CreateFeeding(db, baby.ID, user.ID, ts2, "breast_milk", nil, nil, nil, nil, 67.0)
 	store.CreateUrine(db, baby.ID, user.ID, ts, nil, nil, nil)
@@ -310,7 +310,7 @@ func TestDashboardHandler_DateRangeParams(t *testing.T) {
 	today := time.Now().UTC().Format("2006-01-02")
 
 	vol := 100.0
-	calDen := 20.0
+	calDen := 0.676
 	store.CreateFeeding(db, baby.ID, user.ID, yesterday+"T10:00:00Z", "formula", &vol, &calDen, nil, nil, 67.0)
 	store.CreateFeeding(db, baby.ID, user.ID, today+"T10:00:00Z", "formula", &vol, &calDen, nil, nil, 67.0)
 
@@ -340,7 +340,7 @@ func TestDashboardHandler_ChartDataSeries(t *testing.T) {
 
 	// Seed feeding data
 	vol := 120.0
-	calDen := 20.0
+	calDen := 0.676
 	store.CreateFeeding(db, baby.ID, user.ID, ts1, "formula", &vol, &calDen, nil, nil, 67.0)
 	store.CreateFeeding(db, baby.ID, user.ID, ts2, "breast_milk", nil, nil, nil, nil, 67.0)
 
@@ -499,7 +499,7 @@ func TestDashboardHandler_ChartDataSeries_DateRangeFiltering(t *testing.T) {
 
 	// Seed data across multiple days
 	vol := 100.0
-	calDen := 20.0
+	calDen := 0.676
 	store.CreateFeeding(db, baby.ID, user.ID, twoDaysAgo+"T10:00:00Z", "formula", &vol, &calDen, nil, nil, 67.0)
 	store.CreateFeeding(db, baby.ID, user.ID, yesterday+"T10:00:00Z", "formula", &vol, &calDen, nil, nil, 67.0)
 	store.CreateFeeding(db, baby.ID, user.ID, today+"T10:00:00Z", "formula", &vol, &calDen, nil, nil, 67.0)

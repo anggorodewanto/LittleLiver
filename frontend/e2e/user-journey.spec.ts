@@ -140,7 +140,7 @@ test.describe('Full user journey', () => {
 		expect(createBabyResponse.ok()).toBeTruthy();
 		const baby = await createBabyResponse.json();
 
-		// Log a formula feeding with 150mL (should auto-calculate ~101.4 kcal at 20kcal/oz)
+		// Log a formula feeding with 150mL (should auto-calculate ~101.4 kcal at default kcal/mL)
 		const now = new Date().toISOString();
 		const feedRes = await page.request.post(`/api/babies/${baby.id}/feedings`, {
 			data: {

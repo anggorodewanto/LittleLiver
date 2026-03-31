@@ -4,13 +4,11 @@ import (
 	"testing"
 )
 
-const mlPerOz = 29.5735
-
 func TestCalculateCalories_FormulaWithCalDensity(t *testing.T) {
 	t.Parallel()
 
 	vol := 120.0
-	calDen := 24.0
+	calDen := 0.8 // kcal/mL
 	feedType := "formula"
 
 	result, err := CalculateCalories(feedType, &vol, &calDen, 67.0)
@@ -18,7 +16,7 @@ func TestCalculateCalories_FormulaWithCalDensity(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	expected := 120.0 * (24.0 / mlPerOz) // ~97.4
+	expected := 120.0 * 0.8 // 96.0
 	if result.Calories == nil {
 		t.Fatal("expected non-nil calories")
 	}
@@ -28,12 +26,12 @@ func TestCalculateCalories_FormulaWithCalDensity(t *testing.T) {
 	if result.UsedDefaultCal {
 		t.Error("expected used_default_cal=false for formula with cal_density")
 	}
-	if result.CalDensity == nil || *result.CalDensity != 24.0 {
-		t.Errorf("expected cal_density=24.0, got %v", result.CalDensity)
+	if result.CalDensity == nil || *result.CalDensity != 0.8 {
+		t.Errorf("expected cal_density=0.8, got %v", result.CalDensity)
 	}
 }
 
-func TestCalculateCalories_BreastMilkDefaultsTo20KcalPerOz(t *testing.T) {
+func TestCalculateCalories_BreastMilkDefaultsToStandardDensity(t *testing.T) {
 	t.Parallel()
 
 	vol := 100.0
@@ -44,7 +42,7 @@ func TestCalculateCalories_BreastMilkDefaultsTo20KcalPerOz(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	expected := 100.0 * (20.0 / mlPerOz) // ~67.6
+	expected := 100.0 * DefaultCalDensity // ~67.6
 	if result.Calories == nil {
 		t.Fatal("expected non-nil calories")
 	}
@@ -54,12 +52,12 @@ func TestCalculateCalories_BreastMilkDefaultsTo20KcalPerOz(t *testing.T) {
 	if result.UsedDefaultCal {
 		t.Error("expected used_default_cal=false for breast_milk with volume (type-based default)")
 	}
-	if result.CalDensity == nil || *result.CalDensity != 20.0 {
-		t.Errorf("expected cal_density=20.0 (auto-applied), got %v", result.CalDensity)
+	if result.CalDensity == nil || *result.CalDensity != DefaultCalDensity {
+		t.Errorf("expected cal_density=DefaultCalDensity (auto-applied), got %v", result.CalDensity)
 	}
 }
 
-func TestCalculateCalories_FormulaDefaultsTo20KcalPerOz(t *testing.T) {
+func TestCalculateCalories_FormulaDefaultsToStandardDensity(t *testing.T) {
 	t.Parallel()
 
 	vol := 60.0
@@ -70,7 +68,7 @@ func TestCalculateCalories_FormulaDefaultsTo20KcalPerOz(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	expected := 60.0 * (20.0 / mlPerOz)
+	expected := 60.0 * DefaultCalDensity
 	if result.Calories == nil {
 		t.Fatal("expected non-nil calories")
 	}
@@ -119,7 +117,7 @@ func TestCalculateCalories_UsedDefaultCalFlagSetCorrectly(t *testing.T) {
 			name:           "formula with cal_density",
 			feedType:       "formula",
 			volumeMl:       ptrFloat(120),
-			calDensity:     ptrFloat(24),
+			calDensity:     ptrFloat(0.8),
 			defaultCal:     67.0,
 			wantUsedDefault: false,
 		},
@@ -151,7 +149,7 @@ func TestCalculateCalories_UsedDefaultCalFlagSetCorrectly(t *testing.T) {
 			name:           "solid with volume and cal_density",
 			feedType:       "solid",
 			volumeMl:       ptrFloat(50),
-			calDensity:     ptrFloat(30),
+			calDensity:     ptrFloat(1.0),
 			defaultCal:     67.0,
 			wantUsedDefault: false,
 		},
@@ -183,7 +181,7 @@ func TestCalculateCalories_BreastDirectWithCalDensity_Returns400(t *testing.T) {
 	t.Parallel()
 
 	feedType := "breast_milk"
-	calDen := 24.0
+	calDen := 0.8
 
 	_, err := CalculateCalories(feedType, nil, &calDen, 67.0)
 	if err == nil {
@@ -211,14 +209,14 @@ func TestCalculateCalories_SolidWithBothFields(t *testing.T) {
 	t.Parallel()
 
 	vol := 50.0
-	calDen := 30.0
+	calDen := 1.0 // kcal/mL
 
 	result, err := CalculateCalories("solid", &vol, &calDen, 67.0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	expected := 50.0 * (30.0 / mlPerOz)
+	expected := 50.0 * 1.0 // 50.0
 	if result.Calories == nil {
 		t.Fatal("expected non-nil calories")
 	}
@@ -233,7 +231,7 @@ func TestCalculateCalories_NonBreastMilkNoVolumeWithCalDensity(t *testing.T) {
 	// cal_density provided but no volume for non-breast_milk type
 	// For non breast_milk types without volume, cal_density with no volume
 	// can't compute calories — return error (400)
-	calDen := 24.0
+	calDen := 0.8
 	_, err := CalculateCalories("formula", nil, &calDen, 67.0)
 	if err == nil {
 		t.Fatal("expected error for no volume with cal_density, got nil")
