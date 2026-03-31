@@ -140,7 +140,7 @@
 	}
 </script>
 
-<a href={editId ? '/logs' : '/'} class="back-link">&larr; Back</a>
+<a href={editId ? (metric === 'medication' ? '/medications' : '/logs') : '/'} class="back-link">&larr; Back</a>
 
 {#if !baby}
 	<p>No baby selected</p>
