@@ -168,7 +168,7 @@ describe('DoseLogForm', () => {
 		expect(screen.getByText('Server error')).toBeInTheDocument();
 	});
 
-	it('includes scheduledTime in the submitted payload', async () => {
+	it('converts bare time scheduledTime to full ISO 8601 timestamp', async () => {
 		render(DoseLogForm, {
 			props: { onsubmit, babyId: 'baby-1', medicationId: 'med-1', scheduledTime: '08:00' }
 		});
@@ -179,7 +179,22 @@ describe('DoseLogForm', () => {
 
 		expect(onsubmit).toHaveBeenCalledTimes(1);
 		const payload = onsubmit.mock.calls[0][0];
-		expect(payload.scheduled_time).toBe('08:00');
+		expect(payload.scheduled_time).not.toBe('08:00');
+		expect(payload.scheduled_time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+	});
+
+	it('passes through full ISO 8601 scheduledTime unchanged', async () => {
+		render(DoseLogForm, {
+			props: { onsubmit, babyId: 'baby-1', medicationId: 'med-1', scheduledTime: '2026-03-31T05:00:00Z' }
+		});
+
+		await screen.findByLabelText(/medication/i);
+		await fireEvent.click(screen.getByRole('button', { name: /^given$/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /log dose/i }));
+
+		expect(onsubmit).toHaveBeenCalledTimes(1);
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.scheduled_time).toBe('2026-03-31T05:00:00Z');
 	});
 
 	it('shows error message when medication list fails to load', async () => {
