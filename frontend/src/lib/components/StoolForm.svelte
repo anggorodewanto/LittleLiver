@@ -108,7 +108,7 @@
 					type="button"
 					class="color-swatch"
 					aria-pressed={colorRating === swatch.rating ? 'true' : 'false'}
-					style="background-color: {swatch.color}"
+					style="background-color: {swatch.color};{swatch.textColor ? ` color: ${swatch.textColor}` : ''}"
 					onclick={() => selectColor(swatch.rating)}
 				>
 					<span class="swatch-label">{swatch.label}</span>

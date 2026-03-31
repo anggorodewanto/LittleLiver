@@ -168,6 +168,22 @@ describe('StoolForm', () => {
 		expect(screen.getByRole('alert')).toHaveTextContent(/acholic/i);
 	});
 
+	it('uses white text on dark-background color swatches for readability', () => {
+		render(StoolForm, { props: { onsubmit, onphotoupload } });
+
+		const greenButton = getSwatchButton('Green');
+		const brownButton = getSwatchButton('Brown');
+
+		expect(greenButton.style.color).toBe('white');
+		expect(brownButton.style.color).toBe('white');
+
+		// Light swatches should not force white text
+		const whiteButton = getSwatchButton('White');
+		const yellowButton = getSwatchButton('Yellow');
+		expect(whiteButton.style.color).not.toBe('white');
+		expect(yellowButton.style.color).not.toBe('white');
+	});
+
 	it('pre-populates fields when initialData is provided', () => {
 		const initialData = {
 			timestamp: '2025-06-15T14:30:00Z',
