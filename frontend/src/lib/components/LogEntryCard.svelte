@@ -7,9 +7,10 @@
 		entry: Record<string, unknown>;
 		logType: LogTypeConfig;
 		ondelete: (id: string) => void;
+		medNames?: Record<string, string>;
 	}
 
-	let { entry, logType, ondelete }: Props = $props();
+	let { entry, logType, ondelete, medNames = {} }: Props = $props();
 
 	let confirmingDelete = $state(false);
 
@@ -92,10 +93,12 @@
 			{#if entry.category}<div class="field">{capitalize(entry.category)}</div>{/if}
 			{#if entry.content}<div class="field">{truncate(entry.content, 100)}</div>{/if}
 		{:else if logType.key === 'med-log'}
-			{#if entry.given_at}
-				<div class="field">{formatDateTime(entry.given_at as string)}</div>
-			{:else if entry.skipped}
+			{@const medName = medNames[entry.medication_id as string]}
+			{#if medName}<div class="field"><strong>{medName}</strong></div>{/if}
+			{#if entry.skipped}
 				<div class="field"><span class="badge-skipped">Skipped</span></div>
+			{:else}
+				<div class="field"><span class="badge-given">Given</span></div>
 			{/if}
 			{#if entry.skip_reason}<div class="field">{entry.skip_reason}</div>{/if}
 		{:else if logType.key === 'fluid'}
@@ -165,6 +168,16 @@
 		font-weight: 600;
 		background: var(--color-warning-bg, #fef3c7);
 		color: var(--color-warning, #d97706);
+	}
+
+	.badge-given {
+		display: inline-block;
+		padding: 2px var(--space-2);
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-xs);
+		font-weight: 600;
+		background: var(--color-success-bg, #dcfce7);
+		color: var(--color-success, #16a34a);
 	}
 
 	.card-footer {

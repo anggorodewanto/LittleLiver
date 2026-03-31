@@ -15,6 +15,7 @@
 	let nextCursor: string | null = $state(null);
 	let loading = $state(false);
 	let error: string | null = $state(null);
+	let medNames: Record<string, string> = $state({});
 
 	const now = new Date();
 	const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -64,6 +65,20 @@
 		}
 	}
 
+	async function fetchMedNames(): Promise<void> {
+		try {
+			const data = await apiClient.get<{ medications?: { id: string; name: string; dose: string }[] } | { id: string; name: string; dose: string }[]>(`/babies/${babyId}/medications`);
+			const meds = Array.isArray(data) ? data : (data.medications ?? []);
+			const map: Record<string, string> = {};
+			for (const m of meds) {
+				map[m.id] = `${m.name} ${m.dose}`;
+			}
+			medNames = map;
+		} catch {
+			// Non-critical — entries still render, just without names
+		}
+	}
+
 	$effect(() => {
 		// Track reactive dependencies
 		babyId;
@@ -71,6 +86,11 @@
 		fromDate;
 		toDate;
 		fetchEntries();
+		if (logType.key === 'med-log') {
+			fetchMedNames();
+		} else {
+			medNames = {};
+		}
 	});
 </script>
 
@@ -88,7 +108,7 @@
 		<div class="empty">No entries found.</div>
 	{:else}
 		{#each entries as entry (entry.id)}
-			<LogEntryCard {entry} {logType} ondelete={handleDelete} />
+			<LogEntryCard {entry} {logType} ondelete={handleDelete} {medNames} />
 		{/each}
 
 		{#if loading}

@@ -133,34 +133,41 @@ describe('LogEntryCard', () => {
 		expect(screen.getByText(/baby was fussy during feed/i)).toBeInTheDocument();
 	});
 
-	it('renders med-log skipped status', () => {
+	it('renders med-log with medication name and skipped status', () => {
 		const entry = {
 			id: 'm1',
+			medication_id: 'med-1',
 			given_at: null,
 			skipped: true,
 			skip_reason: 'Vomiting',
 			created_at: '2026-03-20T14:30:00Z'
 		};
+		const medNames = { 'med-1': 'Ursodiol 50mg' };
 
-		render(LogEntryCard, { props: { entry, logType: medLogType, ondelete } });
+		render(LogEntryCard, { props: { entry, logType: medLogType, ondelete, medNames } });
 
+		expect(screen.getByText('Ursodiol 50mg')).toBeInTheDocument();
 		expect(screen.getByText(/skipped/i)).toBeInTheDocument();
 		expect(screen.getByText(/vomiting/i)).toBeInTheDocument();
 	});
 
-	it('renders med-log given_at as header timestamp instead of timestamp field', () => {
+	it('renders med-log given_at as header timestamp and shows medication name', () => {
 		const entry = {
 			id: 'm2',
+			medication_id: 'med-2',
 			given_at: '2026-03-20T14:30:00Z',
 			skipped: false,
 			created_at: '2026-03-20T14:00:00Z'
 		};
+		const medNames = { 'med-2': 'Vitamin D 400IU' };
 
-		render(LogEntryCard, { props: { entry, logType: medLogType, ondelete } });
+		render(LogEntryCard, { props: { entry, logType: medLogType, ondelete, medNames } });
 
 		// Should show given_at time in the header, not "Invalid Date"
 		const header = document.querySelector('.card-header .timestamp');
 		expect(header?.textContent).toBe(new Date('2026-03-20T14:30:00Z').toLocaleString());
+		// Should show medication name, not duplicate date
+		expect(screen.getByText('Vitamin D 400IU')).toBeInTheDocument();
 	});
 
 	it('renders med-log created_at as header when skipped (no given_at)', () => {
