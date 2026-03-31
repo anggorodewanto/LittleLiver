@@ -219,18 +219,18 @@ func TestListMedicationsHandler_ReturnsBothActiveAndInactive(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	// Create two medications
-	med1, err := store.CreateMedication(db, baby.ID, user.ID, "Active Med", "10mg", "once_daily", nil, nil)
+	med1, err := store.CreateMedication(db, baby.ID, user.ID, "Active Med", "10mg", "once_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
-	_, err = store.CreateMedication(db, baby.ID, user.ID, "Another Med", "20mg", "twice_daily", nil, nil)
+	_, err = store.CreateMedication(db, baby.ID, user.ID, "Another Med", "20mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
 
 	// Deactivate the first
 	active := false
-	_, err = store.UpdateMedication(db, baby.ID, med1.ID, user.ID, "Active Med", "10mg", "once_daily", nil, nil, &active)
+	_, err = store.UpdateMedication(db, baby.ID, med1.ID, user.ID, "Active Med", "10mg", "once_daily", nil, nil, &active, nil)
 	if err != nil {
 		t.Fatalf("UpdateMedication failed: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestGetMedicationHandler_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestUpdateMedicationHandler_Deactivate(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestUpdateMedicationHandler_SetsUpdatedBy(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -424,7 +424,7 @@ func TestUpdateMedicationHandler_TimezonePreserved(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	oldTZ := "America/New_York"
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, &oldTZ)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, &oldTZ, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -533,7 +533,7 @@ func TestMedication_LoggedByImmutableAfterEditByDifferentParent(t *testing.T) {
 	}
 
 	// Parent1 creates the medication
-	med, err := store.CreateMedication(db, baby.ID, parent1.ID, "Ursodiol", "50mg", "twice_daily", nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, parent1.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -567,5 +567,98 @@ func TestMedication_LoggedByImmutableAfterEditByDifferentParent(t *testing.T) {
 	}
 	if resp["updated_by"] != parent2.ID {
 		t.Errorf("updated_by should be parent2: expected %s, got %v", parent2.ID, resp["updated_by"])
+	}
+}
+
+func TestCreateMedicationHandler_EveryXDays_Success(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"name":"Vitamin A","dose":"5000IU","frequency":"every_x_days","interval_days":3}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/medications")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Timezone", "America/New_York")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateMedicationHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/medications", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if resp["frequency"] != "every_x_days" {
+		t.Errorf("expected frequency=every_x_days, got %v", resp["frequency"])
+	}
+	if resp["interval_days"] != float64(3) {
+		t.Errorf("expected interval_days=3, got %v", resp["interval_days"])
+	}
+}
+
+func TestCreateMedicationHandler_EveryXDays_MissingIntervalDays(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"name":"Vitamin A","dose":"5000IU","frequency":"every_x_days"}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/medications")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateMedicationHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/medications", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing interval_days, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateMedicationHandler_IntervalDaysOnWrongFrequency(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"name":"Ursodiol","dose":"50mg","frequency":"once_daily","interval_days":3}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/medications")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateMedicationHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/medications", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for interval_days on non-every_x_days freq, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 }

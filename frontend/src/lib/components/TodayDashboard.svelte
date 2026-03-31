@@ -34,6 +34,7 @@
 		frequency: string;
 		schedule_times: string[];
 		timezone: string | null;
+		interval_days: number | null;
 		next_dose_at: string | null;
 	}
 
@@ -97,9 +98,14 @@
 		saveDismissedAlerts(dismissedAlertIds);
 	}
 
-	function formatCountdown(nextDoseAt: string): string {
+	function formatCountdown(nextDoseAt: string, frequency?: string): string {
 		const doseTime = new Date(nextDoseAt).getTime();
 		const diffMs = doseTime - now;
+
+		// For every_x_days, display in whole-day terms
+		if (frequency === 'every_x_days') {
+			return formatDayCountdown(doseTime);
+		}
 
 		if (diffMs < 0) {
 			const overdue = Math.abs(diffMs);
@@ -117,6 +123,24 @@
 			return `in ${hours} h ${mins} min`;
 		}
 		return `in ${mins} min`;
+	}
+
+	function formatDayCountdown(doseTime: number): string {
+		const today = new Date(now);
+		today.setHours(0, 0, 0, 0);
+		const doseDate = new Date(doseTime);
+		doseDate.setHours(0, 0, 0, 0);
+
+		const diffDays = Math.round((doseDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+
+		if (diffDays === 0) {
+			return 'Due today';
+		}
+		if (diffDays < 0) {
+			const overdueDays = Math.abs(diffDays);
+			return `Overdue by ${overdueDays} day${overdueDays !== 1 ? 's' : ''}`;
+		}
+		return `Due in ${diffDays} day${diffDays !== 1 ? 's' : ''}`;
 	}
 
 	function alertLabel(alertType: string): string {
@@ -154,9 +178,19 @@
 	);
 
 	// Medications due within -60min (overdue) to +30min (upcoming)
+	// For every_x_days meds: due if next_dose_at is today or earlier
 	let dueNowMeds = $derived(
 		(dashboard?.upcoming_meds ?? []).filter((med) => {
 			if (!med.next_dose_at) return false;
+
+			if (med.frequency === 'every_x_days') {
+				const doseDate = new Date(med.next_dose_at);
+				doseDate.setHours(0, 0, 0, 0);
+				const today = new Date(now);
+				today.setHours(0, 0, 0, 0);
+				return doseDate.getTime() <= today.getTime();
+			}
+
 			const diffMs = new Date(med.next_dose_at).getTime() - now;
 			return diffMs >= -60 * 60 * 1000 && diffMs <= 30 * 60 * 1000;
 		})
@@ -263,7 +297,7 @@
 					<span class="due-now-dose">{med.dose}</span>
 				</div>
 				<div class="due-now-countdown">
-					{formatCountdown(med.next_dose_at!)}
+					{formatCountdown(med.next_dose_at!, med.frequency)}
 				</div>
 			</div>
 		{/each}
@@ -346,7 +380,7 @@
 					</div>
 					<div class="med-countdown">
 						{#if med.next_dose_at}
-							{formatCountdown(med.next_dose_at)}
+							{formatCountdown(med.next_dose_at, med.frequency)}
 						{:else}
 							No schedule
 						{/if}

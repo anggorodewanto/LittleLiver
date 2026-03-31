@@ -30,12 +30,15 @@ type StoolColorEntry struct {
 
 // UpcomingMed represents an active medication with schedule info.
 type UpcomingMed struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Dose      string  `json:"dose"`
-	Frequency string  `json:"frequency"`
-	Schedule  *string `json:"schedule"`
-	Timezone  *string `json:"timezone"`
+	ID           string     `json:"id"`
+	Name         string     `json:"name"`
+	Dose         string     `json:"dose"`
+	Frequency    string     `json:"frequency"`
+	Schedule     *string    `json:"schedule"`
+	Timezone     *string    `json:"timezone"`
+	IntervalDays *int       `json:"interval_days,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	LastGivenAt  *time.Time `json:"last_given_at,omitempty"`
 }
 
 // GetDashboardSummary returns aggregated summary cards for a baby within the given date range.
@@ -173,9 +176,11 @@ func GetStoolColorTrend(db *sql.DB, babyID string, loc *time.Location) ([]StoolC
 // GetUpcomingMeds returns active medications for a baby, sorted by next scheduled dose time.
 func GetUpcomingMeds(db *sql.DB, babyID string) ([]UpcomingMed, error) {
 	rows, err := db.Query(
-		`SELECT id, name, dose, frequency, schedule, timezone
-		 FROM medications
-		 WHERE baby_id = ? AND active = 1`,
+		`SELECT m.id, m.name, m.dose, m.frequency, m.schedule, m.timezone,
+		        m.interval_days, m.created_at,
+		        (SELECT MAX(ml.given_at) FROM med_logs ml WHERE ml.medication_id = m.id AND ml.skipped = 0) as last_given_at
+		 FROM medications m
+		 WHERE m.baby_id = ? AND m.active = 1`,
 		babyID,
 	)
 	if err != nil {
@@ -187,11 +192,31 @@ func GetUpcomingMeds(db *sql.DB, babyID string) ([]UpcomingMed, error) {
 	for rows.Next() {
 		var m UpcomingMed
 		var schedule, timezone sql.NullString
-		if err := rows.Scan(&m.ID, &m.Name, &m.Dose, &m.Frequency, &schedule, &timezone); err != nil {
+		var intervalDays sql.NullInt64
+		var createdAtStr string
+		var lastGivenAtStr sql.NullString
+		if err := rows.Scan(&m.ID, &m.Name, &m.Dose, &m.Frequency, &schedule, &timezone,
+			&intervalDays, &createdAtStr, &lastGivenAtStr); err != nil {
 			return nil, fmt.Errorf("scan upcoming med: %w", err)
 		}
 		m.Schedule = nullStr(schedule)
 		m.Timezone = nullStr(timezone)
+		if intervalDays.Valid {
+			v := int(intervalDays.Int64)
+			m.IntervalDays = &v
+		}
+		ca, err := ParseTime(createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse created_at for med %s: %w", m.ID, err)
+		}
+		m.CreatedAt = ca
+		if lastGivenAtStr.Valid {
+			lga, err := ParseTime(lastGivenAtStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("parse last_given_at for med %s: %w", m.ID, err)
+			}
+			m.LastGivenAt = &lga
+		}
 		meds = append(meds, m)
 	}
 	if err := rows.Err(); err != nil {
@@ -215,6 +240,12 @@ func GetUpcomingMeds(db *sql.DB, babyID string) ([]UpcomingMed, error) {
 // If no schedule/timezone is set, returns a far-future sentinel so it sorts last.
 func nextDoseTime(m UpcomingMed) time.Time {
 	farFuture := time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Handle every_x_days frequency: due date is a whole calendar day.
+	if m.Frequency == "every_x_days" {
+		return nextDoseTimeInterval(m, farFuture)
+	}
+
 	if m.Schedule == nil || m.Timezone == nil {
 		return farFuture
 	}
@@ -260,4 +291,30 @@ func nextDoseTime(m UpcomingMed) time.Time {
 		return farFuture
 	}
 	return earliest
+}
+
+// nextDoseTimeInterval computes the next dose time for an every_x_days medication.
+// Returns start-of-day (midnight) in the medication's timezone for the due date.
+func nextDoseTimeInterval(m UpcomingMed, farFuture time.Time) time.Time {
+	if m.IntervalDays == nil || m.Timezone == nil {
+		return farFuture
+	}
+
+	loc, err := time.LoadLocation(*m.Timezone)
+	if err != nil {
+		return farFuture
+	}
+
+	// Anchor is the last given_at, or created_at if no doses.
+	anchor := m.CreatedAt
+	if m.LastGivenAt != nil {
+		anchor = *m.LastGivenAt
+	}
+
+	// Compute next due date: anchor date + interval_days, at midnight in med's timezone.
+	anchorLocal := anchor.In(loc)
+	anchorDate := time.Date(anchorLocal.Year(), anchorLocal.Month(), anchorLocal.Day(), 0, 0, 0, 0, loc)
+	dueDate := anchorDate.AddDate(0, 0, *m.IntervalDays)
+
+	return dueDate
 }

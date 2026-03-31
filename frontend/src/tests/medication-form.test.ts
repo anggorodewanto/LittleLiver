@@ -215,6 +215,65 @@ describe('MedicationForm', () => {
 		expect(screen.getByText('Server error')).toBeInTheDocument();
 	});
 
+	it('frequency selector includes every_x_days option', () => {
+		render(MedicationForm, { props: { onsubmit } });
+
+		const select = screen.getByLabelText(/frequency/i) as HTMLSelectElement;
+		const options = Array.from(select.options).map((o) => o.value);
+		expect(options).toContain('every_x_days');
+	});
+
+	it('shows interval days input when every_x_days is selected', async () => {
+		render(MedicationForm, { props: { onsubmit } });
+
+		await fireEvent.change(screen.getByLabelText(/frequency/i), {
+			target: { value: 'every_x_days' }
+		});
+
+		expect(screen.getByLabelText(/every .* days/i)).toBeInTheDocument();
+		// Should not show time pickers
+		expect(screen.queryByLabelText(/schedule time/i)).not.toBeInTheDocument();
+	});
+
+	it('submits interval_days in payload for every_x_days frequency', async () => {
+		render(MedicationForm, { props: { onsubmit } });
+
+		await fireEvent.input(screen.getByLabelText(/medication name/i), {
+			target: { value: 'Vitamin A' }
+		});
+		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '5000IU' } });
+		await fireEvent.change(screen.getByLabelText(/frequency/i), {
+			target: { value: 'every_x_days' }
+		});
+		await fireEvent.input(screen.getByLabelText(/every .* days/i), {
+			target: { value: '3' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: /save medication/i }));
+
+		expect(onsubmit).toHaveBeenCalledTimes(1);
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.frequency).toBe('every_x_days');
+		expect(payload.interval_days).toBe(3);
+		expect(payload.schedule_times).toEqual([]);
+	});
+
+	it('validates interval_days is required for every_x_days', async () => {
+		render(MedicationForm, { props: { onsubmit } });
+
+		await fireEvent.input(screen.getByLabelText(/medication name/i), {
+			target: { value: 'Vitamin A' }
+		});
+		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '5000IU' } });
+		await fireEvent.change(screen.getByLabelText(/frequency/i), {
+			target: { value: 'every_x_days' }
+		});
+		// Don't set interval_days — leave at default/empty
+		await fireEvent.click(screen.getByRole('button', { name: /save medication/i }));
+
+		expect(screen.getByText(/interval.*required|days.*required/i)).toBeInTheDocument();
+		expect(onsubmit).not.toHaveBeenCalled();
+	});
+
 	it('pre-fills notes field from initialData in edit mode', () => {
 		const initialData = {
 			name: 'UDCA (ursodiol)',

@@ -67,7 +67,7 @@
 				<div class="med-info">
 					<span class="med-name">{med.name}</span>
 					<span class="med-dose">{med.dose}</span>
-					<span class="med-frequency">{formatFrequency(med.frequency)}</span>
+					<span class="med-frequency">{formatFrequency(med.frequency, med.interval_days)}</span>
 				</div>
 				<div class="med-actions">
 					{#if med.active}

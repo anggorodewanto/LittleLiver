@@ -599,6 +599,100 @@ describe('TodayDashboard', () => {
 		vi.useRealTimers();
 	});
 
+	// --- Every X Days medications ---
+
+	it('shows due-now banner for every_x_days medication due today', async () => {
+		const now = new Date('2026-03-19T12:00:00Z');
+		vi.useFakeTimers({ now });
+
+		const everyXDaysResponse = {
+			...mockDashboardResponse,
+			upcoming_meds: [
+				{
+					id: 'med-interval',
+					name: 'Vitamin A',
+					dose: '5000IU',
+					frequency: 'every_x_days',
+					schedule_times: [],
+					timezone: 'UTC',
+					interval_days: 3,
+					next_dose_at: '2026-03-19T00:00:00Z' // Today at midnight = due today
+				}
+			]
+		};
+		mockGet.mockResolvedValue(everyXDaysResponse);
+
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		const banner = await screen.findByTestId('due-now-banner');
+		expect(banner).toBeInTheDocument();
+		expect(banner.textContent).toContain('Vitamin A');
+		expect(banner.textContent).toContain('Due today');
+
+		vi.useRealTimers();
+	});
+
+	it('shows "Due in X days" for every_x_days medication not yet due', async () => {
+		const now = new Date('2026-03-19T12:00:00Z');
+		vi.useFakeTimers({ now });
+
+		const futureResponse = {
+			...mockDashboardResponse,
+			upcoming_meds: [
+				{
+					id: 'med-interval',
+					name: 'Vitamin A',
+					dose: '5000IU',
+					frequency: 'every_x_days',
+					schedule_times: [],
+					timezone: 'UTC',
+					interval_days: 3,
+					next_dose_at: '2026-03-22T00:00:00Z' // 3 days from now
+				}
+			]
+		};
+		mockGet.mockResolvedValue(futureResponse);
+
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		await screen.findByText(/vitamin a/i);
+		expect(screen.getByText(/due in 3 days/i)).toBeInTheDocument();
+		// Should NOT show due-now banner for future
+		expect(screen.queryByTestId('due-now-banner')).not.toBeInTheDocument();
+
+		vi.useRealTimers();
+	});
+
+	it('shows "Overdue by X days" for overdue every_x_days medication', async () => {
+		const now = new Date('2026-03-19T12:00:00Z');
+		vi.useFakeTimers({ now });
+
+		const overdueResponse = {
+			...mockDashboardResponse,
+			upcoming_meds: [
+				{
+					id: 'med-interval',
+					name: 'Vitamin A',
+					dose: '5000IU',
+					frequency: 'every_x_days',
+					schedule_times: [],
+					timezone: 'UTC',
+					interval_days: 3,
+					next_dose_at: '2026-03-17T00:00:00Z' // 2 days ago
+				}
+			]
+		};
+		mockGet.mockResolvedValue(overdueResponse);
+
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		const banner = await screen.findByTestId('due-now-banner');
+		expect(banner).toBeInTheDocument();
+		expect(banner.textContent).toContain('Overdue by 2 days');
+
+		vi.useRealTimers();
+	});
+
 	// --- Quick log buttons ---
 
 	it('renders quick log buttons section', async () => {

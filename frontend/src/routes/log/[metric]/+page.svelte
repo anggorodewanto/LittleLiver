@@ -70,7 +70,7 @@
 			if (schedule) {
 				try { scheduleTimes = JSON.parse(schedule); } catch { /* empty */ }
 			}
-			return { name: raw.name, dose: raw.dose, frequency: raw.frequency, schedule_times: scheduleTimes, active: raw.active };
+			return { name: raw.name, dose: raw.dose, frequency: raw.frequency, schedule_times: scheduleTimes, active: raw.active, interval_days: raw.interval_days as number | undefined };
 		}
 		if (metricKey === 'med') {
 			return { medication_id: raw.medication_id, skipped: raw.skipped, given_at: raw.given_at, skip_reason: raw.skip_reason, notes: raw.notes };

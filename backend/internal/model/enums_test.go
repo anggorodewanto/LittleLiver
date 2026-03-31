@@ -160,7 +160,7 @@ func TestValidBruisingSizeEstimate(t *testing.T) {
 
 func TestValidMedFrequency(t *testing.T) {
 	t.Parallel()
-	valid := []string{"once_daily", "twice_daily", "three_times_daily", "as_needed", "custom"}
+	valid := []string{"once_daily", "twice_daily", "three_times_daily", "as_needed", "custom", "every_x_days"}
 	for _, v := range valid {
 		if !model.ValidMedFrequency(v) {
 			t.Errorf("ValidMedFrequency(%q) = false, want true", v)

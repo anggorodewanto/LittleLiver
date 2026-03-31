@@ -197,7 +197,7 @@ func TestDashboardHandler_WithData(t *testing.T) {
 
 	tz := "America/New_York"
 	sched := `["08:00","20:00"]`
-	store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &sched, &tz)
+	store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &sched, &tz, nil)
 
 	rec, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
 
@@ -279,10 +279,10 @@ func TestDashboardHandler_UpcomingMeds_ExcludesDeactivated(t *testing.T) {
 	tz := "UTC"
 	sched := `["09:00"]`
 
-	store.CreateMedication(db, baby.ID, user.ID, "Active Med", "10mg", "once_daily", &sched, &tz)
-	med2, _ := store.CreateMedication(db, baby.ID, user.ID, "Inactive Med", "5mg", "once_daily", &sched, &tz)
+	store.CreateMedication(db, baby.ID, user.ID, "Active Med", "10mg", "once_daily", &sched, &tz, nil)
+	med2, _ := store.CreateMedication(db, baby.ID, user.ID, "Inactive Med", "5mg", "once_daily", &sched, &tz, nil)
 	inactive := false
-	store.UpdateMedication(db, baby.ID, med2.ID, user.ID, "Inactive Med", "5mg", "once_daily", &sched, &tz, &inactive)
+	store.UpdateMedication(db, baby.ID, med2.ID, user.ID, "Inactive Med", "5mg", "once_daily", &sched, &tz, &inactive, nil)
 
 	rec, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
 

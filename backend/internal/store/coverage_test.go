@@ -270,7 +270,7 @@ func TestGetUpcomingMeds_NoScheduleOrTimezone(t *testing.T) {
 	}
 
 	// Create medication without schedule or timezone
-	_, err = CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", nil, nil)
+	_, err = CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}
@@ -551,7 +551,7 @@ func TestCreateMedLog_AllFieldsPopulated(t *testing.T) {
 
 	tz := "UTC"
 	sched := `["08:00"]`
-	med, err := CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, err := CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}
@@ -591,7 +591,7 @@ func TestCreateMedLog_SkippedWithReason(t *testing.T) {
 
 	tz := "UTC"
 	sched := `["08:00"]`
-	med, err := CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, err := CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}
@@ -680,7 +680,7 @@ func TestGetActiveAlerts_MissedMedication_NoSchedule(t *testing.T) {
 	}
 
 	// Medication without schedule should not produce missed alerts
-	_, err = CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", nil, nil)
+	_, err = CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}
@@ -715,7 +715,7 @@ func TestGetActiveAlerts_MissedMedication_InvalidTimezone(t *testing.T) {
 	schedTimeStr := pastTime.Format("15:04")
 	sched := `["` + schedTimeStr + `"]`
 
-	_, err = CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &invalidTz)
+	_, err = CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &invalidTz, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}
@@ -749,7 +749,7 @@ func TestGetActiveAlerts_MissedMedication_InvalidScheduleJSON(t *testing.T) {
 	tz := "UTC"
 	badSched := `not-json`
 
-	_, err = CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &badSched, &tz)
+	_, err = CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &badSched, &tz, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}
@@ -968,7 +968,7 @@ func TestCreateMedication_WithScheduleAndTimezone(t *testing.T) {
 
 	tz := "America/New_York"
 	sched := `["08:00","20:00"]`
-	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &sched, &tz)
+	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &sched, &tz, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}
@@ -998,7 +998,7 @@ func TestCreateMedication_WithoutScheduleOrTimezone(t *testing.T) {
 		t.Fatalf("CreateBaby: %v", err)
 	}
 
-	med, err := CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", nil, nil)
+	med, err := CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}
@@ -1288,7 +1288,7 @@ func TestCreateMedication_ClosedDB(t *testing.T) {
 	t.Parallel()
 	db := setupTestDB(t)
 	db.Close()
-	_, err := CreateMedication(db, "b1", "u1", "Med", "10mg", "once_daily", nil, nil)
+	_, err := CreateMedication(db, "b1", "u1", "Med", "10mg", "once_daily", nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for closed DB")
 	}

@@ -20,7 +20,7 @@ func TestCreateMedication_Success(t *testing.T) {
 
 	schedule := `["08:00","20:00"]`
 	tz := "America/New_York"
-	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &schedule, &tz)
+	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &schedule, &tz, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestCreateMedication_NilScheduleAndTimezone(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	med, err := CreateMedication(db, baby.ID, user.ID, "Vitamin D", "400IU", "once_daily", nil, nil)
+	med, err := CreateMedication(db, baby.ID, user.ID, "Vitamin D", "400IU", "once_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestGetMedicationByID_Success(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	created, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil)
+	created, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -142,18 +142,18 @@ func TestListMedications_ReturnsActiveAndInactive(t *testing.T) {
 	}
 
 	// Create two medications
-	med1, err := CreateMedication(db, baby.ID, user.ID, "Active Med", "10mg", "once_daily", nil, nil)
+	med1, err := CreateMedication(db, baby.ID, user.ID, "Active Med", "10mg", "once_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
-	_, err = CreateMedication(db, baby.ID, user.ID, "Inactive Med", "20mg", "twice_daily", nil, nil)
+	_, err = CreateMedication(db, baby.ID, user.ID, "Inactive Med", "20mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
 
 	// Deactivate the first one
 	active := false
-	_, err = UpdateMedication(db, baby.ID, med1.ID, user.ID, "Active Med", "10mg", "once_daily", nil, nil, &active)
+	_, err = UpdateMedication(db, baby.ID, med1.ID, user.ID, "Active Med", "10mg", "once_daily", nil, nil, &active, nil)
 	if err != nil {
 		t.Fatalf("UpdateMedication failed: %v", err)
 	}
@@ -204,13 +204,13 @@ func TestUpdateMedication_Deactivate(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil)
+	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
 
 	active := false
-	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, &active)
+	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, &active, nil)
 	if err != nil {
 		t.Fatalf("UpdateMedication failed: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestUpdateMedication_SetsUpdatedBy(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil)
+	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestUpdateMedication_SetsUpdatedBy(t *testing.T) {
 		t.Errorf("expected updated_by=nil on creation, got %v", *med.UpdatedBy)
 	}
 
-	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Ursodiol", "60mg", "twice_daily", nil, nil, nil)
+	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Ursodiol", "60mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateMedication failed: %v", err)
 	}
@@ -265,13 +265,13 @@ func TestUpdateMedication_TimezoneUpdate(t *testing.T) {
 	}
 
 	oldTZ := "America/New_York"
-	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, &oldTZ)
+	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, &oldTZ, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
 
 	newTZ := "America/Los_Angeles"
-	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, &newTZ, nil)
+	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, &newTZ, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateMedication failed: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestUpdateMedication_NotFound(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	_, err = UpdateMedication(db, baby.ID, "nonexistent", user.ID, "Name", "10mg", "once_daily", nil, nil, nil)
+	_, err = UpdateMedication(db, baby.ID, "nonexistent", user.ID, "Name", "10mg", "once_daily", nil, nil, nil, nil)
 	if err == nil {
 		t.Error("expected error for nonexistent medication update")
 	}
@@ -315,13 +315,13 @@ func TestUpdateMedication_PreservesTimezoneWhenNil(t *testing.T) {
 	}
 
 	originalTZ := "America/New_York"
-	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, &originalTZ)
+	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, &originalTZ, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
 
 	// Update with nil timezone — should preserve the original
-	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Ursodiol", "60mg", "twice_daily", nil, nil, nil)
+	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Ursodiol", "60mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateMedication failed: %v", err)
 	}
@@ -347,6 +347,7 @@ func TestMedicationsSchema_Columns(t *testing.T) {
 		"id", "baby_id", "logged_by", "updated_by",
 		"name", "dose", "frequency", "schedule",
 		"timezone", "active", "created_at", "updated_at",
+		"interval_days",
 	}
 	assertColumns(t, db, "medications", expected)
 }
@@ -379,7 +380,7 @@ func TestMedicationsSchema_CascadeDelete(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	_, err = CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil)
+	_, err = CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -397,5 +398,90 @@ func TestMedicationsSchema_CascadeDelete(t *testing.T) {
 	}
 	if count != 0 {
 		t.Errorf("expected 0 medications after cascade delete, got %d", count)
+	}
+}
+
+func TestCreateMedication_WithIntervalDays(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	tz := "America/New_York"
+	intervalDays := 3
+	med, err := CreateMedication(db, baby.ID, user.ID, "Vitamin A", "5000IU", "every_x_days", nil, &tz, &intervalDays)
+	if err != nil {
+		t.Fatalf("CreateMedication failed: %v", err)
+	}
+	if med.Frequency != "every_x_days" {
+		t.Errorf("expected frequency=every_x_days, got %q", med.Frequency)
+	}
+	if med.IntervalDays == nil || *med.IntervalDays != 3 {
+		t.Errorf("expected interval_days=3, got %v", med.IntervalDays)
+	}
+	if med.Schedule != nil {
+		t.Errorf("expected nil schedule for every_x_days, got %v", *med.Schedule)
+	}
+}
+
+func TestCreateMedication_IntervalDaysNilForDailyFreq(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	med, err := CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "once_daily", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateMedication failed: %v", err)
+	}
+	if med.IntervalDays != nil {
+		t.Errorf("expected nil interval_days for once_daily, got %v", *med.IntervalDays)
+	}
+}
+
+func TestUpdateMedication_IntervalDays(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	tz := "America/New_York"
+	intervalDays := 3
+	med, err := CreateMedication(db, baby.ID, user.ID, "Vitamin A", "5000IU", "every_x_days", nil, &tz, &intervalDays)
+	if err != nil {
+		t.Fatalf("CreateMedication failed: %v", err)
+	}
+
+	newInterval := 7
+	updated, err := UpdateMedication(db, baby.ID, med.ID, user.ID, "Vitamin A", "5000IU", "every_x_days", nil, nil, nil, &newInterval)
+	if err != nil {
+		t.Fatalf("UpdateMedication failed: %v", err)
+	}
+	if updated.IntervalDays == nil || *updated.IntervalDays != 7 {
+		t.Errorf("expected interval_days=7, got %v", updated.IntervalDays)
 	}
 }

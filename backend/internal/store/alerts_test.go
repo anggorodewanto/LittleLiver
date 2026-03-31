@@ -429,7 +429,7 @@ func TestGetActiveAlerts_MissedMedication_TriggersWhenNoDoseLogged(t *testing.T)
 	pastTime := time.Now().UTC().Add(-2 * time.Hour)
 	schedTimeStr := pastTime.Format("15:04")
 	sched := `["` + schedTimeStr + `"]`
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 
 	// Backdate created_at so the scheduled dose falls after creation
 	createdBefore := pastTime.Add(-1 * time.Hour).Format(model.DateTimeFormat)
@@ -461,7 +461,7 @@ func TestGetActiveAlerts_MissedMedication_NotTriggeredWhenDoseLogged(t *testing.
 	pastTime := time.Now().UTC().Add(-2 * time.Hour)
 	schedTimeStr := pastTime.Format("15:04")
 	sched := `["` + schedTimeStr + `"]`
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 
 	// Backdate created_at so the scheduled dose falls after creation
 	createdBefore := pastTime.Add(-1 * time.Hour).Format(model.DateTimeFormat)
@@ -493,7 +493,7 @@ func TestGetActiveAlerts_MissedMedication_NotTriggeredWithin30Min(t *testing.T) 
 	pastTime := time.Now().UTC().Add(-20 * time.Minute)
 	schedTimeStr := pastTime.Format("15:04")
 	sched := `["` + schedTimeStr + `"]`
-	store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 
 	alerts, err := store.GetActiveAlerts(db, baby.ID)
 	if err != nil {
@@ -517,14 +517,14 @@ func TestGetActiveAlerts_MissedMedication_InactiveMedSkipped(t *testing.T) {
 	pastTime := time.Now().UTC().Add(-2 * time.Hour)
 	schedTimeStr := pastTime.Format("15:04")
 	sched := `["` + schedTimeStr + `"]`
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 
 	// Backdate created_at so the scheduled dose falls after creation
 	createdBefore := pastTime.Add(-1 * time.Hour).Format(model.DateTimeFormat)
 	db.Exec("UPDATE medications SET created_at = ? WHERE id = ?", createdBefore, med.ID)
 
 	inactive := false
-	store.UpdateMedication(db, baby.ID, med.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, &inactive)
+	store.UpdateMedication(db, baby.ID, med.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, &inactive, nil)
 
 	alerts, err := store.GetActiveAlerts(db, baby.ID)
 	if err != nil {
@@ -549,7 +549,7 @@ func TestGetActiveAlerts_MissedMedication_GivenDoseCoverage(t *testing.T) {
 	pastTime := time.Now().UTC().Add(-2 * time.Hour)
 	schedTimeStr := pastTime.Format("15:04")
 	sched := `["` + schedTimeStr + `"]`
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 
 	// Backdate created_at so the scheduled dose falls after creation
 	createdBefore := pastTime.Add(-1 * time.Hour).Format(model.DateTimeFormat)
@@ -586,7 +586,7 @@ func TestGetActiveAlerts_MissedMedication_NotTriggeredForDosesBeforeCreation(t *
 	t1 := time.Now().UTC().Add(-7 * time.Hour)
 	t2 := time.Now().UTC().Add(-3 * time.Hour)
 	sched := `["` + t1.Format("15:04") + `","` + t2.Format("15:04") + `"]`
-	store.CreateMedication(db, baby.ID, user.ID, "NewMed", "5mg", "twice_daily", &sched, &tz)
+	store.CreateMedication(db, baby.ID, user.ID, "NewMed", "5mg", "twice_daily", &sched, &tz, nil)
 
 	alerts, err := store.GetActiveAlerts(db, baby.ID)
 	if err != nil {
@@ -610,7 +610,7 @@ func TestIsDoseCovered_GivenDoseWithinWindow(t *testing.T) {
 
 	tz := "UTC"
 	sched := `["08:00"]`
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 
 	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, time.UTC)
 	givenAt := time.Date(2026, 3, 18, 8, 15, 0, 0, time.UTC).Format(model.DateTimeFormat)
@@ -635,7 +635,7 @@ func TestIsDoseCovered_SkippedDoseWithinWindow(t *testing.T) {
 
 	tz := "UTC"
 	sched := `["08:00"]`
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 
 	// Use "now" as the scheduled time so created_at (set by SQLite to NOW) falls within +/-30 min
 	scheduledUTC := time.Now().UTC()
@@ -661,7 +661,7 @@ func TestIsDoseCovered_NoDoseLogged(t *testing.T) {
 
 	tz := "UTC"
 	sched := `["08:00"]`
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 	_ = baby // suppress unused
 
 	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, time.UTC)
@@ -684,7 +684,7 @@ func TestIsDoseCovered_DoseOutsideWindow(t *testing.T) {
 
 	tz := "UTC"
 	sched := `["08:00"]`
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil)
 
 	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, time.UTC)
 	givenAt := time.Date(2026, 3, 18, 8, 45, 0, 0, time.UTC).Format(model.DateTimeFormat)
@@ -718,6 +718,128 @@ func TestGetActiveAlerts_NoData_EmptyArray(t *testing.T) {
 	}
 	if len(alerts) != 0 {
 		t.Errorf("expected 0 alerts, got %d", len(alerts))
+	}
+}
+
+// --- Every X Days missed medication tests ---
+
+func TestMissedMedAlert_EveryXDays_NotYetDue(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	intervalDays := 5
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "VitA", "5000IU", "every_x_days", nil, &tz, &intervalDays)
+
+	// Log a dose today — not due again for 5 days
+	now := time.Now().UTC().Format(model.DateTimeFormat)
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &now, false, nil, nil)
+
+	alerts, err := store.GetActiveAlerts(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetActiveAlerts failed: %v", err)
+	}
+
+	for _, a := range alerts {
+		if a.AlertType == "missed_medication" {
+			t.Errorf("should not have missed_medication alert when dose was just given")
+		}
+	}
+}
+
+func TestMissedMedAlert_EveryXDays_DueToday_NotMissedYet(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	intervalDays := 3
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "VitA", "5000IU", "every_x_days", nil, &tz, &intervalDays)
+
+	// Log a dose exactly 3 days ago — due today, but day hasn't ended, so not missed
+	threeDaysAgo := time.Now().UTC().AddDate(0, 0, -3).Format(model.DateTimeFormat)
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &threeDaysAgo, false, nil, nil)
+
+	alerts, err := store.GetActiveAlerts(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetActiveAlerts failed: %v", err)
+	}
+
+	for _, a := range alerts {
+		if a.AlertType == "missed_medication" {
+			t.Errorf("should not have missed_medication alert for med due today (day not over)")
+		}
+	}
+}
+
+func TestMissedMedAlert_EveryXDays_Overdue_NoLog(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	intervalDays := 2
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "VitA", "5000IU", "every_x_days", nil, &tz, &intervalDays)
+
+	// Log a dose 4 days ago, interval is 2 — was due 2 days ago (full day passed), no log for that day
+	fourDaysAgo := time.Now().UTC().AddDate(0, 0, -4).Format(model.DateTimeFormat)
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &fourDaysAgo, false, nil, nil)
+
+	alerts, err := store.GetActiveAlerts(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetActiveAlerts failed: %v", err)
+	}
+
+	hasMissed := false
+	for _, a := range alerts {
+		if a.AlertType == "missed_medication" {
+			hasMissed = true
+		}
+	}
+	if !hasMissed {
+		t.Error("expected missed_medication alert for overdue every_x_days med with no log")
+	}
+}
+
+func TestMissedMedAlert_EveryXDays_Overdue_WithLog(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	intervalDays := 2
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "VitA", "5000IU", "every_x_days", nil, &tz, &intervalDays)
+
+	// Log a dose 4 days ago
+	fourDaysAgo := time.Now().UTC().AddDate(0, 0, -4).Format(model.DateTimeFormat)
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &fourDaysAgo, false, nil, nil)
+
+	// Also log a dose on the due day (2 days ago) — should suppress alert
+	twoDaysAgo := time.Now().UTC().AddDate(0, 0, -2).Format(model.DateTimeFormat)
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &twoDaysAgo, false, nil, nil)
+
+	alerts, err := store.GetActiveAlerts(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetActiveAlerts failed: %v", err)
+	}
+
+	for _, a := range alerts {
+		if a.AlertType == "missed_medication" {
+			t.Errorf("should NOT have missed_medication alert when dose was logged on due day")
+		}
 	}
 }
 

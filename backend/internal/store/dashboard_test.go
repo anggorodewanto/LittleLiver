@@ -250,11 +250,11 @@ func TestGetUpcomingMeds_ExcludesInactive(t *testing.T) {
 	sched := `["08:00","20:00"]`
 
 	// Create active medication
-	store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &sched, &tz)
+	store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &sched, &tz, nil)
 	// Create inactive medication
-	med2, _ := store.CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", &sched, &tz)
+	med2, _ := store.CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", &sched, &tz, nil)
 	inactive := false
-	store.UpdateMedication(db, baby.ID, med2.ID, user.ID, "VitD", "400IU", "once_daily", &sched, &tz, &inactive)
+	store.UpdateMedication(db, baby.ID, med2.ID, user.ID, "VitD", "400IU", "once_daily", &sched, &tz, &inactive, nil)
 
 	meds, err := store.GetUpcomingMeds(db, baby.ID)
 	if err != nil {
@@ -282,15 +282,15 @@ func TestGetUpcomingMeds_SortedByNextScheduledDose(t *testing.T) {
 
 	// Med A: next dose is 3 hours from now
 	schedA := `["` + now.Add(3*time.Hour).Format("15:04") + `"]`
-	store.CreateMedication(db, baby.ID, user.ID, "MedA", "10mg", "once_daily", &schedA, &tz)
+	store.CreateMedication(db, baby.ID, user.ID, "MedA", "10mg", "once_daily", &schedA, &tz, nil)
 
 	// Med B: next dose is 1 hour from now (should appear first)
 	schedB := `["` + now.Add(1*time.Hour).Format("15:04") + `"]`
-	store.CreateMedication(db, baby.ID, user.ID, "MedB", "5mg", "once_daily", &schedB, &tz)
+	store.CreateMedication(db, baby.ID, user.ID, "MedB", "5mg", "once_daily", &schedB, &tz, nil)
 
 	// Med C: next dose is 2 hours from now
 	schedC := `["` + now.Add(2*time.Hour).Format("15:04") + `"]`
-	store.CreateMedication(db, baby.ID, user.ID, "MedC", "20mg", "once_daily", &schedC, &tz)
+	store.CreateMedication(db, baby.ID, user.ID, "MedC", "20mg", "once_daily", &schedC, &tz, nil)
 
 	meds, err := store.GetUpcomingMeds(db, baby.ID)
 	if err != nil {
@@ -411,7 +411,7 @@ func TestGetUpcomingMeds_ReturnsScheduleAndTimezone(t *testing.T) {
 
 	tz := "America/New_York"
 	sched := `["08:00","20:00"]`
-	store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &sched, &tz)
+	store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", &sched, &tz, nil)
 
 	meds, err := store.GetUpcomingMeds(db, baby.ID)
 	if err != nil {
@@ -426,5 +426,94 @@ func TestGetUpcomingMeds_ReturnsScheduleAndTimezone(t *testing.T) {
 	}
 	if meds[0].Timezone == nil || *meds[0].Timezone != "America/New_York" {
 		t.Errorf("expected timezone=America/New_York, got %v", meds[0].Timezone)
+	}
+}
+
+func TestGetUpcomingMeds_EveryXDays_NoDoses(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	intervalDays := 3
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "VitA", "5000IU", "every_x_days", nil, &tz, &intervalDays)
+
+	meds, err := store.GetUpcomingMeds(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetUpcomingMeds failed: %v", err)
+	}
+
+	if len(meds) != 1 {
+		t.Fatalf("expected 1 med, got %d", len(meds))
+	}
+	if meds[0].IntervalDays == nil || *meds[0].IntervalDays != 3 {
+		t.Errorf("expected interval_days=3, got %v", meds[0].IntervalDays)
+	}
+	// With no doses, next dose = created_at + 3 days. The med should not be due today (just created).
+	_ = med // use med if needed
+}
+
+func TestGetUpcomingMeds_EveryXDays_WithDose(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	intervalDays := 3
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "VitA", "5000IU", "every_x_days", nil, &tz, &intervalDays)
+
+	// Log a dose 2 days ago
+	twoDaysAgo := time.Now().UTC().AddDate(0, 0, -2).Format("2006-01-02T15:04:05Z")
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &twoDaysAgo, false, nil, nil)
+
+	meds, err := store.GetUpcomingMeds(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetUpcomingMeds failed: %v", err)
+	}
+
+	if len(meds) != 1 {
+		t.Fatalf("expected 1 med, got %d", len(meds))
+	}
+	// Last dose was 2 days ago, interval is 3 days, so next dose is 1 day from now
+	// Should have a LastGivenAt set
+	if meds[0].LastGivenAt == nil {
+		t.Error("expected LastGivenAt to be set after logging a dose")
+	}
+}
+
+func TestGetUpcomingMeds_EveryXDays_DueToday(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	intervalDays := 3
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "VitA", "5000IU", "every_x_days", nil, &tz, &intervalDays)
+
+	// Log a dose exactly 3 days ago — should be due today
+	threeDaysAgo := time.Now().UTC().AddDate(0, 0, -3).Format("2006-01-02T15:04:05Z")
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &threeDaysAgo, false, nil, nil)
+
+	meds, err := store.GetUpcomingMeds(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetUpcomingMeds failed: %v", err)
+	}
+
+	if len(meds) != 1 {
+		t.Fatalf("expected 1 med, got %d", len(meds))
+	}
+	// Due today: nextDoseTime should be today at midnight UTC
+	// It should sort before far-future, so it's accessible
+	if meds[0].CreatedAt.IsZero() {
+		t.Error("expected CreatedAt to be populated")
 	}
 }

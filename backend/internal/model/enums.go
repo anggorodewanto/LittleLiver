@@ -28,7 +28,7 @@ var (
 	firmnessValues         = validSet("soft", "firm", "distended")
 	jaundiceLevelValues    = validSet("none", "mild_face", "moderate_trunk", "severe_limbs_and_trunk")
 	bruisingSizeValues     = validSet("small_<1cm", "medium_1-3cm", "large_>3cm")
-	medFrequencyValues     = validSet("once_daily", "twice_daily", "three_times_daily", "as_needed", "custom")
+	medFrequencyValues     = validSet("once_daily", "twice_daily", "three_times_daily", "as_needed", "custom", "every_x_days")
 	noteCategoryValues     = validSet("behavior", "sleep", "vomiting", "irritability", "skin", "other")
 	fluidDirectionValues   = validSet("intake", "output")
 	fluidSourceTypeValues  = validSet("feeding", "urine", "stool")

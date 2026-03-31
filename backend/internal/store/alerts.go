@@ -212,18 +212,22 @@ func getJaundiceAlert(db *sql.DB, babyID string) (*Alert, error) {
 
 // medScheduleInfo holds info needed to check missed medication doses.
 type medScheduleInfo struct {
-	ID        string
-	Schedule  string
-	Timezone  string
-	CreatedAt time.Time
+	ID           string
+	Frequency    string
+	Schedule     string
+	Timezone     string
+	IntervalDays *int
+	CreatedAt    time.Time
 }
 
 func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
-	// Get all active medications for this baby that have a schedule and timezone.
+	// Get all active medications for this baby that have a timezone.
+	// Schedule-based meds also need schedule IS NOT NULL; every_x_days meds need interval_days.
 	// Collect results first to avoid holding open rows cursor during IsDoseCovered queries.
 	rows, err := db.Query(`
-		SELECT id, schedule, timezone, created_at FROM medications
-		WHERE baby_id = ? AND active = 1 AND schedule IS NOT NULL AND timezone IS NOT NULL`,
+		SELECT id, frequency, schedule, timezone, interval_days, created_at FROM medications
+		WHERE baby_id = ? AND active = 1 AND timezone IS NOT NULL
+		AND (schedule IS NOT NULL OR frequency = 'every_x_days')`,
 		babyID,
 	)
 	if err != nil {
@@ -233,10 +237,19 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 	var meds []medScheduleInfo
 	for rows.Next() {
 		var m medScheduleInfo
+		var schedule sql.NullString
+		var intervalDays sql.NullInt64
 		var createdAtStr string
-		if err := rows.Scan(&m.ID, &m.Schedule, &m.Timezone, &createdAtStr); err != nil {
+		if err := rows.Scan(&m.ID, &m.Frequency, &schedule, &m.Timezone, &intervalDays, &createdAtStr); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan medication: %w", err)
+		}
+		if schedule.Valid {
+			m.Schedule = schedule.String
+		}
+		if intervalDays.Valid {
+			v := int(intervalDays.Int64)
+			m.IntervalDays = &v
 		}
 		ca, err := time.Parse(model.DateTimeFormat, createdAtStr)
 		if err != nil {
@@ -265,6 +278,16 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 		loc, err := time.LoadLocation(m.Timezone)
 		if err != nil {
 			log.Printf("invalid timezone %s for medication %s: %v", m.Timezone, m.ID, err)
+			continue
+		}
+
+		// Handle every_x_days medications separately.
+		if m.Frequency == "every_x_days" {
+			intervalAlerts, err := checkEveryXDaysMissed(db, m, loc, now)
+			if err != nil {
+				return nil, err
+			}
+			alerts = append(alerts, intervalAlerts...)
 			continue
 		}
 
@@ -322,4 +345,88 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 	}
 
 	return alerts, nil
+}
+
+// checkEveryXDaysMissed checks if an every_x_days medication has a missed dose.
+// A dose is "missed" only after the due date has fully passed (now > end of due day)
+// and no med_log entry exists with given_at on that calendar day.
+func checkEveryXDaysMissed(db *sql.DB, m medScheduleInfo, loc *time.Location, now time.Time) ([]Alert, error) {
+	if m.IntervalDays == nil {
+		return nil, nil
+	}
+
+	// Find last given_at for this medication
+	var lastGivenAtStr sql.NullString
+	err := db.QueryRow(
+		`SELECT MAX(given_at) FROM med_logs WHERE medication_id = ? AND skipped = 0`,
+		m.ID,
+	).Scan(&lastGivenAtStr)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("query last given_at for %s: %w", m.ID, err)
+	}
+
+	anchor := m.CreatedAt
+	if lastGivenAtStr.Valid {
+		lga, err := time.Parse(model.DateTimeFormat, lastGivenAtStr.String)
+		if err != nil {
+			lga, err = time.Parse("2006-01-02 15:04:05", lastGivenAtStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("parse last_given_at for %s: %w", m.ID, err)
+			}
+		}
+		anchor = lga
+	}
+
+	// Compute due date
+	anchorLocal := anchor.In(loc)
+	anchorDate := time.Date(anchorLocal.Year(), anchorLocal.Month(), anchorLocal.Day(), 0, 0, 0, 0, loc)
+	dueDate := anchorDate.AddDate(0, 0, *m.IntervalDays)
+
+	// Due date must have fully passed (now is past end of due day)
+	endOfDueDay := dueDate.AddDate(0, 0, 1) // midnight of the day after
+	nowLocal := now.In(loc)
+	if nowLocal.Before(endOfDueDay) {
+		return nil, nil
+	}
+
+	// Check if any dose was logged on the due date
+	covered, err := isDayCovered(db, m.ID, dueDate, loc)
+	if err != nil {
+		return nil, err
+	}
+	if covered {
+		return nil, nil
+	}
+
+	dueDateStr := dueDate.Format(model.DateFormat)
+	return []Alert{{
+		EntryID:   fmt.Sprintf("%s_interval_%s", m.ID, dueDateStr),
+		AlertType: AlertTypeMissedMedication,
+		Value:     dueDateStr,
+		Timestamp: dueDate.UTC().Format(model.DateTimeFormat),
+	}}, nil
+}
+
+// isDayCovered checks if any med_log entry (given or skipped) exists for a medication
+// on the given calendar day in the given timezone.
+func isDayCovered(db *sql.DB, medicationID string, dayStart time.Time, loc *time.Location) (bool, error) {
+	dayEnd := dayStart.AddDate(0, 0, 1)
+	startUTC := dayStart.UTC().Format(model.DateTimeFormat)
+	endUTC := dayEnd.UTC().Format(model.DateTimeFormat)
+
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*) FROM med_logs
+		WHERE medication_id = ?
+		AND (
+			(skipped = 0 AND datetime(given_at) >= datetime(?) AND datetime(given_at) < datetime(?))
+			OR
+			(skipped = 1 AND datetime(created_at) >= datetime(?) AND datetime(created_at) < datetime(?))
+		)`,
+		medicationID, startUTC, endUTC, startUTC, endUTC,
+	).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("check day covered: %w", err)
+	}
+	return count > 0, nil
 }

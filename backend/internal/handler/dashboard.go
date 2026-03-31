@@ -36,6 +36,7 @@ type upcomingMedResponse struct {
 	Frequency     string   `json:"frequency"`
 	ScheduleTimes []string `json:"schedule_times"`
 	Timezone      *string  `json:"timezone,omitempty"`
+	IntervalDays  *int     `json:"interval_days,omitempty"`
 	NextDoseAt    *string  `json:"next_dose_at,omitempty"`
 }
 
@@ -199,8 +200,13 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 				Frequency:     m.Frequency,
 				ScheduleTimes: parseScheduleTimes(m.Schedule),
 				Timezone:      m.Timezone,
+				IntervalDays:  m.IntervalDays,
 			}
-			resp.NextDoseAt = computeNextDoseAt(resp.ScheduleTimes, m.Timezone)
+			if m.Frequency == "every_x_days" {
+				resp.NextDoseAt = computeNextDoseAtInterval(m.IntervalDays, m.LastGivenAt, m.CreatedAt, m.Timezone)
+			} else {
+				resp.NextDoseAt = computeNextDoseAt(resp.ScheduleTimes, m.Timezone)
+			}
 			upcomingMeds = append(upcomingMeds, resp)
 		}
 
@@ -222,6 +228,31 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 
 		writeJSON(w, http.StatusOK, result)
 	}
+}
+
+// computeNextDoseAtInterval calculates the next dose time for every_x_days medications.
+// Returns midnight of the due date in the medication's timezone, as a UTC ISO string.
+func computeNextDoseAtInterval(intervalDays *int, lastGivenAt *time.Time, createdAt time.Time, tz *string) *string {
+	if intervalDays == nil || tz == nil {
+		return nil
+	}
+
+	loc, err := time.LoadLocation(*tz)
+	if err != nil {
+		return nil
+	}
+
+	anchor := createdAt
+	if lastGivenAt != nil {
+		anchor = *lastGivenAt
+	}
+
+	anchorLocal := anchor.In(loc)
+	anchorDate := time.Date(anchorLocal.Year(), anchorLocal.Month(), anchorLocal.Day(), 0, 0, 0, 0, loc)
+	dueDate := anchorDate.AddDate(0, 0, *intervalDays)
+
+	s := dueDate.UTC().Format(model.DateTimeFormat)
+	return &s
 }
 
 // computeNextDoseAt calculates the next dose time based on schedule_times and timezone.

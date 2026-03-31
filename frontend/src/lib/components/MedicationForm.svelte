@@ -6,6 +6,7 @@
 		dose: string;
 		frequency: string;
 		schedule_times: string[];
+		interval_days?: number;
 		notes?: string;
 	}
 
@@ -15,6 +16,7 @@
 		frequency: string;
 		schedule_times: string[];
 		active: boolean;
+		interval_days?: number;
 		notes?: string;
 	}
 
@@ -42,6 +44,7 @@
 	let dose = $state('');
 	let frequency = $state('');
 	let scheduleTimes = $state<string[]>([]);
+	let intervalDays = $state<number | undefined>(undefined);
 	let notes = $state('');
 	let validationError = $state('');
 
@@ -50,6 +53,7 @@
 		dose = initialData?.dose ?? '';
 		frequency = initialData?.frequency ?? '';
 		scheduleTimes = initialData?.schedule_times ?? [];
+		intervalDays = initialData?.interval_days;
 		notes = initialData?.notes ?? '';
 		validationError = '';
 	});
@@ -57,8 +61,19 @@
 	function handleFrequencyChange(): void {
 		if (frequency === 'as_needed') {
 			scheduleTimes = [];
+			intervalDays = undefined;
 			return;
 		}
+
+		if (frequency === 'every_x_days') {
+			scheduleTimes = [];
+			if (intervalDays === undefined) {
+				intervalDays = undefined;
+			}
+			return;
+		}
+
+		intervalDays = undefined;
 
 		if (frequency === 'custom') {
 			if (scheduleTimes.length === 0) {
@@ -99,13 +114,22 @@
 			return;
 		}
 
+		if (frequency === 'every_x_days' && (!intervalDays || intervalDays < 1)) {
+			validationError = 'Interval days is required and must be at least 1';
+			return;
+		}
+
 		validationError = '';
 		const payload: MedicationPayload = {
 			name: name.trim(),
 			dose: dose.trim(),
 			frequency,
-			schedule_times: frequency === 'as_needed' ? [] : scheduleTimes.filter((t) => t !== '')
+			schedule_times: frequency === 'as_needed' || frequency === 'every_x_days' ? [] : scheduleTimes.filter((t) => t !== '')
 		};
+
+		if (frequency === 'every_x_days' && intervalDays) {
+			payload.interval_days = intervalDays;
+		}
 
 		if (notes.trim()) {
 			payload.notes = notes.trim();
@@ -138,12 +162,25 @@
 			<option value="once_daily">Once daily</option>
 			<option value="twice_daily">Twice daily</option>
 			<option value="three_times_daily">Three times daily</option>
+			<option value="every_x_days">Every X days</option>
 			<option value="as_needed">As needed</option>
 			<option value="custom">Custom</option>
 		</select>
 	</div>
 
-	{#if frequency && frequency !== 'as_needed'}
+	{#if frequency === 'every_x_days'}
+		<div>
+			<label for="med-interval-days">Every how many days</label>
+			<input
+				id="med-interval-days"
+				type="number"
+				min="1"
+				bind:value={intervalDays}
+			/>
+		</div>
+	{/if}
+
+	{#if frequency && frequency !== 'as_needed' && frequency !== 'every_x_days'}
 		<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -->
 		{#each scheduleTimes as _time, i (i)}
 			<div>

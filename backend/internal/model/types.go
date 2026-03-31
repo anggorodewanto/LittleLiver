@@ -251,10 +251,11 @@ type Medication struct {
 	UpdatedBy *string   `json:"updated_by,omitempty"`
 	Name      string    `json:"name"`
 	Dose      string    `json:"dose"`
-	Frequency string    `json:"frequency"`
-	Schedule  *string   `json:"schedule,omitempty"`
-	Timezone  *string   `json:"timezone,omitempty"`
-	Active    bool      `json:"active"`
+	Frequency    string    `json:"frequency"`
+	Schedule     *string   `json:"schedule,omitempty"`
+	Timezone     *string   `json:"timezone,omitempty"`
+	IntervalDays *int      `json:"interval_days,omitempty"`
+	Active       bool      `json:"active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
