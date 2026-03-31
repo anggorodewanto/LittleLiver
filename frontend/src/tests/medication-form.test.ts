@@ -288,4 +288,83 @@ describe('MedicationForm', () => {
 
 		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('Take with food');
 	});
+
+	it('shows starts from date input when every_x_days is selected', async () => {
+		render(MedicationForm, { props: { onsubmit } });
+
+		await fireEvent.change(screen.getByLabelText(/frequency/i), {
+			target: { value: 'every_x_days' }
+		});
+
+		expect(screen.getByLabelText(/starts from/i)).toBeInTheDocument();
+	});
+
+	it('does not show starts from for other frequencies', async () => {
+		render(MedicationForm, { props: { onsubmit } });
+
+		await fireEvent.change(screen.getByLabelText(/frequency/i), {
+			target: { value: 'once_daily' }
+		});
+
+		expect(screen.queryByLabelText(/starts from/i)).not.toBeInTheDocument();
+	});
+
+	it('submits starts_from in payload for every_x_days frequency', async () => {
+		render(MedicationForm, { props: { onsubmit } });
+
+		await fireEvent.input(screen.getByLabelText(/medication name/i), {
+			target: { value: 'Vitamin A' }
+		});
+		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '5000IU' } });
+		await fireEvent.change(screen.getByLabelText(/frequency/i), {
+			target: { value: 'every_x_days' }
+		});
+		await fireEvent.input(screen.getByLabelText(/every .* days/i), {
+			target: { value: '3' }
+		});
+		await fireEvent.input(screen.getByLabelText(/starts from/i), {
+			target: { value: '2026-03-20' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: /save medication/i }));
+
+		expect(onsubmit).toHaveBeenCalledTimes(1);
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.starts_from).toBe('2026-03-20');
+	});
+
+	it('does not include starts_from when not set', async () => {
+		render(MedicationForm, { props: { onsubmit } });
+
+		await fireEvent.input(screen.getByLabelText(/medication name/i), {
+			target: { value: 'Vitamin A' }
+		});
+		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '5000IU' } });
+		await fireEvent.change(screen.getByLabelText(/frequency/i), {
+			target: { value: 'every_x_days' }
+		});
+		await fireEvent.input(screen.getByLabelText(/every .* days/i), {
+			target: { value: '3' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: /save medication/i }));
+
+		expect(onsubmit).toHaveBeenCalledTimes(1);
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.starts_from).toBeUndefined();
+	});
+
+	it('pre-fills starts_from from initialData in edit mode', async () => {
+		const initialData = {
+			name: 'Vitamin A',
+			dose: '5000IU',
+			frequency: 'every_x_days',
+			schedule_times: [],
+			active: true,
+			interval_days: 3,
+			starts_from: '2026-03-20'
+		};
+
+		render(MedicationForm, { props: { onsubmit, initialData } });
+
+		expect((screen.getByLabelText(/starts from/i) as HTMLInputElement).value).toBe('2026-03-20');
+	});
 });

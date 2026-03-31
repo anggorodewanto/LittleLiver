@@ -150,8 +150,8 @@ func TestListMedicationsHandler_WithData(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
-	store.CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", nil, nil, nil)
+	store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
+	store.CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", nil, nil, nil, nil)
 
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, "/api/babies/"+baby.ID+"/medications")
 	authMw := middleware.Auth(db, testCookieName)
@@ -178,7 +178,7 @@ func TestListMedLogsHandler_WithFromTo(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", nil, nil, nil)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", nil, nil, nil, nil)
 	givenAt := "2025-07-01T08:00:00Z"
 	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
 	givenAt2 := "2025-07-02T08:00:00Z"
@@ -460,7 +460,7 @@ func TestUpdateMedLogHandler_InvalidJSON_Boost(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "Test", "10mg", "once_daily", nil, nil, nil)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "Test", "10mg", "once_daily", nil, nil, nil, nil)
 	givenAt := "2025-07-01T08:00:00Z"
 	ml, _ := store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
 
@@ -1174,7 +1174,7 @@ func TestCreateMedLogHandler_StoreError(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, _ := store.CreateMedication(db, baby.ID, user.ID, "Test", "10mg", "once_daily", nil, nil, nil)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "Test", "10mg", "once_daily", nil, nil, nil, nil)
 
 	body := `{"medication_id":"` + med.ID + `","given_at":"2025-07-01T08:00:00Z","skipped":false}`
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/med-logs")

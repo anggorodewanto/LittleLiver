@@ -27,7 +27,7 @@ func TestCreateMedLog_Given(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
 	// Create a medication
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestCreateMedLog_Skipped(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestCreateMedLog_MutualExclusivityRejected(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestCreateMedLog_BabyMismatchRejected(t *testing.T) {
 	baby2 := testutil.CreateTestBaby(t, db, user.ID)
 
 	// Create medication for baby1
-	med, err := store.CreateMedication(db, baby1.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby1.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestCreateMedLog_AdHocDose(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Tylenol", "5ml", "as_needed", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Tylenol", "5ml", "as_needed", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestUpdateMedLog_SetsUpdatedByAndUpdatedAt(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestDeleteMedLog_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -340,11 +340,11 @@ func TestListMedLogs_FilterByMedicationID(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med1, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med1, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
-	med2, err := store.CreateMedication(db, baby.ID, user.ID, "Vitamin D", "400IU", "once_daily", nil, nil, nil)
+	med2, err := store.CreateMedication(db, baby.ID, user.ID, "Vitamin D", "400IU", "once_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -397,7 +397,7 @@ func TestListMedLogs_FilterByFromTo(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -459,7 +459,7 @@ func TestMedLog_LoggedByImmutableOnUpdate(t *testing.T) {
 		t.Fatalf("link parent2: %v", err)
 	}
 
-	med, err := store.CreateMedication(db, baby.ID, parent1.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, parent1.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -512,7 +512,7 @@ func TestGetMedLog_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -644,7 +644,7 @@ func TestCreateMedLog_SkippedWithGivenAtRejects(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -679,7 +679,7 @@ func TestCreateMedLog_InvalidScheduledTimeFormat(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}
@@ -713,7 +713,7 @@ func TestUpdateMedLog_InvalidJSON(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication failed: %v", err)
 	}

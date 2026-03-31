@@ -7,9 +7,19 @@ export const FREQUENCY_OPTIONS = [
 	{ value: 'custom', label: 'Custom', timeSlots: 0 }
 ] as const;
 
-export function formatFrequency(freq: string, intervalDays?: number | null): string {
+export function formatFrequency(
+	freq: string,
+	intervalDays?: number | null,
+	startsFrom?: string | null
+): string {
 	if (freq === 'every_x_days' && intervalDays) {
-		return `Every ${intervalDays} days`;
+		const base = `Every ${intervalDays} days`;
+		if (startsFrom) {
+			const d = new Date(startsFrom + 'T00:00:00');
+			const formatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+			return `${base} (from ${formatted})`;
+		}
+		return base;
 	}
 	return FREQUENCY_OPTIONS.find((o) => o.value === freq)?.label ?? freq;
 }

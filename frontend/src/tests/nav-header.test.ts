@@ -99,7 +99,7 @@ describe('NavHeader', () => {
 
 		expect(screen.getByRole('link', { name: /trends/i })).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: /meds/i })).toBeInTheDocument();
-		expect(screen.getByRole('link', { name: /^log$/i })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /logs/i })).toBeInTheDocument();
 	});
 
 	it('shows Logs tab linking to /logs', () => {

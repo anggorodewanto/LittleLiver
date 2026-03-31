@@ -256,13 +256,13 @@ func TestDashboardAggregation_Integration(t *testing.T) {
 	// Medications: one active with schedule, one active without schedule
 	tz := "UTC"
 	sched := `["08:00","20:00"]`
-	store.CreateMedication(db, babyID, userID, "Ursodiol", "50mg", "twice_daily", &sched, &tz, nil)
-	store.CreateMedication(db, babyID, userID, "Vitamin D", "400IU", "once_daily", nil, nil, nil)
+	store.CreateMedication(db, babyID, userID, "Ursodiol", "50mg", "twice_daily", &sched, &tz, nil, nil)
+	store.CreateMedication(db, babyID, userID, "Vitamin D", "400IU", "once_daily", nil, nil, nil, nil)
 
 	// Deactivate a third medication
-	med3, _ := store.CreateMedication(db, babyID, userID, "Stopped Med", "10mg", "once_daily", nil, nil, nil)
+	med3, _ := store.CreateMedication(db, babyID, userID, "Stopped Med", "10mg", "once_daily", nil, nil, nil, nil)
 	inactive := false
-	store.UpdateMedication(db, babyID, med3.ID, userID, "Stopped Med", "10mg", "once_daily", nil, nil, &inactive, nil)
+	store.UpdateMedication(db, babyID, med3.ID, userID, "Stopped Med", "10mg", "once_daily", nil, nil, &inactive, nil, nil)
 
 	// Get Ursodiol ID for med_logs
 	var ursodiolID string

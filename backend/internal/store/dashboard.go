@@ -37,6 +37,7 @@ type UpcomingMed struct {
 	Schedule     *string    `json:"schedule"`
 	Timezone     *string    `json:"timezone"`
 	IntervalDays *int       `json:"interval_days,omitempty"`
+	StartsFrom   *string    `json:"starts_from,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	LastGivenAt  *time.Time `json:"last_given_at,omitempty"`
 }
@@ -177,7 +178,7 @@ func GetStoolColorTrend(db *sql.DB, babyID string, loc *time.Location) ([]StoolC
 func GetUpcomingMeds(db *sql.DB, babyID string) ([]UpcomingMed, error) {
 	rows, err := db.Query(
 		`SELECT m.id, m.name, m.dose, m.frequency, m.schedule, m.timezone,
-		        m.interval_days, m.created_at,
+		        m.interval_days, m.starts_from, m.created_at,
 		        (SELECT MAX(ml.given_at) FROM med_logs ml WHERE ml.medication_id = m.id AND ml.skipped = 0) as last_given_at
 		 FROM medications m
 		 WHERE m.baby_id = ? AND m.active = 1`,
@@ -191,16 +192,17 @@ func GetUpcomingMeds(db *sql.DB, babyID string) ([]UpcomingMed, error) {
 	var meds []UpcomingMed
 	for rows.Next() {
 		var m UpcomingMed
-		var schedule, timezone sql.NullString
+		var schedule, timezone, startsFrom sql.NullString
 		var intervalDays sql.NullInt64
 		var createdAtStr string
 		var lastGivenAtStr sql.NullString
 		if err := rows.Scan(&m.ID, &m.Name, &m.Dose, &m.Frequency, &schedule, &timezone,
-			&intervalDays, &createdAtStr, &lastGivenAtStr); err != nil {
+			&intervalDays, &startsFrom, &createdAtStr, &lastGivenAtStr); err != nil {
 			return nil, fmt.Errorf("scan upcoming med: %w", err)
 		}
 		m.Schedule = nullStr(schedule)
 		m.Timezone = nullStr(timezone)
+		m.StartsFrom = nullStr(startsFrom)
 		if intervalDays.Valid {
 			v := int(intervalDays.Int64)
 			m.IntervalDays = &v
@@ -305,8 +307,13 @@ func nextDoseTimeInterval(m UpcomingMed, farFuture time.Time) time.Time {
 		return farFuture
 	}
 
-	// Anchor is the last given_at, or created_at if no doses.
+	// Anchor is the last given_at, or starts_from date, or created_at if no doses.
 	anchor := m.CreatedAt
+	if m.StartsFrom != nil {
+		if sf, err := time.ParseInLocation("2006-01-02", *m.StartsFrom, loc); err == nil {
+			anchor = sf
+		}
+	}
 	if m.LastGivenAt != nil {
 		anchor = *m.LastGivenAt
 	}

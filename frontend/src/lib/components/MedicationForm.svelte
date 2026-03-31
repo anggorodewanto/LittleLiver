@@ -7,6 +7,7 @@
 		frequency: string;
 		schedule_times: string[];
 		interval_days?: number;
+		starts_from?: string;
 		notes?: string;
 	}
 
@@ -17,6 +18,7 @@
 		schedule_times: string[];
 		active: boolean;
 		interval_days?: number;
+		starts_from?: string;
 		notes?: string;
 	}
 
@@ -45,6 +47,7 @@
 	let frequency = $state('');
 	let scheduleTimes = $state<string[]>([]);
 	let intervalDays = $state<number | undefined>(undefined);
+	let startsFrom = $state('');
 	let notes = $state('');
 	let validationError = $state('');
 
@@ -54,6 +57,7 @@
 		frequency = initialData?.frequency ?? '';
 		scheduleTimes = initialData?.schedule_times ?? [];
 		intervalDays = initialData?.interval_days;
+		startsFrom = initialData?.starts_from ?? '';
 		notes = initialData?.notes ?? '';
 		validationError = '';
 	});
@@ -62,6 +66,7 @@
 		if (frequency === 'as_needed') {
 			scheduleTimes = [];
 			intervalDays = undefined;
+			startsFrom = '';
 			return;
 		}
 
@@ -74,6 +79,7 @@
 		}
 
 		intervalDays = undefined;
+		startsFrom = '';
 
 		if (frequency === 'custom') {
 			if (scheduleTimes.length === 0) {
@@ -131,6 +137,10 @@
 			payload.interval_days = intervalDays;
 		}
 
+		if (frequency === 'every_x_days' && startsFrom) {
+			payload.starts_from = startsFrom;
+		}
+
 		if (notes.trim()) {
 			payload.notes = notes.trim();
 		}
@@ -176,6 +186,14 @@
 				type="number"
 				min="1"
 				bind:value={intervalDays}
+			/>
+		</div>
+		<div>
+			<label for="med-starts-from">Starts from</label>
+			<input
+				id="med-starts-from"
+				type="date"
+				bind:value={startsFrom}
 			/>
 		</div>
 	{/if}

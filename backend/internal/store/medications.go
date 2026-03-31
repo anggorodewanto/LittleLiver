@@ -8,12 +8,12 @@ import (
 )
 
 const medicationColumns = `id, baby_id, logged_by, updated_by, name, dose,
-	frequency, schedule, timezone, interval_days, active, created_at, updated_at`
+	frequency, schedule, timezone, interval_days, starts_from, active, created_at, updated_at`
 
 // scanMedication scans a single medication row from the given scanner.
 func scanMedication(s scanner) (*model.Medication, error) {
 	var m model.Medication
-	var updatedBy, schedule, timezone sql.NullString
+	var updatedBy, schedule, timezone, startsFrom sql.NullString
 	var intervalDays sql.NullInt64
 	var createdStr, updatedStr string
 	var active bool
@@ -21,7 +21,7 @@ func scanMedication(s scanner) (*model.Medication, error) {
 	err := s.Scan(
 		&m.ID, &m.BabyID, &m.LoggedBy, &updatedBy,
 		&m.Name, &m.Dose, &m.Frequency, &schedule,
-		&timezone, &intervalDays, &active, &createdStr, &updatedStr,
+		&timezone, &intervalDays, &startsFrom, &active, &createdStr, &updatedStr,
 	)
 	if err != nil {
 		return nil, err
@@ -31,6 +31,7 @@ func scanMedication(s scanner) (*model.Medication, error) {
 	m.UpdatedBy = nullStr(updatedBy)
 	m.Schedule = nullStr(schedule)
 	m.Timezone = nullStr(timezone)
+	m.StartsFrom = nullStr(startsFrom)
 	if intervalDays.Valid {
 		v := int(intervalDays.Int64)
 		m.IntervalDays = &v
@@ -52,13 +53,13 @@ func scanMedication(s scanner) (*model.Medication, error) {
 // It's already available via the store package.
 
 // CreateMedication inserts a new medication and returns it.
-func CreateMedication(db *sql.DB, babyID, loggedBy, name, dose, frequency string, schedule, timezone *string, intervalDays *int) (*model.Medication, error) {
+func CreateMedication(db *sql.DB, babyID, loggedBy, name, dose, frequency string, schedule, timezone *string, intervalDays *int, startsFrom *string) (*model.Medication, error) {
 	id := model.NewULID()
 
 	_, err := db.Exec(
-		`INSERT INTO medications (id, baby_id, logged_by, name, dose, frequency, schedule, timezone, interval_days)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, babyID, loggedBy, name, dose, frequency, schedule, timezone, intervalDays,
+		`INSERT INTO medications (id, baby_id, logged_by, name, dose, frequency, schedule, timezone, interval_days, starts_from)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, babyID, loggedBy, name, dose, frequency, schedule, timezone, intervalDays, startsFrom,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create medication: %w", err)
@@ -106,7 +107,7 @@ func ListMedications(db *sql.DB, babyID string) ([]model.Medication, error) {
 }
 
 // UpdateMedication updates a medication's fields. Pass nil for active to leave unchanged.
-func UpdateMedication(db *sql.DB, babyID, medID, updatedBy, name, dose, frequency string, schedule, timezone *string, active *bool, intervalDays *int) (*model.Medication, error) {
+func UpdateMedication(db *sql.DB, babyID, medID, updatedBy, name, dose, frequency string, schedule, timezone *string, active *bool, intervalDays *int, startsFrom *string) (*model.Medication, error) {
 	// First get existing to determine current active state if not changing
 	existing, err := GetMedicationByID(db, babyID, medID)
 	if err != nil {
@@ -130,14 +131,20 @@ func UpdateMedication(db *sql.DB, babyID, medID, updatedBy, name, dose, frequenc
 		intervalDaysVal = intervalDays
 	}
 
+	// Preserve existing starts_from when nil is passed
+	startsFromVal := existing.StartsFrom
+	if startsFrom != nil {
+		startsFromVal = startsFrom
+	}
+
 	res, err := db.Exec(
 		`UPDATE medications SET
 			updated_by = ?, name = ?, dose = ?, frequency = ?,
-			schedule = ?, timezone = ?, interval_days = ?, active = ?,
+			schedule = ?, timezone = ?, interval_days = ?, starts_from = ?, active = ?,
 			updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ? AND baby_id = ?`,
 		updatedBy, name, dose, frequency,
-		schedule, timezoneVal, intervalDaysVal, activeVal,
+		schedule, timezoneVal, intervalDaysVal, startsFromVal, activeVal,
 		medID, babyID,
 	)
 	if err != nil {

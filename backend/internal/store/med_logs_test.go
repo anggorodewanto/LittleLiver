@@ -11,7 +11,7 @@ import (
 
 func createTestMed(t *testing.T, db *sql.DB, babyID, userID string) string {
 	t.Helper()
-	med, err := store.CreateMedication(db, babyID, userID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil)
+	med, err := store.CreateMedication(db, babyID, userID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestListMedLogs_FilterByMedicationID(t *testing.T) {
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 	med1 := createTestMed(t, db, baby.ID, user.ID)
 
-	med2, err := store.CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", nil, nil, nil)
+	med2, err := store.CreateMedication(db, baby.ID, user.ID, "VitD", "400IU", "once_daily", nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateMedication: %v", err)
 	}

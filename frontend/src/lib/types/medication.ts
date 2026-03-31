@@ -7,6 +7,7 @@ export interface Medication {
 	schedule: string | null;
 	timezone: string | null;
 	interval_days: number | null;
+	starts_from: string | null;
 	active: boolean;
 	created_at: string;
 	updated_at: string;

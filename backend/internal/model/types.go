@@ -255,6 +255,7 @@ type Medication struct {
 	Schedule     *string   `json:"schedule,omitempty"`
 	Timezone     *string   `json:"timezone,omitempty"`
 	IntervalDays *int      `json:"interval_days,omitempty"`
+	StartsFrom   *string   `json:"starts_from,omitempty"`
 	Active       bool      `json:"active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

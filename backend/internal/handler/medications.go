@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
@@ -19,6 +20,7 @@ type medicationRequest struct {
 	Timezone      *string  `json:"timezone,omitempty"` // IANA timezone; on create defaults to X-Timezone header; mutable via PUT
 	Active        *bool    `json:"active,omitempty"`
 	IntervalDays  *int     `json:"interval_days,omitempty"`
+	StartsFrom    *string  `json:"starts_from,omitempty"`
 }
 
 // validate checks required fields for a medication request.
@@ -42,6 +44,14 @@ func (req *medicationRequest) validate() (string, bool) {
 	} else if req.IntervalDays != nil {
 		return "interval_days is only valid for every_x_days frequency", false
 	}
+	if req.StartsFrom != nil {
+		if req.Frequency != "every_x_days" {
+			return "starts_from is only valid for every_x_days frequency", false
+		}
+		if _, err := time.Parse("2006-01-02", *req.StartsFrom); err != nil {
+			return "starts_from must be a valid date in YYYY-MM-DD format", false
+		}
+	}
 	return "", true
 }
 
@@ -57,6 +67,7 @@ type medicationResponse struct {
 	ScheduleTimes []string `json:"schedule_times"`
 	Timezone      *string  `json:"timezone,omitempty"`
 	IntervalDays  *int     `json:"interval_days,omitempty"`
+	StartsFrom    *string  `json:"starts_from,omitempty"`
 	Active        bool     `json:"active"`
 	CreatedAt     string   `json:"created_at"`
 	UpdatedAt     string   `json:"updated_at"`
@@ -74,6 +85,7 @@ func toMedicationResponse(m *model.Medication) medicationResponse {
 		ScheduleTimes: parseScheduleTimes(m.Schedule),
 		Timezone:      m.Timezone,
 		IntervalDays:  m.IntervalDays,
+		StartsFrom:    m.StartsFrom,
 		Active:        m.Active,
 		CreatedAt:     m.CreatedAt.Format(model.DateTimeFormat),
 		UpdatedAt:     m.UpdatedAt.Format(model.DateTimeFormat),
@@ -125,7 +137,7 @@ func CreateMedicationHandler(db *sql.DB) http.HandlerFunc {
 			tz = optionalTimezone(r)
 		}
 
-		med, err := store.CreateMedication(db, baby.ID, user.ID, req.Name, req.Dose, req.Frequency, schedule, tz, req.IntervalDays)
+		med, err := store.CreateMedication(db, baby.ID, user.ID, req.Name, req.Dose, req.Frequency, schedule, tz, req.IntervalDays, req.StartsFrom)
 		if err != nil {
 			log.Printf("create medication: %v", err)
 			http.Error(w, "failed to create medication", http.StatusInternalServerError)
@@ -223,7 +235,7 @@ func UpdateMedicationHandler(db *sql.DB) http.HandlerFunc {
 
 		schedule := scheduleTimesToJSON(req.ScheduleTimes)
 
-		med, err := store.UpdateMedication(db, baby.ID, medID, user.ID, req.Name, req.Dose, req.Frequency, schedule, req.Timezone, req.Active, req.IntervalDays)
+		med, err := store.UpdateMedication(db, baby.ID, medID, user.ID, req.Name, req.Dose, req.Frequency, schedule, req.Timezone, req.Active, req.IntervalDays, req.StartsFrom)
 		if err != nil {
 			handleStoreError(w, err, "medication not found")
 			return
