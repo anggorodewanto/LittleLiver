@@ -120,8 +120,8 @@
 			{/each}
 		</span>
 		<div class="row-actions">
-			<button class="btn-sm btn-edit" onclick={handleEdit}>Edit</button>
-			<button class="btn-sm btn-delete" onclick={handleDeleteClick}>Delete</button>
+			<button class="btn-sm btn-edit" onclick={handleEdit} aria-label="Edit">✏️</button>
+			<button class="btn-sm btn-delete" onclick={handleDeleteClick} aria-label="Delete">🗑️</button>
 		</div>
 	{/if}
 </div>

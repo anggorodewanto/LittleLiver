@@ -118,8 +118,8 @@
 			<button class="btn-confirm" onclick={handleConfirmDelete}>Confirm</button>
 			<button class="btn-cancel" onclick={handleCancelDelete}>Cancel</button>
 		{:else}
-			<button class="btn-edit" onclick={handleEdit}>Edit</button>
-			<button class="btn-delete" onclick={handleDeleteClick}>Delete</button>
+			<button class="btn-edit" onclick={handleEdit} aria-label="Edit">✏️</button>
+			<button class="btn-delete" onclick={handleDeleteClick} aria-label="Delete">🗑️</button>
 		{/if}
 	</div>
 </div>
