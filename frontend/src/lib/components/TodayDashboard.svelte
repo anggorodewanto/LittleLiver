@@ -44,6 +44,8 @@
 		method?: string;
 		value: unknown;
 		timestamp: string;
+		medication_id?: string;
+		medication_name?: string;
 	}
 
 	interface DashboardResponse {
@@ -167,7 +169,9 @@
 			case 'jaundice_worsening':
 				return 'Worsening jaundice detected. Contact your hepatology team.';
 			case 'missed_medication':
-				return 'A scheduled medication dose was missed. Tap to log.';
+				return alert.medication_name
+					? `${alert.medication_name} dose was missed. Tap to log.`
+					: 'A scheduled medication dose was missed. Tap to log.';
 			default:
 				return '';
 		}
@@ -261,13 +265,15 @@
 					data-alert-type={alert.alert_type}
 					onclick={(e: MouseEvent) => {
 						if (alert.alert_type === 'missed_medication' && !(e.target as HTMLElement).closest('button')) {
-							void goto('/log/med');
+							const url = alert.medication_id ? `/log/med?medicationId=${alert.medication_id}` : '/log/med';
+							void goto(url);
 						}
 					}}
 					onkeydown={(e: KeyboardEvent) => {
 						if (alert.alert_type === 'missed_medication' && (e.key === 'Enter' || e.key === ' ') && !(e.target as HTMLElement).closest('button')) {
 							e.preventDefault();
-							void goto('/log/med');
+							const url = alert.medication_id ? `/log/med?medicationId=${alert.medication_id}` : '/log/med';
+							void goto(url);
 						}
 					}}
 				>

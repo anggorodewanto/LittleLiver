@@ -843,6 +843,48 @@ func TestMissedMedAlert_EveryXDays_Overdue_WithLog(t *testing.T) {
 	}
 }
 
+// --- Missed medication alert includes medication info ---
+
+func TestGetActiveAlerts_MissedMedication_IncludesMedicationInfo(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	pastTime := time.Now().UTC().Add(-2 * time.Hour)
+	schedTimeStr := pastTime.Format("15:04")
+	sched := `["` + schedTimeStr + `"]`
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "once_daily", &sched, &tz, nil, nil)
+
+	// Backdate created_at so the scheduled dose falls after creation
+	createdBefore := pastTime.Add(-1 * time.Hour).Format(model.DateTimeFormat)
+	db.Exec("UPDATE medications SET created_at = ? WHERE id = ?", createdBefore, med.ID)
+
+	alerts, err := store.GetActiveAlerts(db, baby.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var missedAlert *store.Alert
+	for i, a := range alerts {
+		if a.AlertType == "missed_medication" {
+			missedAlert = &alerts[i]
+			break
+		}
+	}
+	if missedAlert == nil {
+		t.Fatal("expected missed_medication alert")
+	}
+	if missedAlert.MedicationID != med.ID {
+		t.Errorf("MedicationID = %q, want %q", missedAlert.MedicationID, med.ID)
+	}
+	if missedAlert.MedicationName != "Ursodiol" {
+		t.Errorf("MedicationName = %q, want %q", missedAlert.MedicationName, "Ursodiol")
+	}
+}
+
 // --- FeverThreshold tests ---
 
 func TestFeverThreshold(t *testing.T) {

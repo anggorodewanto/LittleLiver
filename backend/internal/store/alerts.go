@@ -20,11 +20,13 @@ const (
 
 // Alert represents a single active alert for the dashboard.
 type Alert struct {
-	EntryID   string  `json:"entry_id"`
-	AlertType string  `json:"alert_type"`
-	Method    *string `json:"method,omitempty"`
-	Value     any     `json:"value"`
-	Timestamp string  `json:"timestamp"`
+	EntryID        string  `json:"entry_id"`
+	AlertType      string  `json:"alert_type"`
+	Method         *string `json:"method,omitempty"`
+	Value          any     `json:"value"`
+	Timestamp      string  `json:"timestamp"`
+	MedicationID   string  `json:"medication_id,omitempty"`
+	MedicationName string  `json:"medication_name,omitempty"`
 }
 
 // FeverThreshold returns the fever threshold for the given temperature method.
@@ -213,6 +215,7 @@ func getJaundiceAlert(db *sql.DB, babyID string) (*Alert, error) {
 // medScheduleInfo holds info needed to check missed medication doses.
 type medScheduleInfo struct {
 	ID           string
+	Name         string
 	Frequency    string
 	Schedule     string
 	Timezone     string
@@ -225,7 +228,7 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 	// Schedule-based meds also need schedule IS NOT NULL; every_x_days meds need interval_days.
 	// Collect results first to avoid holding open rows cursor during IsDoseCovered queries.
 	rows, err := db.Query(`
-		SELECT id, frequency, schedule, timezone, interval_days, created_at FROM medications
+		SELECT id, name, frequency, schedule, timezone, interval_days, created_at FROM medications
 		WHERE baby_id = ? AND active = 1 AND timezone IS NOT NULL
 		AND (schedule IS NOT NULL OR frequency = 'every_x_days')`,
 		babyID,
@@ -240,7 +243,7 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 		var schedule sql.NullString
 		var intervalDays sql.NullInt64
 		var createdAtStr string
-		if err := rows.Scan(&m.ID, &m.Frequency, &schedule, &m.Timezone, &intervalDays, &createdAtStr); err != nil {
+		if err := rows.Scan(&m.ID, &m.Name, &m.Frequency, &schedule, &m.Timezone, &intervalDays, &createdAtStr); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan medication: %w", err)
 		}
@@ -335,10 +338,12 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 				}
 
 				alerts = append(alerts, Alert{
-					EntryID:   fmt.Sprintf("%s_%s", m.ID, scheduledUTC.Format("20060102T150405Z")),
-					AlertType: AlertTypeMissedMedication,
-					Value:     st,
-					Timestamp: scheduledUTC.Format(model.DateTimeFormat),
+					EntryID:        fmt.Sprintf("%s_%s", m.ID, scheduledUTC.Format("20060102T150405Z")),
+					AlertType:      AlertTypeMissedMedication,
+					Value:          st,
+					Timestamp:      scheduledUTC.Format(model.DateTimeFormat),
+					MedicationID:   m.ID,
+					MedicationName: m.Name,
 				})
 			}
 		}
@@ -400,10 +405,12 @@ func checkEveryXDaysMissed(db *sql.DB, m medScheduleInfo, loc *time.Location, no
 
 	dueDateStr := dueDate.Format(model.DateFormat)
 	return []Alert{{
-		EntryID:   fmt.Sprintf("%s_interval_%s", m.ID, dueDateStr),
-		AlertType: AlertTypeMissedMedication,
-		Value:     dueDateStr,
-		Timestamp: dueDate.UTC().Format(model.DateTimeFormat),
+		EntryID:        fmt.Sprintf("%s_interval_%s", m.ID, dueDateStr),
+		AlertType:      AlertTypeMissedMedication,
+		Value:          dueDateStr,
+		Timestamp:      dueDate.UTC().Format(model.DateTimeFormat),
+		MedicationID:   m.ID,
+		MedicationName: m.Name,
 	}}, nil
 }
 

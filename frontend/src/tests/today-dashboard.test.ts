@@ -79,8 +79,10 @@ const mockDashboardResponse = {
 		{
 			entry_id: 'alert-4',
 			alert_type: 'missed_medication',
-			value: 'Ursodiol 50mg',
-			timestamp: '2026-03-19T08:00:00Z'
+			value: '08:00',
+			timestamp: '2026-03-19T08:00:00Z',
+			medication_id: 'med-1',
+			medication_name: 'Ursodiol'
 		}
 	],
 	chart_data_series: {
@@ -231,7 +233,12 @@ describe('TodayDashboard', () => {
 	it('shows upcoming medication names and doses', async () => {
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
-		expect(await screen.findByText(/ursodiol/i)).toBeInTheDocument();
+		// Wait for dashboard to load
+		await screen.findByText('Upcoming Medications');
+
+		// Ursodiol appears in both alert and upcoming meds, so use getAllByText
+		const ursodiolElements = screen.getAllByText(/ursodiol/i);
+		expect(ursodiolElements.length).toBeGreaterThanOrEqual(1);
 		expect(screen.getByText(/50mg/)).toBeInTheDocument();
 		expect(screen.getByText(/vitamin d/i)).toBeInTheDocument();
 		expect(screen.getByText(/400IU/)).toBeInTheDocument();
@@ -411,7 +418,7 @@ describe('TodayDashboard', () => {
 
 	// --- Missed medication alert tap-to-log ---
 
-	it('navigates to med log page when tapping a missed_medication alert banner', async () => {
+	it('navigates to med log page with medicationId when tapping a missed_medication alert banner', async () => {
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
 		await screen.findByText('Missed Medication');
@@ -421,7 +428,15 @@ describe('TodayDashboard', () => {
 		expect(missedMedBanner).not.toBeNull();
 		await fireEvent.click(missedMedBanner!);
 
-		expect(goto).toHaveBeenCalledWith('/log/med');
+		expect(goto).toHaveBeenCalledWith('/log/med?medicationId=med-1');
+	});
+
+	it('shows medication name in missed_medication alert message', async () => {
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		await screen.findByText('Missed Medication');
+
+		expect(screen.getByText(/Ursodiol dose was missed/)).toBeInTheDocument();
 	});
 
 	// --- API call ---
@@ -535,7 +550,8 @@ describe('TodayDashboard', () => {
 
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
-		await screen.findByText(/ursodiol/i);
+		// Wait for dashboard to render (use a stable element from the response)
+		await screen.findByText('Upcoming Medications');
 		expect(screen.queryByText(/due now/i)).not.toBeInTheDocument();
 
 		vi.useRealTimers();
@@ -593,7 +609,8 @@ describe('TodayDashboard', () => {
 
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
-		await screen.findByText(/ursodiol/i);
+		// Wait for dashboard to render (use a stable element from the response)
+		await screen.findByText('Upcoming Medications');
 		expect(screen.queryByText(/due now/i)).not.toBeInTheDocument();
 
 		vi.useRealTimers();

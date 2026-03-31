@@ -54,7 +54,7 @@
 	});
 
 	// Query params for DoseLogForm
-	let medicationId = $derived($page.url.searchParams.get('medication_id') ?? '');
+	let medicationId = $derived($page.url.searchParams.get('medicationId') ?? '');
 	let scheduledTime = $derived($page.url.searchParams.get('scheduled_time') ?? undefined);
 
 	// Generic edit mode
