@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { apiClient } from '$lib/api';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 	import type { Medication, MedicationsResponse } from '$lib/types/medication';
 
 	export interface DoseLogPayload {
 		medication_id: string;
 		skipped: boolean;
+		given_at?: string;
 		skip_reason?: string;
 		scheduled_time?: string;
 		notes?: string;
@@ -14,6 +16,7 @@
 	export interface DoseLogInitialData {
 		medication_id: string;
 		skipped: boolean;
+		given_at?: string;
 		skip_reason?: string;
 		notes?: string;
 	}
@@ -33,6 +36,7 @@
 	let medications = $state<Medication[]>([]);
 	let selectedMedicationId = $state('');
 	let status = $state<'given' | 'skipped' | ''>('');
+	let givenAt = $state(defaultTimestamp());
 	let skipReason = $state('');
 	let notes = $state('');
 	let validationError = $state('');
@@ -57,6 +61,7 @@
 	$effect(() => {
 		selectedMedicationId = initialData?.medication_id ?? medicationId;
 		status = initialData ? (initialData.skipped ? 'skipped' : 'given') : '';
+		givenAt = initialData?.given_at ? fromISO8601(initialData.given_at) : defaultTimestamp();
 		skipReason = initialData?.skip_reason ?? '';
 		notes = initialData?.notes ?? '';
 		validationError = '';
@@ -84,6 +89,10 @@
 			medication_id: selectedMedicationId,
 			skipped: status === 'skipped'
 		};
+
+		if (status === 'given') {
+			payload.given_at = toISO8601(givenAt);
+		}
 
 		if (status === 'skipped' && skipReason.trim()) {
 			payload.skip_reason = skipReason.trim();
@@ -124,6 +133,13 @@
 			onclick={() => selectStatus('skipped')}
 		>Skipped</button>
 	</div>
+
+	{#if status === 'given'}
+		<div>
+			<label for="dose-given-at">Given At</label>
+			<input id="dose-given-at" type="datetime-local" bind:value={givenAt} />
+		</div>
+	{/if}
 
 	{#if status === 'skipped'}
 		<div>

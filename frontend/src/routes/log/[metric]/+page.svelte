@@ -73,7 +73,7 @@
 			return { name: raw.name, dose: raw.dose, frequency: raw.frequency, schedule_times: scheduleTimes, active: raw.active };
 		}
 		if (metricKey === 'med') {
-			return { medication_id: raw.medication_id, skipped: raw.skipped, skip_reason: raw.skip_reason, notes: raw.notes };
+			return { medication_id: raw.medication_id, skipped: raw.skipped, given_at: raw.given_at, skip_reason: raw.skip_reason, notes: raw.notes };
 		}
 		// All other types have a timestamp field — return as-is (forms use fromISO8601 internally)
 		return raw;

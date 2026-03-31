@@ -40,11 +40,19 @@
 		if (str.length <= max) return str;
 		return str.slice(0, max) + '...';
 	}
+
+	function entryTimestamp(): string {
+		if (entry.timestamp) return entry.timestamp as string;
+		// Med-logs don't have timestamp — use given_at or created_at
+		if (entry.given_at) return entry.given_at as string;
+		if (entry.created_at) return entry.created_at as string;
+		return '';
+	}
 </script>
 
 <div class="log-entry-card">
 	<div class="card-header">
-		<span class="timestamp">{formatDateTime(entry.timestamp as string)}</span>
+		<span class="timestamp">{formatDateTime(entryTimestamp())}</span>
 	</div>
 
 	<div class="card-body">

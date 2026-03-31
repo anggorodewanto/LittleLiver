@@ -208,6 +208,57 @@ describe('DoseLogForm', () => {
 		expect(options.some((o) => o?.includes('Inactive Med'))).toBe(false);
 	});
 
+	it('shows given_at datetime field when Given is selected', async () => {
+		render(DoseLogForm, { props: { onsubmit, babyId: 'baby-1', medicationId: 'med-1' } });
+
+		await screen.findByLabelText(/medication/i);
+		await fireEvent.click(screen.getByRole('button', { name: /^given$/i }));
+
+		expect(screen.getByLabelText(/given at/i)).toBeInTheDocument();
+	});
+
+	it('hides given_at datetime field when Skipped is selected', async () => {
+		render(DoseLogForm, { props: { onsubmit, babyId: 'baby-1', medicationId: 'med-1' } });
+
+		await screen.findByLabelText(/medication/i);
+		await fireEvent.click(screen.getByRole('button', { name: /^skipped$/i }));
+
+		expect(screen.queryByLabelText(/given at/i)).not.toBeInTheDocument();
+	});
+
+	it('includes given_at in submitted payload when given', async () => {
+		render(DoseLogForm, {
+			props: { onsubmit, babyId: 'baby-1', medicationId: 'med-1' }
+		});
+
+		await screen.findByLabelText(/medication/i);
+		await fireEvent.click(screen.getByRole('button', { name: /^given$/i }));
+
+		const givenAtInput = screen.getByLabelText(/given at/i) as HTMLInputElement;
+		await fireEvent.input(givenAtInput, { target: { value: '2026-03-20T14:30' } });
+
+		await fireEvent.click(screen.getByRole('button', { name: /log dose/i }));
+
+		expect(onsubmit).toHaveBeenCalledTimes(1);
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.given_at).toBeDefined();
+	});
+
+	it('pre-populates given_at from initialData', async () => {
+		const initialData = {
+			medication_id: 'med-1',
+			skipped: false,
+			given_at: '2026-03-20T14:30:00Z',
+			notes: ''
+		};
+
+		render(DoseLogForm, { props: { onsubmit, babyId: 'baby-1', initialData } });
+
+		await screen.findByLabelText(/medication/i);
+		const givenAtInput = screen.getByLabelText(/given at/i) as HTMLInputElement;
+		expect(givenAtInput.value).toBeTruthy();
+	});
+
 	it('pre-populates fields when initialData is provided', async () => {
 		const initialData = {
 			medication_id: 'med-2',

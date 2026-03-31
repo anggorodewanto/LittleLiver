@@ -136,15 +136,43 @@ describe('LogEntryCard', () => {
 	it('renders med-log skipped status', () => {
 		const entry = {
 			id: 'm1',
-			timestamp: '2026-03-20T14:30:00Z',
 			given_at: null,
 			skipped: true,
-			skip_reason: 'Vomiting'
+			skip_reason: 'Vomiting',
+			created_at: '2026-03-20T14:30:00Z'
 		};
 
 		render(LogEntryCard, { props: { entry, logType: medLogType, ondelete } });
 
 		expect(screen.getByText(/skipped/i)).toBeInTheDocument();
 		expect(screen.getByText(/vomiting/i)).toBeInTheDocument();
+	});
+
+	it('renders med-log given_at as header timestamp instead of timestamp field', () => {
+		const entry = {
+			id: 'm2',
+			given_at: '2026-03-20T14:30:00Z',
+			skipped: false,
+			created_at: '2026-03-20T14:00:00Z'
+		};
+
+		render(LogEntryCard, { props: { entry, logType: medLogType, ondelete } });
+
+		// Should show given_at time in the header, not "Invalid Date"
+		const header = document.querySelector('.card-header .timestamp');
+		expect(header?.textContent).toBe(new Date('2026-03-20T14:30:00Z').toLocaleString());
+	});
+
+	it('renders med-log created_at as header when skipped (no given_at)', () => {
+		const entry = {
+			id: 'm3',
+			given_at: null,
+			skipped: true,
+			created_at: '2026-03-20T14:00:00Z'
+		};
+
+		render(LogEntryCard, { props: { entry, logType: medLogType, ondelete } });
+
+		expect(screen.getByText(new Date('2026-03-20T14:00:00Z').toLocaleString())).toBeInTheDocument();
 	});
 });
