@@ -61,10 +61,35 @@
 		}
 	}
 
+	const SOURCE_TYPE_TO_ENDPOINT: Record<string, string> = {
+		urine: 'urine',
+		stool: 'stools',
+		feeding: 'feedings'
+	};
+
 	async function handleDelete(logType: LogTypeConfig, id: string): Promise<void> {
 		try {
+			const typedEntry = entries.find((e) => e.entry.id === id);
+			const entry = typedEntry?.entry;
+
+			// If deleting a linked fluid_log, redirect to the source endpoint
+			if (logType.key === 'fluid' && entry?.source_type && entry?.source_id) {
+				const sourceEndpoint = SOURCE_TYPE_TO_ENDPOINT[entry.source_type as string];
+				if (sourceEndpoint) {
+					await apiClient.del(`/babies/${babyId}/${sourceEndpoint}/${entry.source_id}`);
+					entries = entries.filter(
+						(e) => e.entry.id !== id && e.entry.id !== entry.source_id
+					);
+					return;
+				}
+			}
+
 			await apiClient.del(`/babies/${babyId}/${logType.endpoint}/${id}`);
-			entries = entries.filter((e) => e.entry.id !== id);
+
+			// Remove the deleted entry AND any linked fluid_log entries
+			entries = entries.filter(
+				(e) => e.entry.id !== id && !(e.logType.key === 'fluid' && e.entry.source_id === id)
+			);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to delete entry';
 		}
