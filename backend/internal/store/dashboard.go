@@ -2,7 +2,9 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -168,13 +170,12 @@ func GetStoolColorTrend(db *sql.DB, babyID string, loc *time.Location) ([]StoolC
 	return entries, nil
 }
 
-// GetUpcomingMeds returns active medications for a baby with their schedule info.
+// GetUpcomingMeds returns active medications for a baby, sorted by next scheduled dose time.
 func GetUpcomingMeds(db *sql.DB, babyID string) ([]UpcomingMed, error) {
 	rows, err := db.Query(
 		`SELECT id, name, dose, frequency, schedule, timezone
 		 FROM medications
-		 WHERE baby_id = ? AND active = 1
-		 ORDER BY created_at ASC`,
+		 WHERE baby_id = ? AND active = 1`,
 		babyID,
 	)
 	if err != nil {
@@ -200,5 +201,63 @@ func GetUpcomingMeds(db *sql.DB, babyID string) ([]UpcomingMed, error) {
 	if meds == nil {
 		meds = make([]UpcomingMed, 0)
 	}
+
+	sort.Slice(meds, func(i, j int) bool {
+		ti := nextDoseTime(meds[i])
+		tj := nextDoseTime(meds[j])
+		return ti.Before(tj)
+	})
+
 	return meds, nil
+}
+
+// nextDoseTime computes the next scheduled dose time for a medication.
+// If no schedule/timezone is set, returns a far-future sentinel so it sorts last.
+func nextDoseTime(m UpcomingMed) time.Time {
+	farFuture := time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+	if m.Schedule == nil || m.Timezone == nil {
+		return farFuture
+	}
+
+	loc, err := time.LoadLocation(*m.Timezone)
+	if err != nil {
+		return farFuture
+	}
+
+	var times []string
+	if err := json.Unmarshal([]byte(*m.Schedule), &times); err != nil {
+		return farFuture
+	}
+
+	now := time.Now().In(loc)
+	today := now.Format("2006-01-02")
+	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
+
+	var earliest time.Time
+	for _, st := range times {
+		// Check today first
+		t, err := time.ParseInLocation("2006-01-02 15:04", today+" "+st, loc)
+		if err != nil {
+			continue
+		}
+		if t.After(now) {
+			if earliest.IsZero() || t.Before(earliest) {
+				earliest = t
+			}
+			continue
+		}
+		// Already passed today, use tomorrow
+		t, err = time.ParseInLocation("2006-01-02 15:04", tomorrow+" "+st, loc)
+		if err != nil {
+			continue
+		}
+		if earliest.IsZero() || t.Before(earliest) {
+			earliest = t
+		}
+	}
+
+	if earliest.IsZero() {
+		return farFuture
+	}
+	return earliest
 }

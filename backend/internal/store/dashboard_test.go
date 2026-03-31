@@ -269,6 +269,48 @@ func TestGetUpcomingMeds_ExcludesInactive(t *testing.T) {
 	}
 }
 
+func TestGetUpcomingMeds_SortedByNextScheduledDose(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	now := time.Now().UTC()
+
+	// Med A: next dose is 3 hours from now
+	schedA := `["` + now.Add(3*time.Hour).Format("15:04") + `"]`
+	store.CreateMedication(db, baby.ID, user.ID, "MedA", "10mg", "once_daily", &schedA, &tz)
+
+	// Med B: next dose is 1 hour from now (should appear first)
+	schedB := `["` + now.Add(1*time.Hour).Format("15:04") + `"]`
+	store.CreateMedication(db, baby.ID, user.ID, "MedB", "5mg", "once_daily", &schedB, &tz)
+
+	// Med C: next dose is 2 hours from now
+	schedC := `["` + now.Add(2*time.Hour).Format("15:04") + `"]`
+	store.CreateMedication(db, baby.ID, user.ID, "MedC", "20mg", "once_daily", &schedC, &tz)
+
+	meds, err := store.GetUpcomingMeds(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetUpcomingMeds failed: %v", err)
+	}
+
+	if len(meds) != 3 {
+		t.Fatalf("expected 3 meds, got %d", len(meds))
+	}
+	if meds[0].Name != "MedB" {
+		t.Errorf("expected first med to be MedB (soonest), got %s", meds[0].Name)
+	}
+	if meds[1].Name != "MedC" {
+		t.Errorf("expected second med to be MedC, got %s", meds[1].Name)
+	}
+	if meds[2].Name != "MedA" {
+		t.Errorf("expected third med to be MedA (latest), got %s", meds[2].Name)
+	}
+}
+
 func TestParseDateRangeInLocation_NonUTC(t *testing.T) {
 	t.Parallel()
 
