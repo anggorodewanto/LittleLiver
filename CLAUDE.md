@@ -39,6 +39,10 @@ cd frontend && npm test
 2. Fix the bug (test passes)
 3. Refactor if needed
 
+### Worktree Workflow
+
+Always work in a **git worktree** to avoid disturbing other agents working in the main tree. After completing work: commit, push the branch, then merge to main.
+
 ---
 
 ## Code Conventions
