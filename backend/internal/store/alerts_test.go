@@ -429,7 +429,11 @@ func TestGetActiveAlerts_MissedMedication_TriggersWhenNoDoseLogged(t *testing.T)
 	pastTime := time.Now().UTC().Add(-2 * time.Hour)
 	schedTimeStr := pastTime.Format("15:04")
 	sched := `["` + schedTimeStr + `"]`
-	store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+
+	// Backdate created_at so the scheduled dose falls after creation
+	createdBefore := pastTime.Add(-1 * time.Hour).Format(model.DateTimeFormat)
+	db.Exec("UPDATE medications SET created_at = ? WHERE id = ?", createdBefore, med.ID)
 
 	alerts, err := store.GetActiveAlerts(db, baby.ID)
 	if err != nil {
@@ -458,6 +462,10 @@ func TestGetActiveAlerts_MissedMedication_NotTriggeredWhenDoseLogged(t *testing.
 	schedTimeStr := pastTime.Format("15:04")
 	sched := `["` + schedTimeStr + `"]`
 	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
+
+	// Backdate created_at so the scheduled dose falls after creation
+	createdBefore := pastTime.Add(-1 * time.Hour).Format(model.DateTimeFormat)
+	db.Exec("UPDATE medications SET created_at = ? WHERE id = ?", createdBefore, med.ID)
 
 	givenAt := pastTime.Format(model.DateTimeFormat)
 	scheduledTime := pastTime.Format(model.DateTimeFormat)
@@ -511,6 +519,10 @@ func TestGetActiveAlerts_MissedMedication_InactiveMedSkipped(t *testing.T) {
 	sched := `["` + schedTimeStr + `"]`
 	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
 
+	// Backdate created_at so the scheduled dose falls after creation
+	createdBefore := pastTime.Add(-1 * time.Hour).Format(model.DateTimeFormat)
+	db.Exec("UPDATE medications SET created_at = ? WHERE id = ?", createdBefore, med.ID)
+
 	inactive := false
 	store.UpdateMedication(db, baby.ID, med.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, &inactive)
 
@@ -539,6 +551,10 @@ func TestGetActiveAlerts_MissedMedication_GivenDoseCoverage(t *testing.T) {
 	sched := `["` + schedTimeStr + `"]`
 	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz)
 
+	// Backdate created_at so the scheduled dose falls after creation
+	createdBefore := pastTime.Add(-1 * time.Hour).Format(model.DateTimeFormat)
+	db.Exec("UPDATE medications SET created_at = ? WHERE id = ?", createdBefore, med.ID)
+
 	// Log a given dose with given_at within +/-30 min of the scheduled time
 	givenAt := pastTime.Add(10 * time.Minute).Format(model.DateTimeFormat)
 	scheduledTime := pastTime.Format(model.DateTimeFormat)
@@ -551,6 +567,34 @@ func TestGetActiveAlerts_MissedMedication_GivenDoseCoverage(t *testing.T) {
 	for _, a := range alerts {
 		if a.AlertType == "missed_medication" {
 			t.Error("given dose with given_at within +/-30 min of scheduled time should suppress missed_medication alert")
+		}
+	}
+}
+
+func TestGetActiveAlerts_MissedMedication_NotTriggeredForDosesBeforeCreation(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	// Schedule a twice-daily med with times that are already past.
+	// E.g. if it's 15:00 now, schedule at 08:00 and 12:00.
+	// Both are >30 min past due, but the medication was JUST created,
+	// so neither should trigger a missed dose alert.
+	t1 := time.Now().UTC().Add(-7 * time.Hour)
+	t2 := time.Now().UTC().Add(-3 * time.Hour)
+	sched := `["` + t1.Format("15:04") + `","` + t2.Format("15:04") + `"]`
+	store.CreateMedication(db, baby.ID, user.ID, "NewMed", "5mg", "twice_daily", &sched, &tz)
+
+	alerts, err := store.GetActiveAlerts(db, baby.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, a := range alerts {
+		if a.AlertType == "missed_medication" {
+			t.Error("newly created medication should not trigger missed_medication alert for doses scheduled before creation")
 		}
 	}
 }

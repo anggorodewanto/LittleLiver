@@ -212,16 +212,17 @@ func getJaundiceAlert(db *sql.DB, babyID string) (*Alert, error) {
 
 // medScheduleInfo holds info needed to check missed medication doses.
 type medScheduleInfo struct {
-	ID       string
-	Schedule string
-	Timezone string
+	ID        string
+	Schedule  string
+	Timezone  string
+	CreatedAt time.Time
 }
 
 func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 	// Get all active medications for this baby that have a schedule and timezone.
 	// Collect results first to avoid holding open rows cursor during IsDoseCovered queries.
 	rows, err := db.Query(`
-		SELECT id, schedule, timezone FROM medications
+		SELECT id, schedule, timezone, created_at FROM medications
 		WHERE baby_id = ? AND active = 1 AND schedule IS NOT NULL AND timezone IS NOT NULL`,
 		babyID,
 	)
@@ -232,10 +233,21 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 	var meds []medScheduleInfo
 	for rows.Next() {
 		var m medScheduleInfo
-		if err := rows.Scan(&m.ID, &m.Schedule, &m.Timezone); err != nil {
+		var createdAtStr string
+		if err := rows.Scan(&m.ID, &m.Schedule, &m.Timezone, &createdAtStr); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan medication: %w", err)
 		}
+		ca, err := time.Parse(model.DateTimeFormat, createdAtStr)
+		if err != nil {
+			// Try alternate SQLite format
+			ca, err = time.Parse("2006-01-02 15:04:05", createdAtStr)
+			if err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("parse created_at for medication %s: %w", m.ID, err)
+			}
+		}
+		m.CreatedAt = ca
 		meds = append(meds, m)
 	}
 	if err := rows.Err(); err != nil {
@@ -278,6 +290,11 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 
 				// Must be within last 24 hours
 				if scheduledUTC.Before(cutoff) {
+					continue
+				}
+
+				// Skip doses scheduled before the medication was created
+				if scheduledUTC.Before(m.CreatedAt) {
 					continue
 				}
 
