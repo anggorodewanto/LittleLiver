@@ -823,3 +823,89 @@ func TestDashboardHandler_ActiveAlerts_IgnoresDateRange(t *testing.T) {
 		t.Error("expected acholic_stool alert even when querying only today (alerts are global)")
 	}
 }
+
+func TestDashboardHandler_ScheduledMed_DueNowClearsAfterLogging(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	// Create a med scheduled at the current hour (so it's "due now")
+	now := time.Now().UTC()
+	schedTime := now.Add(-10 * time.Minute).Format("15:04") // 10 min ago = within grace window
+	tz := "UTC"
+	sched := `["` + schedTime + `"]`
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil, nil)
+
+	// Before logging: med should be "due now" (next_dose_at is today's schedule time)
+	_, resp1 := doDashboardRequest(t, db, user.ID, baby.ID, "")
+	if len(resp1.UpcomingMeds) != 1 {
+		t.Fatalf("expected 1 upcoming med before logging, got %d", len(resp1.UpcomingMeds))
+	}
+	if resp1.UpcomingMeds[0].NextDoseAt == nil {
+		t.Fatal("expected next_dose_at to be set before logging")
+	}
+	// The next_dose_at should be today's schedule time (due now)
+	nextDose1, _ := time.Parse("2006-01-02T15:04:05Z", *resp1.UpcomingMeds[0].NextDoseAt)
+	if nextDose1.Format("2006-01-02") != now.Format("2006-01-02") {
+		t.Fatalf("expected next_dose_at to be today, got %s", *resp1.UpcomingMeds[0].NextDoseAt)
+	}
+
+	// Log the dose
+	givenAt := now.Format("2006-01-02T15:04:05Z")
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, &schedTime, &givenAt, false, nil, nil)
+
+	// After logging: next_dose_at should advance to tomorrow (not still show today)
+	_, resp2 := doDashboardRequest(t, db, user.ID, baby.ID, "")
+	if len(resp2.UpcomingMeds) != 1 {
+		t.Fatalf("expected 1 upcoming med after logging, got %d", len(resp2.UpcomingMeds))
+	}
+	if resp2.UpcomingMeds[0].NextDoseAt == nil {
+		t.Fatal("expected next_dose_at to be set after logging")
+	}
+	nextDose2, _ := time.Parse("2006-01-02T15:04:05Z", *resp2.UpcomingMeds[0].NextDoseAt)
+	tomorrow := now.AddDate(0, 0, 1)
+	if nextDose2.Format("2006-01-02") != tomorrow.Format("2006-01-02") {
+		t.Errorf("after logging, expected next_dose_at to be tomorrow (%s), got %s",
+			tomorrow.Format("2006-01-02"), *resp2.UpcomingMeds[0].NextDoseAt)
+	}
+}
+
+func TestDashboardHandler_ScheduledMed_MultiDose_SkipsCoveredSlots(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	// Create a med with two schedule times: one in the past (covered) and one upcoming
+	now := time.Now().UTC()
+	pastTime := now.Add(-20 * time.Minute).Format("15:04")   // 20 min ago, within grace
+	futureTime := now.Add(20 * time.Minute).Format("15:04")  // 20 min from now
+	tz := "UTC"
+	sched := `["` + pastTime + `","` + futureTime + `"]`
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TwiceMed", "5mg", "twice_daily", &sched, &tz, nil, nil)
+
+	// Log dose for the past schedule time
+	givenAt := now.Add(-15 * time.Minute).Format("2006-01-02T15:04:05Z")
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, &pastTime, &givenAt, false, nil, nil)
+
+	// After logging past dose: next_dose_at should be the future time (not the already-covered past time)
+	_, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
+	if len(resp.UpcomingMeds) != 1 {
+		t.Fatalf("expected 1 upcoming med, got %d", len(resp.UpcomingMeds))
+	}
+	if resp.UpcomingMeds[0].NextDoseAt == nil {
+		t.Fatal("expected next_dose_at to be set")
+	}
+	nextDose, _ := time.Parse("2006-01-02T15:04:05Z", *resp.UpcomingMeds[0].NextDoseAt)
+	// next_dose_at should be the future schedule time, not the past one
+	expectedTime, _ := time.Parse("2006-01-02 15:04", now.Format("2006-01-02")+" "+futureTime)
+	if nextDose.Format("15:04") != expectedTime.Format("15:04") {
+		t.Errorf("expected next_dose_at time to be %s (future slot), got %s",
+			futureTime, nextDose.Format("15:04"))
+	}
+}

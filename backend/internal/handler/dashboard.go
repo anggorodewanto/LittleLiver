@@ -205,7 +205,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			if m.Frequency == "every_x_days" {
 				resp.NextDoseAt = computeNextDoseAtInterval(m)
 			} else {
-				resp.NextDoseAt = computeNextDoseAt(resp.ScheduleTimes, m.Timezone)
+				resp.NextDoseAt = computeNextDoseAt(resp.ScheduleTimes, m.Timezone, m.LastGivenAt)
 			}
 			upcomingMeds = append(upcomingMeds, resp)
 		}
@@ -243,8 +243,9 @@ func computeNextDoseAtInterval(m store.UpcomingMed) *string {
 }
 
 // computeNextDoseAt calculates the next dose time based on schedule_times and timezone.
+// It skips schedule slots that are already covered by lastGivenAt (dose logged after that time).
 // Returns nil if no schedule or timezone is available.
-func computeNextDoseAt(scheduleTimes []string, tz *string) *string {
+func computeNextDoseAt(scheduleTimes []string, tz *string, lastGivenAt *time.Time) *string {
 	if len(scheduleTimes) == 0 || tz == nil {
 		return nil
 	}
@@ -263,10 +264,14 @@ func computeNextDoseAt(scheduleTimes []string, tz *string) *string {
 
 	// Check today's schedule times that are either upcoming or recently
 	// passed (within the overdue grace window so the frontend can still
-	// show them as "due now").
+	// show them as "due now"). Skip times already covered by a logged dose.
 	for _, st := range scheduleTimes {
 		t, err := time.ParseInLocation(model.DateFormat+" 15:04", todayStr+" "+st, loc)
 		if err != nil {
+			continue
+		}
+		// Skip this slot if a dose was already logged at or after this schedule time today.
+		if lastGivenAt != nil && !lastGivenAt.In(loc).Before(t) {
 			continue
 		}
 		if now.Sub(t) <= overdueGrace && (!found || t.Before(earliest)) {
