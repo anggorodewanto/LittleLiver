@@ -153,6 +153,15 @@
 		(dashboard?.active_alerts ?? []).filter((a) => !dismissedAlertIds.has(a.entry_id))
 	);
 
+	// Medications due within -60min (overdue) to +30min (upcoming)
+	let dueNowMeds = $derived(
+		(dashboard?.upcoming_meds ?? []).filter((med) => {
+			if (!med.next_dose_at) return false;
+			const diffMs = new Date(med.next_dose_at).getTime() - now;
+			return diffMs >= -60 * 60 * 1000 && diffMs <= 30 * 60 * 1000;
+		})
+	);
+
 	function handleQuickLog(type: MetricType): void {
 		if (type === 'med_given') {
 			void goto('/log/med');
@@ -236,6 +245,28 @@
 				</div>
 			{/each}
 		</div>
+	{/if}
+
+	<!-- Due Now -->
+	{#if dueNowMeds.length > 0}
+		{#each dueNowMeds as med (med.id)}
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="due-now-banner"
+				data-testid="due-now-banner"
+				onclick={() => void goto(`/log/med?medicationId=${med.id}`)}
+			>
+				<div class="due-now-label">Due Now</div>
+				<div class="due-now-info">
+					<span class="due-now-name">{med.name}</span>
+					<span class="due-now-dose">{med.dose}</span>
+				</div>
+				<div class="due-now-countdown">
+					{formatCountdown(med.next_dose_at!)}
+				</div>
+			</div>
+		{/each}
 	{/if}
 
 	<!-- Summary Cards -->
@@ -403,6 +434,53 @@
 		background: transparent;
 		color: var(--color-text-muted);
 		border: 1px solid var(--color-border);
+	}
+
+	.due-now-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-3) var(--space-4);
+		margin-bottom: var(--space-4);
+		border-radius: var(--radius-md);
+		background: var(--color-primary);
+		color: white;
+		cursor: pointer;
+		box-shadow: var(--shadow-sm);
+	}
+
+	.due-now-label {
+		font-size: var(--font-size-xs);
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		background: rgba(255, 255, 255, 0.2);
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-sm);
+		white-space: nowrap;
+	}
+
+	.due-now-info {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.due-now-name {
+		font-weight: 600;
+	}
+
+	.due-now-dose {
+		font-size: var(--font-size-sm);
+		opacity: 0.85;
+	}
+
+	.due-now-countdown {
+		font-size: var(--font-size-sm);
+		font-weight: 500;
+		opacity: 0.9;
+		text-align: right;
+		white-space: nowrap;
 	}
 
 	.summary-cards {

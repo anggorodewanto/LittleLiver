@@ -279,7 +279,7 @@ describe('TodayDashboard', () => {
 					frequency: 'twice_daily',
 					schedule_times: ['08:00', '20:00'],
 					timezone: 'America/New_York',
-					next_dose_at: '2026-03-19T11:15:00Z'
+					next_dose_at: '2026-03-19T10:00:00Z' // 2 hours overdue (outside due-now window)
 				}
 			]
 		};
@@ -451,6 +451,152 @@ describe('TodayDashboard', () => {
 		render(TodayDashboard, { props: { babyId: 'baby-1' } });
 
 		expect(await screen.findByText(/failed to load/i)).toBeInTheDocument();
+	});
+
+	// --- Due Now Banner ---
+
+	it('shows due-now banner for medication due within 30 minutes', async () => {
+		const now = new Date('2026-03-19T12:00:00Z');
+		vi.useFakeTimers({ now });
+
+		const dueNowResponse = {
+			...mockDashboardResponse,
+			upcoming_meds: [
+				{
+					id: 'med-1',
+					name: 'Ursodiol',
+					dose: '50mg',
+					frequency: 'twice_daily',
+					schedule_times: ['08:00', '20:00'],
+					timezone: 'America/New_York',
+					next_dose_at: '2026-03-19T12:10:00Z' // 10 min from now
+				}
+			]
+		};
+		mockGet.mockResolvedValue(dueNowResponse);
+
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		const banner = await screen.findByTestId('due-now-banner');
+		expect(banner).toBeInTheDocument();
+		expect(banner.textContent).toContain('Due Now');
+		expect(banner.textContent).toContain('Ursodiol');
+		expect(banner.textContent).toContain('50mg');
+
+		vi.useRealTimers();
+	});
+
+	it('shows due-now banner for overdue medication (within 60 minutes)', async () => {
+		const now = new Date('2026-03-19T12:00:00Z');
+		vi.useFakeTimers({ now });
+
+		const overdueResponse = {
+			...mockDashboardResponse,
+			upcoming_meds: [
+				{
+					id: 'med-1',
+					name: 'Ursodiol',
+					dose: '50mg',
+					frequency: 'twice_daily',
+					schedule_times: ['08:00', '20:00'],
+					timezone: 'America/New_York',
+					next_dose_at: '2026-03-19T11:30:00Z' // 30 min overdue
+				}
+			]
+		};
+		mockGet.mockResolvedValue(overdueResponse);
+
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		expect(await screen.findByText(/due now/i)).toBeInTheDocument();
+
+		vi.useRealTimers();
+	});
+
+	it('does not show due-now banner for medication more than 30 min in the future', async () => {
+		const now = new Date('2026-03-19T12:00:00Z');
+		vi.useFakeTimers({ now });
+
+		const futureResponse = {
+			...mockDashboardResponse,
+			upcoming_meds: [
+				{
+					id: 'med-1',
+					name: 'Ursodiol',
+					dose: '50mg',
+					frequency: 'twice_daily',
+					schedule_times: ['08:00', '20:00'],
+					timezone: 'America/New_York',
+					next_dose_at: '2026-03-19T14:00:00Z' // 2 hours away
+				}
+			]
+		};
+		mockGet.mockResolvedValue(futureResponse);
+
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		await screen.findByText(/ursodiol/i);
+		expect(screen.queryByText(/due now/i)).not.toBeInTheDocument();
+
+		vi.useRealTimers();
+	});
+
+	it('navigates to dose log form when tapping due-now banner', async () => {
+		const now = new Date('2026-03-19T12:00:00Z');
+		vi.useFakeTimers({ now });
+
+		const dueNowResponse = {
+			...mockDashboardResponse,
+			upcoming_meds: [
+				{
+					id: 'med-1',
+					name: 'Ursodiol',
+					dose: '50mg',
+					frequency: 'twice_daily',
+					schedule_times: ['08:00', '20:00'],
+					timezone: 'America/New_York',
+					next_dose_at: '2026-03-19T12:10:00Z'
+				}
+			]
+		};
+		mockGet.mockResolvedValue(dueNowResponse);
+
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		const banner = await screen.findByTestId('due-now-banner');
+		await fireEvent.click(banner);
+
+		expect(goto).toHaveBeenCalledWith('/log/med?medicationId=med-1');
+
+		vi.useRealTimers();
+	});
+
+	it('does not show due-now banner for medication more than 60 min overdue', async () => {
+		const now = new Date('2026-03-19T12:00:00Z');
+		vi.useFakeTimers({ now });
+
+		const longOverdueResponse = {
+			...mockDashboardResponse,
+			upcoming_meds: [
+				{
+					id: 'med-1',
+					name: 'Ursodiol',
+					dose: '50mg',
+					frequency: 'twice_daily',
+					schedule_times: ['08:00', '20:00'],
+					timezone: 'America/New_York',
+					next_dose_at: '2026-03-19T10:30:00Z' // 90 min overdue
+				}
+			]
+		};
+		mockGet.mockResolvedValue(longOverdueResponse);
+
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		await screen.findByText(/ursodiol/i);
+		expect(screen.queryByText(/due now/i)).not.toBeInTheDocument();
+
+		vi.useRealTimers();
 	});
 
 	// --- Quick log buttons ---
