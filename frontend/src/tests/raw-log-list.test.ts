@@ -167,6 +167,157 @@ describe('RawLogList', () => {
 		expect(await screen.findByText(/Output:\s*80\s*mL/)).toBeInTheDocument();
 	});
 
+	it('deleting urine entry also removes linked fluid_log entry', async () => {
+		mockAllEndpoints({
+			urine: {
+				data: [
+					{ id: 'u1', timestamp: '2026-03-31T10:00:00Z', color: 'pale_yellow', volume_ml: 50 }
+				],
+				next_cursor: null
+			},
+			'fluid-log': {
+				data: [
+					{
+						id: 'fl1',
+						timestamp: '2026-03-31T10:00:00Z',
+						direction: 'output',
+						method: 'urine',
+						volume_ml: 50,
+						source_type: 'urine',
+						source_id: 'u1'
+					}
+				],
+				next_cursor: null
+			}
+		});
+		vi.mocked(apiClient.del).mockResolvedValue(undefined);
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		// Wait for both entries to render (2 delete buttons = 2 entries)
+		await waitFor(() => {
+			expect(screen.getAllByRole('button', { name: /delete/i })).toHaveLength(2);
+		});
+
+		// Delete the urine entry (urine appears before fluid in LOG_TYPES)
+		const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
+		await fireEvent.click(deleteButtons[0]);
+
+		const confirmBtn = screen.getByRole('button', { name: /confirm/i });
+		await fireEvent.click(confirmBtn);
+
+		await waitFor(() => {
+			expect(apiClient.del).toHaveBeenCalledWith('/babies/baby-1/urine/u1');
+		});
+
+		// Both entries should be removed - no delete buttons remain
+		await waitFor(() => {
+			expect(screen.queryAllByRole('button', { name: /delete/i })).toHaveLength(0);
+		});
+	});
+
+	it('deleting linked fluid_log entry deletes source instead', async () => {
+		mockAllEndpoints({
+			urine: {
+				data: [
+					{ id: 'u1', timestamp: '2026-03-31T10:00:00Z', color: 'pale_yellow', volume_ml: 50 }
+				],
+				next_cursor: null
+			},
+			'fluid-log': {
+				data: [
+					{
+						id: 'fl1',
+						timestamp: '2026-03-31T10:00:00Z',
+						direction: 'output',
+						method: 'urine',
+						volume_ml: 50,
+						source_type: 'urine',
+						source_id: 'u1'
+					}
+				],
+				next_cursor: null
+			}
+		});
+		vi.mocked(apiClient.del).mockResolvedValue(undefined);
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		// Wait for both entries to render
+		await waitFor(() => {
+			expect(screen.getAllByRole('button', { name: /delete/i })).toHaveLength(2);
+		});
+
+		// Delete the fluid_log entry (second delete button - fluid group comes after urine)
+		const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
+		await fireEvent.click(deleteButtons[1]);
+
+		const confirmBtn = screen.getByRole('button', { name: /confirm/i });
+		await fireEvent.click(confirmBtn);
+
+		// Should call the SOURCE endpoint, not fluid-log
+		await waitFor(() => {
+			expect(apiClient.del).toHaveBeenCalledWith('/babies/baby-1/urine/u1');
+		});
+
+		// Both entries should be removed
+		await waitFor(() => {
+			expect(screen.queryAllByRole('button', { name: /delete/i })).toHaveLength(0);
+		});
+	});
+
+	it('deleting feeding entry also removes linked fluid_log entry', async () => {
+		mockAllEndpoints({
+			feedings: {
+				data: [
+					{ id: 'f1', timestamp: '2026-03-31T10:00:00Z', feed_type: 'formula', volume_ml: 120 }
+				],
+				next_cursor: null
+			},
+			'fluid-log': {
+				data: [
+					{
+						id: 'fl2',
+						timestamp: '2026-03-31T10:00:00Z',
+						direction: 'intake',
+						method: 'formula',
+						volume_ml: 120,
+						source_type: 'feeding',
+						source_id: 'f1'
+					}
+				],
+				next_cursor: null
+			}
+		});
+		vi.mocked(apiClient.del).mockResolvedValue(undefined);
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		// Wait for both entries to render (2 delete buttons)
+		await waitFor(() => {
+			expect(screen.getAllByRole('button', { name: /delete/i })).toHaveLength(2);
+		});
+
+		// Delete the feeding entry (first group)
+		const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
+		await fireEvent.click(deleteButtons[0]);
+
+		const confirmBtn = screen.getByRole('button', { name: /confirm/i });
+		await fireEvent.click(confirmBtn);
+
+		await waitFor(() => {
+			expect(apiClient.del).toHaveBeenCalledWith('/babies/baby-1/feedings/f1');
+		});
+
+		// Both entries should be removed
+		await waitFor(() => {
+			expect(screen.queryAllByRole('button', { name: /delete/i })).toHaveLength(0);
+		});
+
+		// Feeding total should update (no more feeding entries)
+		expect(screen.queryByText(/Feeding:/)).not.toBeInTheDocument();
+	});
+
 	it('does not count fluid intake in output total', async () => {
 		mockAllEndpoints({
 			'fluid-log': {
