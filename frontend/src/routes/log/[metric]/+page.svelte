@@ -65,12 +65,16 @@
 
 	function transformForEdit(metricKey: string, raw: Record<string, unknown>): unknown {
 		if (metricKey === 'medication') {
-			const schedule = raw.schedule as string | null;
-			let scheduleTimes: string[] = [];
-			if (schedule) {
-				try { scheduleTimes = JSON.parse(schedule); } catch { /* empty */ }
-			}
-			return { name: raw.name, dose: raw.dose, frequency: raw.frequency, schedule_times: scheduleTimes, active: raw.active, interval_days: raw.interval_days as number | undefined };
+			return {
+				name: raw.name,
+				dose: raw.dose,
+				frequency: raw.frequency,
+				schedule_times: (raw.schedule_times as string[] | null) ?? [],
+				active: raw.active,
+				interval_days: raw.interval_days as number | undefined,
+				starts_from: raw.starts_from as string | undefined,
+				notes: raw.notes as string | undefined
+			};
 		}
 		if (metricKey === 'med') {
 			return { medication_id: raw.medication_id, skipped: raw.skipped, given_at: raw.given_at, skip_reason: raw.skip_reason, notes: raw.notes };

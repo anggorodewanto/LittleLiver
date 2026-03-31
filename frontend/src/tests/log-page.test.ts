@@ -172,6 +172,42 @@ describe('Log Page', () => {
 		expect(await screen.findByRole('heading')).toHaveTextContent(/edit feeding/i);
 	});
 
+	it('populates schedule times when editing a medication', async () => {
+		activeBaby.set(mockBaby);
+
+		const mockGet = apiClient.get as ReturnType<typeof vi.fn>;
+		mockGet.mockImplementation((url: string) => {
+			if (url.includes('/medications/med-1')) {
+				return Promise.resolve({
+					id: 'med-1',
+					name: 'UDCA (ursodiol)',
+					dose: '50mg',
+					frequency: 'twice_daily',
+					schedule_times: ['08:00', '20:00'],
+					active: true,
+					notes: 'Take with food',
+					interval_days: null,
+					starts_from: null
+				});
+			}
+			return Promise.resolve({ medications: [] });
+		});
+
+		pageStore.set({
+			params: { metric: 'medication' },
+			url: new URL('http://localhost/log/medication?edit=med-1')
+		});
+
+		render(LogPage);
+
+		await screen.findByText(/edit medication/i);
+
+		const timeInputs = screen.getAllByLabelText(/schedule time/i);
+		expect(timeInputs).toHaveLength(2);
+		expect(timeInputs[0]).toHaveValue('08:00');
+		expect(timeInputs[1]).toHaveValue('20:00');
+	});
+
 	it('shows back link to /logs when in edit mode', async () => {
 		activeBaby.set(mockBaby);
 
