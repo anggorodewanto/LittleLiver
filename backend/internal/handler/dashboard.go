@@ -203,7 +203,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 				IntervalDays:  m.IntervalDays,
 			}
 			if m.Frequency == "every_x_days" {
-				resp.NextDoseAt = computeNextDoseAtInterval(m.IntervalDays, m.LastGivenAt, m.CreatedAt, m.Timezone)
+				resp.NextDoseAt = computeNextDoseAtInterval(m)
 			} else {
 				resp.NextDoseAt = computeNextDoseAt(resp.ScheduleTimes, m.Timezone)
 			}
@@ -231,26 +231,13 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 }
 
 // computeNextDoseAtInterval calculates the next dose time for every_x_days medications.
-// Returns midnight of the due date in the medication's timezone, as a UTC ISO string.
-func computeNextDoseAtInterval(intervalDays *int, lastGivenAt *time.Time, createdAt time.Time, tz *string) *string {
-	if intervalDays == nil || tz == nil {
+// Delegates to store.NextDoseTimeInterval for the scheduling logic, then formats as UTC ISO string.
+func computeNextDoseAtInterval(m store.UpcomingMed) *string {
+	farFuture := time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+	dueDate := store.NextDoseTimeInterval(m, farFuture)
+	if dueDate.Equal(farFuture) {
 		return nil
 	}
-
-	loc, err := time.LoadLocation(*tz)
-	if err != nil {
-		return nil
-	}
-
-	anchor := createdAt
-	if lastGivenAt != nil {
-		anchor = *lastGivenAt
-	}
-
-	anchorLocal := anchor.In(loc)
-	anchorDate := time.Date(anchorLocal.Year(), anchorLocal.Month(), anchorLocal.Day(), 0, 0, 0, 0, loc)
-	dueDate := anchorDate.AddDate(0, 0, *intervalDays)
-
 	s := dueDate.UTC().Format(model.DateTimeFormat)
 	return &s
 }
