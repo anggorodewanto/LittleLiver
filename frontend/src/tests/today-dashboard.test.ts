@@ -428,7 +428,7 @@ describe('TodayDashboard', () => {
 		expect(missedMedBanner).not.toBeNull();
 		await fireEvent.click(missedMedBanner!);
 
-		expect(goto).toHaveBeenCalledWith('/log/med?medicationId=med-1');
+		expect(goto).toHaveBeenCalledWith('/log/med?medicationId=med-1&scheduled_time=08%3A00');
 	});
 
 	it('shows medication name in missed_medication alert message', async () => {
@@ -722,5 +722,55 @@ describe('TodayDashboard', () => {
 		expect(screen.getByRole('button', { name: /stool/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /temp/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /medication given/i })).toBeInTheDocument();
+	});
+
+	// --- Auto-refresh on visibility change ---
+
+	it('re-fetches dashboard when page becomes visible again', async () => {
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		await screen.findByText('Missed Medication');
+
+		const callsBefore = mockGet.mock.calls.length;
+
+		// Simulate returning to the page (visibilitychange to visible)
+		Object.defineProperty(document, 'visibilityState', {
+			value: 'visible',
+			writable: true,
+			configurable: true
+		});
+		document.dispatchEvent(new Event('visibilitychange'));
+
+		// Should trigger an additional fetch
+		await vi.waitFor(() => {
+			expect(mockGet.mock.calls.length).toBeGreaterThan(callsBefore);
+		});
+	});
+
+	it('removes missed alert after re-fetch when dose has been logged', async () => {
+		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+
+		await screen.findByText('Missed Medication');
+
+		// Simulate other parent logging the dose — API no longer returns missed alert
+		mockGet.mockResolvedValue({
+			...mockDashboardResponse,
+			active_alerts: mockDashboardResponse.active_alerts.filter(
+				(a) => a.alert_type !== 'missed_medication'
+			)
+		});
+
+		// Simulate returning to page
+		Object.defineProperty(document, 'visibilityState', {
+			value: 'visible',
+			writable: true,
+			configurable: true
+		});
+		document.dispatchEvent(new Event('visibilitychange'));
+
+		// Missed medication alert should disappear
+		await vi.waitFor(() => {
+			expect(screen.queryByText('Missed Medication')).not.toBeInTheDocument();
+		});
 	});
 });

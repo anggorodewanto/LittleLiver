@@ -159,14 +159,13 @@ func TestMedicationNotificationLifecycle(t *testing.T) {
 		t.Fatalf("step 8: expected 201 creating skipped med-log, got %d", status)
 	}
 
-	// --- Step 9: Tick at 20:30 UTC -> skipped dose has NULL given_at,
-	// isDoseSuppressed checks given_at which is NULL for skipped logs,
-	// so the +30 follow-up should still fire. ---
+	// --- Step 9: Tick at 20:30 UTC -> skipped dose has scheduled_time matching
+	// the dose slot, so IsDoseCovered recognizes it and suppresses the follow-up. ---
 	mock6 := &mockPusher{}
 	s6 := notify.NewScheduler(db, mock6)
 	s6.Tick(baseDate.Add(20*time.Hour + 30*time.Minute))
-	if mock6.sendCount() != 1 {
-		t.Fatalf("step 9: expected 1 notification at 20:30 (skipped dose does not suppress), got %d", mock6.sendCount())
+	if mock6.sendCount() != 0 {
+		t.Fatalf("step 9: expected 0 notifications at 20:30 (skipped dose with scheduled_time suppresses), got %d", mock6.sendCount())
 	}
 
 	// --- Step 10: Verify adherence ratio ---

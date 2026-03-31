@@ -675,7 +675,7 @@ func TestIsDoseCovered_NoDoseLogged(t *testing.T) {
 	}
 }
 
-func TestIsDoseCovered_DoseOutsideWindow(t *testing.T) {
+func TestIsDoseCovered_DoseOutsideWindowNoScheduledTime(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
 	defer db.Close()
@@ -688,6 +688,32 @@ func TestIsDoseCovered_DoseOutsideWindow(t *testing.T) {
 
 	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, time.UTC)
 	givenAt := time.Date(2026, 3, 18, 8, 45, 0, 0, time.UTC).Format(model.DateTimeFormat)
+	// Ad-hoc dose with no scheduled_time — only given_at is set
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
+
+	covered, err := store.IsDoseCovered(db, med.ID, scheduledUTC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if covered {
+		t.Error("expected dose to NOT be covered when no scheduled_time and given_at is outside window")
+	}
+}
+
+func TestIsDoseCovered_LateDoseWithMatchingScheduledTime(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	sched := `["08:00"]`
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil, nil)
+
+	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, time.UTC)
+	// Parent logs dose 2 hours late, but scheduled_time matches the dose slot
+	givenAt := time.Date(2026, 3, 18, 10, 0, 0, 0, time.UTC).Format(model.DateTimeFormat)
 	schedStr := scheduledUTC.Format(model.DateTimeFormat)
 	store.CreateMedLog(db, baby.ID, med.ID, user.ID, &schedStr, &givenAt, false, nil, nil)
 
@@ -695,8 +721,34 @@ func TestIsDoseCovered_DoseOutsideWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if covered {
-		t.Error("expected dose to NOT be covered when given_at is outside +/-30 min window")
+	if !covered {
+		t.Error("expected dose to be covered when scheduled_time matches even if given_at is late")
+	}
+}
+
+func TestIsDoseCovered_SkippedDoseWithMatchingScheduledTime(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	sched := `["08:00"]`
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil, nil)
+
+	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, time.UTC)
+	schedStr := scheduledUTC.Format(model.DateTimeFormat)
+	reason := "vomited"
+	// Skipped dose logged hours later, but scheduled_time matches
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, &schedStr, nil, true, &reason, nil)
+
+	covered, err := store.IsDoseCovered(db, med.ID, scheduledUTC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !covered {
+		t.Error("expected dose to be covered when skipped log has matching scheduled_time")
 	}
 }
 

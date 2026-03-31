@@ -46,22 +46,27 @@ func FeverThreshold(method string) float64 {
 }
 
 // IsDoseCovered checks whether a scheduled dose (as a UTC time) has a corresponding
-// med_log entry (given or skipped) within +/-30 min of the scheduled time.
-// This is the shared suppression utility reusable by the scheduler (Phase 34).
+// med_log entry. A dose is covered if:
+//  1. A med_log has a scheduled_time matching the dose slot exactly, OR
+//  2. A given dose has given_at within +/-30 min of the scheduled time, OR
+//  3. A skipped dose (without scheduled_time) was created within +/-30 min.
 func IsDoseCovered(db *sql.DB, medicationID string, scheduledUTC time.Time) (bool, error) {
 	windowStart := scheduledUTC.Add(-30 * time.Minute).Format(model.DateTimeFormat)
 	windowEnd := scheduledUTC.Add(30 * time.Minute).Format(model.DateTimeFormat)
+	scheduledStr := scheduledUTC.Format(model.DateTimeFormat)
 
 	var count int
 	err := db.QueryRow(`
 		SELECT COUNT(*) FROM med_logs
 		WHERE medication_id = ?
 		AND (
-			(skipped = 0 AND datetime(given_at) >= datetime(?) AND datetime(given_at) <= datetime(?))
+			(scheduled_time IS NOT NULL AND strftime('%Y-%m-%dT%H:%M', scheduled_time) = strftime('%Y-%m-%dT%H:%M', ?))
 			OR
-			(skipped = 1 AND datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?))
+			(scheduled_time IS NULL AND skipped = 0 AND datetime(given_at) >= datetime(?) AND datetime(given_at) <= datetime(?))
+			OR
+			(scheduled_time IS NULL AND skipped = 1 AND datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?))
 		)`,
-		medicationID, windowStart, windowEnd, windowStart, windowEnd,
+		medicationID, scheduledStr, windowStart, windowEnd, windowStart, windowEnd,
 	).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("check dose covered: %w", err)

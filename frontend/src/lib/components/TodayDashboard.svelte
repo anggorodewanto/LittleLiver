@@ -246,6 +246,16 @@
 		}, 60000);
 		return () => clearInterval(interval);
 	});
+
+	$effect(() => {
+		function onVisibilityChange() {
+			if (document.visibilityState === 'visible') {
+				void fetchDashboard();
+			}
+		}
+		document.addEventListener('visibilitychange', onVisibilityChange);
+		return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+	});
 </script>
 
 <div class="dashboard">
@@ -265,14 +275,22 @@
 					data-alert-type={alert.alert_type}
 					onclick={(e: MouseEvent) => {
 						if (alert.alert_type === 'missed_medication' && !(e.target as HTMLElement).closest('button')) {
-							const url = alert.medication_id ? `/log/med?medicationId=${alert.medication_id}` : '/log/med';
+							let url = alert.medication_id ? `/log/med?medicationId=${alert.medication_id}` : '/log/med';
+							if (alert.value) {
+								const sep = url.includes('?') ? '&' : '?';
+								url += `${sep}scheduled_time=${encodeURIComponent(String(alert.value))}`;
+							}
 							void goto(url);
 						}
 					}}
 					onkeydown={(e: KeyboardEvent) => {
 						if (alert.alert_type === 'missed_medication' && (e.key === 'Enter' || e.key === ' ') && !(e.target as HTMLElement).closest('button')) {
 							e.preventDefault();
-							const url = alert.medication_id ? `/log/med?medicationId=${alert.medication_id}` : '/log/med';
+							let url = alert.medication_id ? `/log/med?medicationId=${alert.medication_id}` : '/log/med';
+							if (alert.value) {
+								const sep = url.includes('?') ? '&' : '?';
+								url += `${sep}scheduled_time=${encodeURIComponent(String(alert.value))}`;
+							}
 							void goto(url);
 						}
 					}}
