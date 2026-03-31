@@ -32,13 +32,6 @@
 				<span>Trends</span>
 			</a>
 
-			<a href="/log" class="nav-tab log-tab" class:active={currentPath.startsWith('/log')}>
-				<div class="log-btn">
-					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-				</div>
-				<span>Log</span>
-			</a>
-
 			<a href="/medications" class="nav-tab" class:active={currentPath === '/medications'}>
 				<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
 				<span>Meds</span>
@@ -55,6 +48,12 @@
 			<span>Settings</span>
 		</a>
 	</nav>
+
+	{#if $babies.length > 0}
+		<a href="/log" class="fab" class:active={currentPath.startsWith('/log')}>
+			<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+		</a>
+	{/if}
 {/if}
 
 <style>
@@ -112,30 +111,28 @@
 		color: var(--color-primary);
 	}
 
-	.log-tab {
-		position: relative;
-	}
-
-	.log-btn {
-		width: 44px;
-		height: 44px;
+	.fab {
+		position: fixed;
+		bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 16px);
+		right: 16px;
+		width: 56px;
+		height: 56px;
 		border-radius: 50%;
 		background: var(--color-primary);
 		color: var(--color-text-inverse);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		margin-top: -14px;
+		z-index: 110;
 		box-shadow: var(--shadow-md);
-		transition: background-color 0.15s;
+		text-decoration: none;
+		transition: background-color 0.15s, transform 0.15s;
 	}
 
-	.log-tab:hover .log-btn,
-	.log-tab.active .log-btn {
+	.fab:hover,
+	.fab.active {
 		background: var(--color-primary-dark);
-	}
-
-	.log-tab span {
-		margin-top: -2px;
+		text-decoration: none;
+		transform: scale(1.05);
 	}
 </style>
