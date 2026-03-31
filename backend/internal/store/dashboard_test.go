@@ -616,3 +616,73 @@ func TestGetUpcomingMeds_EveryXDays_NoStartsFrom_BackwardsCompat(t *testing.T) {
 		t.Error("expected StartsFrom to be nil when not set")
 	}
 }
+
+func TestGetUpcomingMeds_EveryXDays_StartsFrom_Future_NoDoses(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	intervalDays := 5
+	// starts_from is tomorrow — first dose should be due tomorrow, not tomorrow+5
+	startsFrom := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
+	_, err := store.CreateMedication(db, baby.ID, user.ID, "VitA", "5000IU", "every_x_days", nil, &tz, &intervalDays, &startsFrom)
+	if err != nil {
+		t.Fatalf("create medication: %v", err)
+	}
+
+	meds, err := store.GetUpcomingMeds(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetUpcomingMeds failed: %v", err)
+	}
+	if len(meds) != 1 {
+		t.Fatalf("expected 1 med, got %d", len(meds))
+	}
+
+	// nextDoseTimeInterval should return starts_from (tomorrow), not starts_from + 5 days
+	loc, _ := time.LoadLocation(tz)
+	expectedDate, _ := time.ParseInLocation("2006-01-02", startsFrom, loc)
+	got := store.NextDoseTimeInterval(meds[0], time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC))
+	if !got.Equal(expectedDate) {
+		t.Errorf("expected next dose at %v (starts_from), got %v", expectedDate, got)
+	}
+}
+
+func TestGetUpcomingMeds_EveryXDays_StartsFrom_Past_NoDoses_CycleForward(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	intervalDays := 3
+	// starts_from is 7 days ago, interval=3 → cycle: -7, -4, -1, +2, +5...
+	// Next occurrence >= today should be +2 (2 days from now)
+	startsFrom := time.Now().UTC().AddDate(0, 0, -7).Format("2006-01-02")
+	_, err := store.CreateMedication(db, baby.ID, user.ID, "VitA", "5000IU", "every_x_days", nil, &tz, &intervalDays, &startsFrom)
+	if err != nil {
+		t.Fatalf("create medication: %v", err)
+	}
+
+	meds, err := store.GetUpcomingMeds(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetUpcomingMeds failed: %v", err)
+	}
+	if len(meds) != 1 {
+		t.Fatalf("expected 1 med, got %d", len(meds))
+	}
+
+	loc, _ := time.LoadLocation(tz)
+	sf, _ := time.ParseInLocation("2006-01-02", startsFrom, loc)
+	// Cycle forward: -7 + 3*3 = -7+9 = +2
+	expectedDate := sf.AddDate(0, 0, 3*intervalDays)
+	got := store.NextDoseTimeInterval(meds[0], time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC))
+	if !got.Equal(expectedDate) {
+		t.Errorf("expected next dose at %v, got %v", expectedDate, got)
+	}
+}

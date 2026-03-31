@@ -245,7 +245,7 @@ func nextDoseTime(m UpcomingMed) time.Time {
 
 	// Handle every_x_days frequency: due date is a whole calendar day.
 	if m.Frequency == "every_x_days" {
-		return nextDoseTimeInterval(m, farFuture)
+		return NextDoseTimeInterval(m, farFuture)
 	}
 
 	if m.Schedule == nil || m.Timezone == nil {
@@ -298,7 +298,7 @@ func nextDoseTime(m UpcomingMed) time.Time {
 
 // nextDoseTimeInterval computes the next dose time for an every_x_days medication.
 // Returns start-of-day (midnight) in the medication's timezone for the due date.
-func nextDoseTimeInterval(m UpcomingMed, farFuture time.Time) time.Time {
+func NextDoseTimeInterval(m UpcomingMed, farFuture time.Time) time.Time {
 	if m.IntervalDays == nil || m.Timezone == nil {
 		return farFuture
 	}
@@ -308,21 +308,36 @@ func nextDoseTimeInterval(m UpcomingMed, farFuture time.Time) time.Time {
 		return farFuture
 	}
 
-	// Anchor is the last given_at, or starts_from date, or created_at if no doses.
-	anchor := m.CreatedAt
-	if m.StartsFrom != nil {
-		if sf, err := time.ParseInLocation("2006-01-02", *m.StartsFrom, loc); err == nil {
-			anchor = sf
-		}
-	}
+	// If a dose has been logged, next due = last dose + interval_days.
 	if m.LastGivenAt != nil {
-		anchor = *m.LastGivenAt
+		anchorLocal := m.LastGivenAt.In(loc)
+		anchorDate := time.Date(anchorLocal.Year(), anchorLocal.Month(), anchorLocal.Day(), 0, 0, 0, 0, loc)
+		return anchorDate.AddDate(0, 0, *m.IntervalDays)
 	}
 
-	// Compute next due date: anchor date + interval_days, at midnight in med's timezone.
-	anchorLocal := anchor.In(loc)
-	anchorDate := time.Date(anchorLocal.Year(), anchorLocal.Month(), anchorLocal.Day(), 0, 0, 0, 0, loc)
-	dueDate := anchorDate.AddDate(0, 0, *m.IntervalDays)
+	// No doses logged yet. If starts_from is set, the first dose is due on that date.
+	// If starts_from is in the past, cycle forward to the next occurrence >= today.
+	if m.StartsFrom != nil {
+		sf, err := time.ParseInLocation("2006-01-02", *m.StartsFrom, loc)
+		if err != nil {
+			return farFuture
+		}
+		now := time.Now().In(loc)
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		if !sf.Before(today) {
+			return sf
+		}
+		days := int(today.Sub(sf).Hours()/24)
+		intervals := days / *m.IntervalDays
+		dueDate := sf.AddDate(0, 0, intervals**m.IntervalDays)
+		if dueDate.Before(today) {
+			dueDate = dueDate.AddDate(0, 0, *m.IntervalDays)
+		}
+		return dueDate
+	}
 
-	return dueDate
+	// No starts_from, no doses: fall back to created_at + interval_days.
+	anchorLocal := m.CreatedAt.In(loc)
+	anchorDate := time.Date(anchorLocal.Year(), anchorLocal.Month(), anchorLocal.Day(), 0, 0, 0, 0, loc)
+	return anchorDate.AddDate(0, 0, *m.IntervalDays)
 }
