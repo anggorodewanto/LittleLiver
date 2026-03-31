@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toISO8601, fromISO8601 } from '$lib/datetime';
+import { toISO8601, fromISO8601, formatTime } from '$lib/datetime';
 
 describe('toISO8601', () => {
 	it('converts local datetime-local value to correct UTC ISO 8601', () => {
@@ -40,5 +40,19 @@ describe('fromISO8601', () => {
 	it('handles ISO 8601 strings with milliseconds', () => {
 		const result = fromISO8601('2026-06-15T08:45:30.123Z');
 		expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+	});
+});
+
+describe('formatTime', () => {
+	it('returns time-only string from ISO timestamp', () => {
+		const result = formatTime('2026-03-20T14:30:00Z');
+		// Should contain hour and minute but not the date
+		expect(result).not.toContain('2026');
+		expect(result).toMatch(/\d{1,2}:\d{2}/);
+	});
+
+	it('handles timestamps with milliseconds', () => {
+		const result = formatTime('2026-06-15T08:45:30.123Z');
+		expect(result).toMatch(/\d{1,2}:\d{2}/);
 	});
 });

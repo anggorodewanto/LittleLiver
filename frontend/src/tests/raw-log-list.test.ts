@@ -13,33 +13,21 @@ vi.mock('$lib/api', () => ({
 }));
 
 import { apiClient } from '$lib/api';
+import { formatDateISO } from '$lib/datetime';
 import RawLogList from '$lib/components/RawLogList.svelte';
-import type { LogTypeConfig } from '$lib/types/logs';
 
-const feedingType: LogTypeConfig = {
-	key: 'feeding',
-	label: 'Feedings',
-	endpoint: 'feedings',
-	metricParam: 'feeding'
-};
-
-const mockResponse = {
-	data: [
-		{
-			id: 'entry-1',
-			timestamp: '2026-03-19T14:00:00Z',
-			feed_type: 'formula',
-			volume_ml: 120
-		},
-		{
-			id: 'entry-2',
-			timestamp: '2026-03-19T10:00:00Z',
-			feed_type: 'breast_milk',
-			volume_ml: 90
+function mockAllEndpoints(overrides: Record<string, unknown> = {}) {
+	vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+		if (url.includes('/medications')) {
+			return overrides.medications ?? [];
 		}
-	],
-	next_cursor: null
-};
+		const endpoint = Object.keys(overrides).find((k) => url.includes(`/${k}?`));
+		if (endpoint) {
+			return overrides[endpoint];
+		}
+		return { data: [], next_cursor: null };
+	});
+}
 
 describe('RawLogList', () => {
 	beforeEach(() => {
@@ -47,28 +35,54 @@ describe('RawLogList', () => {
 		vi.mocked(apiClient.del).mockReset();
 	});
 
+	it('defaults date range to today', () => {
+		mockAllEndpoints();
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		const today = formatDateISO(new Date());
+		const fromInput = screen.getByLabelText('From date') as HTMLInputElement;
+		const toInput = screen.getByLabelText('To date') as HTMLInputElement;
+		expect(fromInput.value).toBe(today);
+		expect(toInput.value).toBe(today);
+	});
+
 	it('shows loading state while fetching', () => {
-		// Never resolve so it stays loading
 		vi.mocked(apiClient.get).mockReturnValue(new Promise(() => {}));
 
-		render(RawLogList, { props: { babyId: 'baby-1', logType: feedingType } });
+		render(RawLogList, { props: { babyId: 'baby-1' } });
 
 		expect(screen.getByText('Loading...')).toBeInTheDocument();
 	});
 
-	it('renders entries after fetch', async () => {
-		vi.mocked(apiClient.get).mockResolvedValue(mockResponse);
+	it('fetches all log types and renders entries', async () => {
+		mockAllEndpoints({
+			feedings: {
+				data: [
+					{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 }
+				],
+				next_cursor: null
+			},
+			stools: {
+				data: [
+					{ id: 's1', timestamp: '2026-03-31T10:00:00Z', color_rating: 4, consistency: 'soft' }
+				],
+				next_cursor: null
+			}
+		});
 
-		render(RawLogList, { props: { babyId: 'baby-1', logType: feedingType } });
+		render(RawLogList, { props: { babyId: 'baby-1' } });
 
-		expect(await screen.findByText(/120\s*mL/)).toBeInTheDocument();
-		expect(screen.getByText(/90\s*mL/)).toBeInTheDocument();
+		// 120 mL appears in both the row and the total, so use getAllByText
+		const matches = await screen.findAllByText(/120\s*mL/);
+		expect(matches.length).toBeGreaterThanOrEqual(1);
+		expect(screen.getByText(/4\/7/)).toBeInTheDocument();
 	});
 
-	it('shows empty state when no entries', async () => {
-		vi.mocked(apiClient.get).mockResolvedValue({ data: [], next_cursor: null });
+	it('shows empty state when no entries from any type', async () => {
+		mockAllEndpoints();
 
-		render(RawLogList, { props: { babyId: 'baby-1', logType: feedingType } });
+		render(RawLogList, { props: { babyId: 'baby-1' } });
 
 		expect(await screen.findByText('No entries found.')).toBeInTheDocument();
 	});
@@ -76,55 +90,92 @@ describe('RawLogList', () => {
 	it('shows error state on fetch failure', async () => {
 		vi.mocked(apiClient.get).mockRejectedValue(new Error('API error: 500'));
 
-		render(RawLogList, { props: { babyId: 'baby-1', logType: feedingType } });
+		render(RawLogList, { props: { babyId: 'baby-1' } });
 
 		expect(await screen.findByText('API error: 500')).toBeInTheDocument();
 	});
 
-	it('Load More button appears when next_cursor is present', async () => {
-		vi.mocked(apiClient.get).mockResolvedValue({
-			data: [
-				{
-					id: 'entry-1',
-					timestamp: '2026-03-19T14:00:00Z',
-					feed_type: 'formula',
-					volume_ml: 120
-				}
-			],
-			next_cursor: 'cursor-abc'
-		});
-
-		render(RawLogList, { props: { babyId: 'baby-1', logType: feedingType } });
-
-		expect(await screen.findByText('Load More')).toBeInTheDocument();
-	});
-
 	it('delete removes entry from list', async () => {
-		vi.mocked(apiClient.get).mockResolvedValue(mockResponse);
+		mockAllEndpoints({
+			feedings: {
+				data: [
+					{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 },
+					{ id: 'f2', timestamp: '2026-03-31T10:00:00Z', feed_type: 'breast_milk', volume_ml: 90 }
+				],
+				next_cursor: null
+			}
+		});
 		vi.mocked(apiClient.del).mockResolvedValue(undefined);
 
-		render(RawLogList, { props: { babyId: 'baby-1', logType: feedingType } });
+		render(RawLogList, { props: { babyId: 'baby-1' } });
 
-		// Wait for entries to render
 		await screen.findByText(/120\s*mL/);
 
-		// Click delete on first entry
 		const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
 		await fireEvent.click(deleteButtons[0]);
 
-		// Confirm deletion
 		const confirmBtn = screen.getByRole('button', { name: /confirm/i });
 		await fireEvent.click(confirmBtn);
 
 		await waitFor(() => {
-			expect(apiClient.del).toHaveBeenCalledWith('/babies/baby-1/feedings/entry-1');
+			expect(apiClient.del).toHaveBeenCalledWith('/babies/baby-1/feedings/f1');
 		});
 
 		await waitFor(() => {
+			// After deleting f1 (120 mL), only the total "Feeding: 90 mL" should contain mL for 90
 			expect(screen.queryByText(/120\s*mL/)).not.toBeInTheDocument();
 		});
 
-		// Second entry should still be there
-		expect(screen.getByText(/90\s*mL/)).toBeInTheDocument();
+		// 90 mL appears in both the row and the feeding total
+		const remaining = screen.getAllByText(/90\s*mL/);
+		expect(remaining.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it('shows feeding total volume', async () => {
+		mockAllEndpoints({
+			feedings: {
+				data: [
+					{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 },
+					{ id: 'f2', timestamp: '2026-03-31T10:00:00Z', feed_type: 'formula', volume_ml: 80 }
+				],
+				next_cursor: null
+			}
+		});
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		expect(await screen.findByText(/Feeding:\s*200\s*mL/)).toBeInTheDocument();
+	});
+
+	it('shows fluid output total volume', async () => {
+		mockAllEndpoints({
+			'fluid-log': {
+				data: [
+					{ id: 'fl1', timestamp: '2026-03-31T14:00:00Z', direction: 'output', method: 'drain', volume_ml: 50 },
+					{ id: 'fl2', timestamp: '2026-03-31T10:00:00Z', direction: 'output', method: 'drain', volume_ml: 30 }
+				],
+				next_cursor: null
+			}
+		});
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		expect(await screen.findByText(/Output:\s*80\s*mL/)).toBeInTheDocument();
+	});
+
+	it('does not count fluid intake in output total', async () => {
+		mockAllEndpoints({
+			'fluid-log': {
+				data: [
+					{ id: 'fl1', timestamp: '2026-03-31T14:00:00Z', direction: 'intake', method: 'oral', volume_ml: 100 },
+					{ id: 'fl2', timestamp: '2026-03-31T10:00:00Z', direction: 'output', method: 'drain', volume_ml: 30 }
+				],
+				next_cursor: null
+			}
+		});
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		expect(await screen.findByText(/Output:\s*30\s*mL/)).toBeInTheDocument();
 	});
 });

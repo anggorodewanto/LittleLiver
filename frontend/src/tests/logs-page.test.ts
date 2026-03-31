@@ -13,7 +13,6 @@ vi.mock('$lib/api', () => ({
 }));
 
 import { activeBaby, _resetBabyStores } from '$lib/stores/baby';
-import { LOG_TYPES } from '$lib/types/logs';
 import LogsPage from '../routes/logs/+page.svelte';
 
 const mockBaby = {
@@ -40,24 +39,12 @@ describe('Logs Page', () => {
 		expect(screen.getByText(/no baby selected/i)).toBeInTheDocument();
 	});
 
-	it('renders type selector with all log types', () => {
+	it('renders heading and log list when baby is active', async () => {
 		activeBaby.set(mockBaby);
 
 		render(LogsPage);
 
-		const select = screen.getByLabelText(/log type/i);
-		expect(select).toBeInTheDocument();
-
-		for (const lt of LOG_TYPES) {
-			expect(screen.getByRole('option', { name: lt.label })).toBeInTheDocument();
-		}
-	});
-
-	it('renders RawLogList for default type (feeding)', async () => {
-		activeBaby.set(mockBaby);
-
-		render(LogsPage);
-
+		expect(screen.getByRole('heading', { name: /logs/i })).toBeInTheDocument();
 		// The RawLogList should render and show empty state since API returns empty data
 		expect(await screen.findByText('No entries found.')).toBeInTheDocument();
 	});

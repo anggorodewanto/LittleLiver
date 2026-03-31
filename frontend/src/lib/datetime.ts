@@ -31,3 +31,7 @@ export function formatDateISO(date: Date): string {
 export function formatDateTime(dt: string): string {
 	return new Date(dt).toLocaleString();
 }
+
+export function formatTime(dt: string): string {
+	return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}

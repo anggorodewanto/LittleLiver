@@ -1,25 +1,27 @@
 <script lang="ts">
 	import { apiClient } from '$lib/api';
-	import LogEntryCard from '$lib/components/LogEntryCard.svelte';
-	import type { LogTypeConfig } from '$lib/types/logs';
+	import LogEntryRow from '$lib/components/LogEntryRow.svelte';
+	import { LOG_TYPES, type LogTypeConfig } from '$lib/types/logs';
 	import { formatDateISO } from '$lib/datetime';
 
 	interface Props {
 		babyId: string;
+	}
+
+	let { babyId }: Props = $props();
+
+	interface TypedEntry {
+		entry: Record<string, unknown>;
 		logType: LogTypeConfig;
 	}
 
-	let { babyId, logType }: Props = $props();
-
-	let entries: Record<string, unknown>[] = $state([]);
-	let nextCursor: string | null = $state(null);
+	let entries: TypedEntry[] = $state([]);
 	let loading = $state(false);
 	let error: string | null = $state(null);
 	let medNames: Record<string, string> = $state({});
 
 	const now = new Date();
-	const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-	let fromDate = $state(formatDateISO(sevenDaysAgo));
+	let fromDate = $state(formatDateISO(now));
 	let toDate = $state(formatDateISO(now));
 
 	interface ApiResponse {
@@ -27,22 +29,31 @@
 		next_cursor: string | null;
 	}
 
-	async function fetchEntries(cursor?: string): Promise<void> {
+	function entryTimestamp(entry: Record<string, unknown>): string {
+		return (entry.timestamp ?? entry.given_at ?? entry.created_at ?? '') as string;
+	}
+
+	async function fetchAllEntries(): Promise<void> {
 		loading = true;
 		error = null;
 
 		try {
-			let url = `/babies/${babyId}/${logType.endpoint}?from=${fromDate}&to=${toDate}`;
-			if (cursor) {
-				url += `&cursor=${cursor}`;
-			}
-			const response = await apiClient.get<ApiResponse>(url);
-			if (cursor) {
-				entries = [...entries, ...response.data];
-			} else {
-				entries = response.data;
-			}
-			nextCursor = response.next_cursor;
+			const results = await Promise.all(
+				LOG_TYPES.map(async (lt) => {
+					const url = `/babies/${babyId}/${lt.endpoint}?from=${fromDate}&to=${toDate}`;
+					const response = await apiClient.get<ApiResponse>(url);
+					return response.data.map((entry) => ({ entry, logType: lt }));
+				})
+			);
+
+			const merged = results.flat();
+			merged.sort((a, b) => {
+				const ta = entryTimestamp(a.entry);
+				const tb = entryTimestamp(b.entry);
+				return tb.localeCompare(ta); // newest first
+			});
+
+			entries = merged;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'An error occurred';
 		} finally {
@@ -50,16 +61,10 @@
 		}
 	}
 
-	function handleLoadMore(): void {
-		if (nextCursor) {
-			fetchEntries(nextCursor);
-		}
-	}
-
-	async function handleDelete(id: string): Promise<void> {
+	async function handleDelete(logType: LogTypeConfig, id: string): Promise<void> {
 		try {
 			await apiClient.del(`/babies/${babyId}/${logType.endpoint}/${id}`);
-			entries = entries.filter((e) => e.id !== id);
+			entries = entries.filter((e) => e.entry.id !== id);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to delete entry';
 		}
@@ -75,22 +80,28 @@
 			}
 			medNames = map;
 		} catch {
-			// Non-critical — entries still render, just without names
+			// Non-critical
 		}
 	}
 
+	let feedingTotalMl = $derived(
+		entries
+			.filter((e) => e.logType.key === 'feeding')
+			.reduce((sum, e) => sum + (Number(e.entry.volume_ml) || 0), 0)
+	);
+
+	let fluidOutputTotalMl = $derived(
+		entries
+			.filter((e) => e.logType.key === 'fluid' && e.entry.direction === 'output')
+			.reduce((sum, e) => sum + (Number(e.entry.volume_ml) || 0), 0)
+	);
+
 	$effect(() => {
-		// Track reactive dependencies
 		babyId;
-		logType;
 		fromDate;
 		toDate;
-		fetchEntries();
-		if (logType.key === 'med-log') {
-			fetchMedNames();
-		} else {
-			medNames = {};
-		}
+		fetchAllEntries();
+		fetchMedNames();
 	});
 </script>
 
@@ -107,16 +118,24 @@
 	{:else if entries.length === 0}
 		<div class="empty">No entries found.</div>
 	{:else}
-		{#each entries as entry (entry.id)}
-			<LogEntryCard {entry} {logType} ondelete={handleDelete} {medNames} />
-		{/each}
+		{#if feedingTotalMl > 0 || fluidOutputTotalMl > 0}
+			<div class="totals">
+				{#if feedingTotalMl > 0}
+					<span class="total-item">Feeding: {feedingTotalMl} mL</span>
+				{/if}
+				{#if fluidOutputTotalMl > 0}
+					<span class="total-item">Output: {fluidOutputTotalMl} mL</span>
+				{/if}
+			</div>
+		{/if}
+		<div class="entry-list">
+			{#each entries as { entry, logType } (entry.id)}
+				<LogEntryRow {entry} {logType} ondelete={(id) => handleDelete(logType, id)} {medNames} />
+			{/each}
+		</div>
 
 		{#if loading}
 			<div class="loading">Loading...</div>
-		{/if}
-
-		{#if nextCursor}
-			<button class="load-more" onclick={handleLoadMore}>Load More</button>
 		{/if}
 	{/if}
 </div>
@@ -125,7 +144,6 @@
 	.log-list {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-3);
 	}
 
 	.date-filters {
@@ -138,8 +156,17 @@
 		flex: 1;
 	}
 
-	.load-more {
-		width: 100%;
-		margin-top: var(--space-3);
+	.entry-list {
+		border-top: 1px solid var(--color-border);
+	}
+
+	.totals {
+		display: flex;
+		gap: var(--space-4);
+		padding: var(--space-2) var(--space-3);
+		margin-bottom: var(--space-2);
+		font-size: var(--font-size-sm);
+		font-weight: 600;
+		color: var(--color-text-muted);
 	}
 </style>
