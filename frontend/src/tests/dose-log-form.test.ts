@@ -207,4 +207,21 @@ describe('DoseLogForm', () => {
 		expect(options.some((o) => o?.includes('Vitamin D'))).toBe(true);
 		expect(options.some((o) => o?.includes('Inactive Med'))).toBe(false);
 	});
+
+	it('pre-populates fields when initialData is provided', async () => {
+		const initialData = {
+			medication_id: 'med-2',
+			skipped: true,
+			skip_reason: 'Vomiting',
+			notes: 'Will retry later'
+		};
+
+		render(DoseLogForm, { props: { onsubmit, babyId: 'baby-1', initialData } });
+
+		await screen.findByLabelText(/medication/i);
+		expect((screen.getByLabelText(/medication/i) as HTMLSelectElement).value).toBe('med-2');
+		expect((screen.getByLabelText(/skip reason/i) as HTMLInputElement).value).toBe('Vomiting');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('Will retry later');
+		expect(screen.getByRole('button', { name: /update dose/i })).toBeInTheDocument();
+	});
 });

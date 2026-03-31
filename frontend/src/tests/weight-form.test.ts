@@ -84,4 +84,20 @@ describe('WeightForm', () => {
 
 		expect(screen.getByText('Save failed')).toBeInTheDocument();
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-06-15T14:30:00Z',
+			weight_kg: 4.5,
+			measurement_source: 'clinic',
+			notes: 'post-feed'
+		};
+
+		render(WeightForm, { props: { onsubmit, initialData } });
+
+		expect((screen.getByLabelText(/weight/i) as HTMLInputElement).value).toBe('4.5');
+		expect((screen.getByLabelText(/source/i) as HTMLSelectElement).value).toBe('clinic');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('post-feed');
+		expect(screen.getByRole('button', { name: /update weight/i })).toBeInTheDocument();
+	});
 });

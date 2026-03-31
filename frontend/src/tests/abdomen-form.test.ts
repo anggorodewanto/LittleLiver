@@ -108,4 +108,22 @@ describe('AbdomenForm', () => {
 
 		expect(screen.getByText('Failed')).toBeInTheDocument();
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-01-15T10:30:00Z',
+			firmness: 'firm',
+			tenderness: true,
+			girth_cm: 35.5,
+			notes: 'slightly swollen'
+		};
+
+		render(AbdomenForm, { props: { onsubmit, onphotoupload, initialData } });
+
+		expect((screen.getByLabelText(/firmness/i) as HTMLSelectElement).value).toBe('firm');
+		expect((screen.getByLabelText(/tenderness/i) as HTMLInputElement).checked).toBe(true);
+		expect((screen.getByLabelText(/girth/i) as HTMLInputElement).value).toBe('35.5');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('slightly swollen');
+		expect(screen.getByRole('button', { name: /update abdomen/i })).toBeInTheDocument();
+	});
 });

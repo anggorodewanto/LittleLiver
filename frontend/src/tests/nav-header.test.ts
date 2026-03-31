@@ -99,6 +99,35 @@ describe('NavHeader', () => {
 
 		expect(screen.getByRole('link', { name: /trends/i })).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: /meds/i })).toBeInTheDocument();
-		expect(screen.getByRole('link', { name: /log/i })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /^log$/i })).toBeInTheDocument();
+	});
+
+	it('shows Logs tab linking to /logs', () => {
+		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
+		babies.set([
+			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null }
+		]);
+		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
+
+		render(NavHeader);
+
+		const logsLink = screen.getByRole('link', { name: /logs/i });
+		expect(logsLink).toBeInTheDocument();
+		expect(logsLink.getAttribute('href')).toBe('/logs');
+	});
+
+	it('Logs tab is active when on /logs path', () => {
+		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
+		babies.set([
+			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null }
+		]);
+		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
+
+		pageStore.set({ url: new URL('http://localhost/logs') });
+
+		render(NavHeader);
+
+		const logsLink = screen.getByRole('link', { name: /logs/i });
+		expect(logsLink.classList.contains('active')).toBe(true);
 	});
 });

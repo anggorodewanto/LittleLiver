@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 	import { COLOR_SWATCHES } from '$lib/stool-colors';
 	import PhotoUpload from './PhotoUpload.svelte';
 
@@ -14,16 +14,26 @@
 		notes?: string;
 	}
 
+	export interface StoolInitialData {
+		timestamp: string;
+		color_rating: number;
+		consistency?: string;
+		volume_estimate?: string;
+		volume_ml?: number;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: StoolPayload) => void;
 		onphotoupload: (file: File) => void;
+		initialData?: StoolInitialData;
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
 		photoKeys?: string[];
 	}
 
-	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
+	let { onsubmit, onphotoupload, initialData, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let colorRating = $state(0);
@@ -33,6 +43,17 @@
 	let volumeMl = $state('');
 	let notes = $state('');
 	let validationError = $state('');
+
+	$effect(() => {
+		if (initialData) {
+			timestamp = fromISO8601(initialData.timestamp);
+			colorRating = initialData.color_rating;
+			consistency = initialData.consistency ?? '';
+			volumeEstimate = initialData.volume_estimate ?? '';
+			volumeMl = String(initialData.volume_ml ?? '');
+			notes = initialData.notes ?? '';
+		}
+	});
 
 	function selectColor(rating: number) {
 		colorRating = rating;
@@ -147,7 +168,7 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Stool'}
+		{submitting ? 'Logging...' : initialData ? 'Update Stool' : 'Log Stool'}
 	</button>
 </form>
 

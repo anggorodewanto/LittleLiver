@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 
 	export interface LabPayload {
 		timestamp: string;
@@ -10,13 +10,23 @@
 		notes?: string;
 	}
 
+	export interface LabInitialData {
+		timestamp: string;
+		test_name: string;
+		value: string;
+		unit?: string;
+		normal_range?: string;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: LabPayload) => void;
+		initialData?: LabInitialData;
 		submitting?: boolean;
 		error?: string;
 	}
 
-	let { onsubmit, submitting = false, error = '' }: Props = $props();
+	let { onsubmit, initialData, submitting = false, error = '' }: Props = $props();
 
 	const QUICK_PICKS = [
 		{ label: 'Total Bilirubin', testName: 'total_bilirubin', unit: 'mg/dL' },
@@ -36,6 +46,16 @@
 	let normalRange = $state('');
 	let notes = $state('');
 	let validationError = $state('');
+
+	$effect(() => {
+		timestamp = initialData ? fromISO8601(initialData.timestamp) : defaultTimestamp();
+		testName = initialData?.test_name ?? '';
+		value = initialData?.value ?? '';
+		unit = initialData?.unit ?? '';
+		normalRange = initialData?.normal_range ?? '';
+		notes = initialData?.notes ?? '';
+		validationError = '';
+	});
 
 	function selectQuickPick(pick: typeof QUICK_PICKS[number]) {
 		testName = pick.testName;
@@ -131,6 +151,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Lab'}
+		{submitting ? 'Logging...' : initialData ? 'Update Lab' : 'Log Lab'}
 	</button>
 </form>

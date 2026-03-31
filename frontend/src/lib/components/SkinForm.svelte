@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 	import PhotoUpload from './PhotoUpload.svelte';
 
 	export interface SkinPayload {
@@ -12,16 +12,26 @@
 		notes?: string;
 	}
 
+	export interface SkinInitialData {
+		timestamp: string;
+		jaundice_level?: string;
+		scleral_icterus: boolean;
+		rashes?: string;
+		bruising?: string;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: SkinPayload) => void;
 		onphotoupload: (file: File) => void;
+		initialData?: SkinInitialData;
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
 		photoKeys?: string[];
 	}
 
-	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
+	let { onsubmit, onphotoupload, initialData, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let jaundiceLevel = $state('');
@@ -29,6 +39,17 @@
 	let rashes = $state('');
 	let bruising = $state('');
 	let notes = $state('');
+
+	$effect(() => {
+		if (initialData) {
+			timestamp = fromISO8601(initialData.timestamp);
+			jaundiceLevel = initialData.jaundice_level ?? '';
+			scleralIcterus = initialData.scleral_icterus;
+			rashes = initialData.rashes ?? '';
+			bruising = initialData.bruising ?? '';
+			notes = initialData.notes ?? '';
+		}
+	});
 
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -105,6 +126,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Skin'}
+		{submitting ? 'Logging...' : initialData ? 'Update Skin' : 'Log Skin'}
 	</button>
 </form>

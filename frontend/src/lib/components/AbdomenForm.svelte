@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 	import PhotoUpload from './PhotoUpload.svelte';
 
 	export interface AbdomenPayload {
@@ -11,16 +11,25 @@
 		notes?: string;
 	}
 
+	export interface AbdomenInitialData {
+		timestamp: string;
+		firmness: string;
+		tenderness: boolean;
+		girth_cm?: number;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: AbdomenPayload) => void;
 		onphotoupload: (file: File) => void;
+		initialData?: AbdomenInitialData;
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
 		photoKeys?: string[];
 	}
 
-	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
+	let { onsubmit, onphotoupload, initialData, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let firmness = $state('');
@@ -28,6 +37,16 @@
 	let girthCm = $state('');
 	let notes = $state('');
 	let validationError = $state('');
+
+	$effect(() => {
+		if (initialData) {
+			timestamp = fromISO8601(initialData.timestamp);
+			firmness = initialData.firmness;
+			tenderness = initialData.tenderness;
+			girthCm = String(initialData.girth_cm ?? '');
+			notes = initialData.notes ?? '';
+		}
+	});
 
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -103,6 +122,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Abdomen'}
+		{submitting ? 'Logging...' : initialData ? 'Update Abdomen' : 'Log Abdomen'}
 	</button>
 </form>

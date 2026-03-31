@@ -140,4 +140,20 @@ describe('TemperatureForm', () => {
 
 		expect(screen.getByText('Failed')).toBeInTheDocument();
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-01-15T10:30:00Z',
+			value: 37.8,
+			method: 'rectal',
+			notes: 'after nap'
+		};
+
+		render(TemperatureForm, { props: { onsubmit, initialData } });
+
+		expect((screen.getByLabelText(/temperature/i) as HTMLInputElement).value).toBe('37.8');
+		expect((screen.getByLabelText(/method/i) as HTMLSelectElement).value).toBe('rectal');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('after nap');
+		expect(screen.getByRole('button', { name: /update temperature/i })).toBeInTheDocument();
+	});
 });

@@ -24,11 +24,13 @@ vi.mock('$lib/api', () => ({
 	apiClient: {
 		get: vi.fn().mockResolvedValue({ medications: [] }),
 		post: vi.fn(),
+		put: vi.fn(),
 		postForm: vi.fn()
 	}
 }));
 
 import { activeBaby, _resetBabyStores } from '$lib/stores/baby';
+import { apiClient } from '$lib/api';
 import LogPage from '../routes/log/[metric]/+page.svelte';
 
 const mockBaby = {
@@ -141,5 +143,59 @@ describe('Log Page', () => {
 		render(LogPage);
 
 		expect(screen.getByRole('heading')).toHaveTextContent(/log temperature/i);
+	});
+
+	it('fetches entry and shows Edit heading when edit query param is present', async () => {
+		activeBaby.set(mockBaby);
+
+		const mockGet = apiClient.get as ReturnType<typeof vi.fn>;
+		mockGet.mockImplementation((url: string) => {
+			if (url.includes('/feedings/entry-1')) {
+				return Promise.resolve({
+					id: 'entry-1',
+					timestamp: '2026-03-19T14:00:00Z',
+					feed_type: 'formula',
+					volume_ml: 120,
+					notes: 'test'
+				});
+			}
+			return Promise.resolve({ medications: [] });
+		});
+
+		pageStore.set({
+			params: { metric: 'feeding' },
+			url: new URL('http://localhost/log/feeding?edit=entry-1')
+		});
+
+		render(LogPage);
+
+		expect(await screen.findByRole('heading')).toHaveTextContent(/edit feeding/i);
+	});
+
+	it('shows back link to /logs when in edit mode', async () => {
+		activeBaby.set(mockBaby);
+
+		const mockGet = apiClient.get as ReturnType<typeof vi.fn>;
+		mockGet.mockImplementation((url: string) => {
+			if (url.includes('/feedings/entry-1')) {
+				return Promise.resolve({
+					id: 'entry-1',
+					timestamp: '2026-03-19T14:00:00Z',
+					feed_type: 'formula'
+				});
+			}
+			return Promise.resolve({ medications: [] });
+		});
+
+		pageStore.set({
+			params: { metric: 'feeding' },
+			url: new URL('http://localhost/log/feeding?edit=entry-1')
+		});
+
+		render(LogPage);
+
+		await screen.findByText(/edit feeding/i);
+		const backLink = screen.getByRole('link', { name: /back/i });
+		expect(backLink.getAttribute('href')).toBe('/logs');
 	});
 });

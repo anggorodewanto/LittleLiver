@@ -89,4 +89,20 @@ describe('UrineForm', () => {
 
 		expect(screen.getByRole('button', { name: /log urine/i })).toBeInTheDocument();
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-06-15T14:30:00Z',
+			color: 'pale_yellow',
+			volume_ml: 50.5,
+			notes: 'normal output'
+		};
+
+		render(UrineForm, { props: { onsubmit, initialData } });
+
+		expect((screen.getByLabelText(/color/i) as HTMLSelectElement).value).toBe('pale_yellow');
+		expect((screen.getByLabelText(/volume/i) as HTMLInputElement).value).toBe('50.5');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('normal output');
+		expect(screen.getByRole('button', { name: /update urine/i })).toBeInTheDocument();
+	});
 });

@@ -11,16 +11,24 @@
 		notes?: string;
 	}
 
+	export interface DoseLogInitialData {
+		medication_id: string;
+		skipped: boolean;
+		skip_reason?: string;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: DoseLogPayload) => void;
 		babyId: string;
 		medicationId?: string;
 		scheduledTime?: string;
+		initialData?: DoseLogInitialData;
 		submitting?: boolean;
 		error?: string;
 	}
 
-	let { onsubmit, babyId, medicationId = '', scheduledTime, submitting = false, error = '' }: Props = $props();
+	let { onsubmit, babyId, medicationId = '', scheduledTime, initialData, submitting = false, error = '' }: Props = $props();
 
 	let medications = $state<Medication[]>([]);
 	let selectedMedicationId = $state('');
@@ -47,7 +55,11 @@
 	});
 
 	$effect(() => {
-		selectedMedicationId = medicationId;
+		selectedMedicationId = initialData?.medication_id ?? medicationId;
+		status = initialData ? (initialData.skipped ? 'skipped' : 'given') : '';
+		skipReason = initialData?.skip_reason ?? '';
+		notes = initialData?.notes ?? '';
+		validationError = '';
 	});
 
 	function selectStatus(s: 'given' | 'skipped'): void {
@@ -138,6 +150,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Dose'}
+		{submitting ? 'Logging...' : initialData ? 'Update Dose' : 'Log Dose'}
 	</button>
 </form>

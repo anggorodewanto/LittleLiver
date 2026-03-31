@@ -119,4 +119,24 @@ describe('FeedingForm', () => {
 
 		expect(screen.getByRole('button', { name: /log feeding/i })).toBeInTheDocument();
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-06-15T14:30:00Z',
+			feed_type: 'formula',
+			volume_ml: 120,
+			cal_density: 24,
+			duration_min: 15,
+			notes: 'tolerated well'
+		};
+
+		render(FeedingForm, { props: { onsubmit, initialData } });
+
+		expect((screen.getByLabelText(/feed type/i) as HTMLSelectElement).value).toBe('formula');
+		expect((screen.getByLabelText(/volume/i) as HTMLInputElement).value).toBe('120');
+		expect((screen.getByLabelText(/caloric density/i) as HTMLInputElement).value).toBe('24');
+		expect((screen.getByLabelText(/duration/i) as HTMLInputElement).value).toBe('15');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('tolerated well');
+		expect(screen.getByRole('button', { name: /update feeding/i })).toBeInTheDocument();
+	});
 });

@@ -185,4 +185,24 @@ describe('LabForm', () => {
 
 		expect(altButton.getAttribute('aria-pressed')).toBe('true');
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-01-15T10:30:00Z',
+			test_name: 'total_bilirubin',
+			value: '1.5',
+			unit: 'mg/dL',
+			normal_range: '0.1-1.2',
+			notes: 'slightly elevated'
+		};
+
+		render(LabForm, { props: { onsubmit, initialData } });
+
+		expect((screen.getByLabelText(/test name/i) as HTMLInputElement).value).toBe('total_bilirubin');
+		expect((screen.getByLabelText(/^value$/i) as HTMLInputElement).value).toBe('1.5');
+		expect((screen.getByLabelText(/unit/i) as HTMLInputElement).value).toBe('mg/dL');
+		expect((screen.getByLabelText(/normal range/i) as HTMLInputElement).value).toBe('0.1-1.2');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('slightly elevated');
+		expect(screen.getByRole('button', { name: /update lab/i })).toBeInTheDocument();
+	});
 });

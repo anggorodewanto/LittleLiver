@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toISO8601 } from '$lib/datetime';
+import { toISO8601, fromISO8601 } from '$lib/datetime';
 
 describe('toISO8601', () => {
 	it('converts local datetime-local value to correct UTC ISO 8601', () => {
@@ -21,5 +21,24 @@ describe('toISO8601', () => {
 
 	it('already-valid ISO 8601 with Z suffix is returned as-is', () => {
 		expect(toISO8601('2026-03-31T15:30:00Z')).toBe('2026-03-31T15:30:00Z');
+	});
+});
+
+describe('fromISO8601', () => {
+	it('converts UTC ISO 8601 to datetime-local format in local timezone', () => {
+		const utcInput = '2026-03-31T15:30:00Z';
+		const result = fromISO8601(utcInput);
+
+		// Result should be in datetime-local format: YYYY-MM-DDTHH:MM
+		expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+
+		// Round-trip: fromISO8601 then toISO8601 should return the same UTC time
+		const roundTrip = toISO8601(result);
+		expect(new Date(roundTrip).getTime()).toBe(new Date(utcInput).getTime());
+	});
+
+	it('handles ISO 8601 strings with milliseconds', () => {
+		const result = fromISO8601('2026-06-15T08:45:30.123Z');
+		expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
 	});
 });

@@ -129,4 +129,18 @@ describe('NotesForm', () => {
 
 		expect(screen.getByText('Failed')).toBeInTheDocument();
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-01-15T10:30:00Z',
+			content: 'Baby seemed fussy today',
+			category: 'behavior'
+		};
+
+		render(NotesForm, { props: { onsubmit, onphotoupload, initialData } });
+
+		expect((screen.getByLabelText(/content/i) as HTMLTextAreaElement).value).toBe('Baby seemed fussy today');
+		expect((screen.getByLabelText(/category/i) as HTMLSelectElement).value).toBe('behavior');
+		expect(screen.getByRole('button', { name: /update note/i })).toBeInTheDocument();
+	});
 });

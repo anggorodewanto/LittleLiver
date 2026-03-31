@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 
 	export interface FeedingPayload {
 		timestamp: string;
@@ -10,13 +10,23 @@
 		notes?: string;
 	}
 
+	export interface FeedingInitialData {
+		timestamp: string;
+		feed_type: string;
+		volume_ml?: number;
+		cal_density?: number;
+		duration_min?: number;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: FeedingPayload) => void;
+		initialData?: FeedingInitialData;
 		submitting?: boolean;
 		error?: string;
 	}
 
-	let { onsubmit, submitting = false, error = '' }: Props = $props();
+	let { onsubmit, initialData, submitting = false, error = '' }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let feedType = $state('');
@@ -25,6 +35,17 @@
 	let durationMin = $state('');
 	let notes = $state('');
 	let validationError = $state('');
+
+	$effect(() => {
+		if (initialData) {
+			timestamp = fromISO8601(initialData.timestamp);
+			feedType = initialData.feed_type;
+			volumeMl = String(initialData.volume_ml ?? '');
+			calDensity = String(initialData.cal_density ?? '');
+			durationMin = String(initialData.duration_min ?? '');
+			notes = initialData.notes ?? '';
+		}
+	});
 
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -104,6 +125,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Feeding'}
+		{submitting ? 'Logging...' : initialData ? 'Update Feeding' : 'Log Feeding'}
 	</button>
 </form>

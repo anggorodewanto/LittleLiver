@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 
 	export interface WeightPayload {
 		timestamp: string;
@@ -8,19 +8,36 @@
 		notes?: string;
 	}
 
+	export interface WeightInitialData {
+		timestamp: string;
+		weight_kg: number;
+		measurement_source?: string;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: WeightPayload) => void;
+		initialData?: WeightInitialData;
 		submitting?: boolean;
 		error?: string;
 	}
 
-	let { onsubmit, submitting = false, error = '' }: Props = $props();
+	let { onsubmit, initialData, submitting = false, error = '' }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let weightKg = $state('');
 	let measurementSource = $state('');
 	let notes = $state('');
 	let validationError = $state('');
+
+	$effect(() => {
+		if (initialData) {
+			timestamp = fromISO8601(initialData.timestamp);
+			weightKg = String(initialData.weight_kg);
+			measurementSource = initialData.measurement_source ?? '';
+			notes = initialData.notes ?? '';
+		}
+	});
 
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -81,6 +98,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Weight'}
+		{submitting ? 'Logging...' : initialData ? 'Update Weight' : 'Log Weight'}
 	</button>
 </form>

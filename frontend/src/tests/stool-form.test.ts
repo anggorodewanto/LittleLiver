@@ -167,4 +167,24 @@ describe('StoolForm', () => {
 		// The warning banner text (separate from the swatch meaning text)
 		expect(screen.getByRole('alert')).toHaveTextContent(/acholic/i);
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-06-15T14:30:00Z',
+			color_rating: 6,
+			consistency: 'soft',
+			volume_estimate: 'medium',
+			volume_ml: 25,
+			notes: 'normal color'
+		};
+
+		render(StoolForm, { props: { onsubmit, onphotoupload, initialData } });
+
+		expect((screen.getByLabelText(/consistency/i) as HTMLSelectElement).value).toBe('soft');
+		expect((screen.getByLabelText(/volume estimate/i) as HTMLSelectElement).value).toBe('medium');
+		expect((screen.getByLabelText(/volume \(mL\)/i) as HTMLInputElement).value).toBe('25');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('normal color');
+		expect(getSwatchButton('Green').getAttribute('aria-pressed')).toBe('true');
+		expect(screen.getByRole('button', { name: /update stool/i })).toBeInTheDocument();
+	});
 });

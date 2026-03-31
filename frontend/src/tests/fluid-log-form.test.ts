@@ -94,4 +94,20 @@ describe('FluidLogForm', () => {
 
 		expect(screen.getByText('Network error')).toBeInTheDocument();
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-01-15T10:30:00Z',
+			method: 'IV',
+			volume_ml: 50,
+			notes: 'slow drip'
+		};
+
+		render(FluidLogForm, { props: { direction: 'intake', onsubmit, initialData } });
+
+		expect((screen.getByLabelText(/method/i) as HTMLInputElement).value).toBe('IV');
+		expect((screen.getByLabelText(/volume/i) as HTMLInputElement).value).toBe('50');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('slow drip');
+		expect(screen.getByRole('button', { name: /update intake/i })).toBeInTheDocument();
+	});
 });

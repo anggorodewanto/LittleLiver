@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 	import PhotoUpload from './PhotoUpload.svelte';
 
 	export interface BruisingPayload {
@@ -12,16 +12,26 @@
 		notes?: string;
 	}
 
+	export interface BruisingInitialData {
+		timestamp: string;
+		location: string;
+		size_estimate: string;
+		size_cm?: number;
+		color?: string;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: BruisingPayload) => void;
 		onphotoupload: (file: File) => void;
+		initialData?: BruisingInitialData;
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
 		photoKeys?: string[];
 	}
 
-	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
+	let { onsubmit, onphotoupload, initialData, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let location = $state('');
@@ -30,6 +40,17 @@
 	let color = $state('');
 	let notes = $state('');
 	let validationError = $state('');
+
+	$effect(() => {
+		if (initialData) {
+			timestamp = fromISO8601(initialData.timestamp);
+			location = initialData.location;
+			sizeEstimate = initialData.size_estimate;
+			sizeCm = String(initialData.size_cm ?? '');
+			color = initialData.color ?? '';
+			notes = initialData.notes ?? '';
+		}
+	});
 
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -116,6 +137,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Bruising'}
+		{submitting ? 'Logging...' : initialData ? 'Update Bruising' : 'Log Bruising'}
 	</button>
 </form>

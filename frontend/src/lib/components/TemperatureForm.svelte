@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 
 	export interface TemperaturePayload {
 		timestamp: string;
@@ -8,19 +8,36 @@
 		notes?: string;
 	}
 
+	export interface TemperatureInitialData {
+		timestamp: string;
+		value: number;
+		method: string;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: TemperaturePayload) => void;
+		initialData?: TemperatureInitialData;
 		submitting?: boolean;
 		error?: string;
 	}
 
-	let { onsubmit, submitting = false, error = '' }: Props = $props();
+	let { onsubmit, initialData, submitting = false, error = '' }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let value = $state('');
 	let method = $state('');
 	let notes = $state('');
 	let validationError = $state('');
+
+	$effect(() => {
+		if (initialData) {
+			timestamp = fromISO8601(initialData.timestamp);
+			value = String(initialData.value);
+			method = initialData.method;
+			notes = initialData.notes ?? '';
+		}
+	});
 
 	const FEVER_THRESHOLDS: Record<string, number> = {
 		rectal: 38.0,
@@ -106,6 +123,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Temperature'}
+		{submitting ? 'Logging...' : initialData ? 'Update Temperature' : 'Log Temperature'}
 	</button>
 </form>

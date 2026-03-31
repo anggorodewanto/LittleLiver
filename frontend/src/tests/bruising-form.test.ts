@@ -137,4 +137,24 @@ describe('BruisingForm', () => {
 
 		expect(screen.getByText('Failed')).toBeInTheDocument();
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-01-15T10:30:00Z',
+			location: 'left arm',
+			size_estimate: 'medium_1-3cm',
+			size_cm: 2.5,
+			color: 'purple',
+			notes: 'appeared overnight'
+		};
+
+		render(BruisingForm, { props: { onsubmit, onphotoupload, initialData } });
+
+		expect((screen.getByLabelText(/location/i) as HTMLInputElement).value).toBe('left arm');
+		expect((screen.getByLabelText(/size estimate/i) as HTMLSelectElement).value).toBe('medium_1-3cm');
+		expect((screen.getByLabelText(/size.*cm/i) as HTMLInputElement).value).toBe('2.5');
+		expect((screen.getByLabelText(/color/i) as HTMLInputElement).value).toBe('purple');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('appeared overnight');
+		expect(screen.getByRole('button', { name: /update bruising/i })).toBeInTheDocument();
+	});
 });

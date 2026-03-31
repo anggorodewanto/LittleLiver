@@ -4,6 +4,7 @@
 	import { activeBaby } from '$lib/stores/baby';
 	import { apiClient } from '$lib/api';
 
+	import { fromISO8601 } from '$lib/datetime';
 	import FeedingForm from '$lib/components/FeedingForm.svelte';
 	import UrineForm from '$lib/components/UrineForm.svelte';
 	import StoolForm from '$lib/components/StoolForm.svelte';
@@ -56,32 +57,38 @@
 	let medicationId = $derived($page.url.searchParams.get('medication_id') ?? '');
 	let scheduledTime = $derived($page.url.searchParams.get('scheduled_time') ?? undefined);
 
-	// Medication edit mode
-	let editMedicationId = $derived($page.url.searchParams.get('edit') ?? '');
-	let editMedicationData = $state<import('$lib/components/MedicationForm.svelte').MedicationInitialData | undefined>(undefined);
+	// Generic edit mode
+	let editId = $derived($page.url.searchParams.get('edit') ?? '');
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	let editData = $state<any>(undefined);
 	let loadingEdit = $state(false);
 
+	function transformForEdit(metricKey: string, raw: Record<string, unknown>): unknown {
+		if (metricKey === 'medication') {
+			const schedule = raw.schedule as string | null;
+			let scheduleTimes: string[] = [];
+			if (schedule) {
+				try { scheduleTimes = JSON.parse(schedule); } catch { /* empty */ }
+			}
+			return { name: raw.name, dose: raw.dose, frequency: raw.frequency, schedule_times: scheduleTimes, active: raw.active };
+		}
+		if (metricKey === 'med') {
+			return { medication_id: raw.medication_id, skipped: raw.skipped, skip_reason: raw.skip_reason, notes: raw.notes };
+		}
+		// All other types have a timestamp field — return as-is (forms use fromISO8601 internally)
+		return raw;
+	}
+
 	$effect(() => {
-		if (metric === 'medication' && editMedicationId && baby) {
+		if (editId && baby && config) {
 			loadingEdit = true;
-			apiClient.get<{ id: string; name: string; dose: string; frequency: string; schedule: string | null; active: boolean }>(`/babies/${baby.id}/medications/${editMedicationId}`)
-				.then((med) => {
-					let scheduleTimes: string[] = [];
-					if (med.schedule) {
-						try { scheduleTimes = JSON.parse(med.schedule); } catch { /* empty */ }
-					}
-					editMedicationData = {
-						name: med.name,
-						dose: med.dose,
-						frequency: med.frequency,
-						schedule_times: scheduleTimes,
-						active: med.active
-					};
-				})
-				.catch(() => { error = 'Failed to load medication'; })
+			editData = undefined;
+			apiClient.get<Record<string, unknown>>(`/babies/${baby.id}/${config.endpoint}/${editId}`)
+				.then((raw) => { editData = transformForEdit(metric, raw); })
+				.catch(() => { error = 'Failed to load entry'; })
 				.finally(() => { loadingEdit = false; });
 		} else {
-			editMedicationData = undefined;
+			editData = undefined;
 		}
 	});
 
@@ -110,10 +117,13 @@
 		submitting = true;
 		error = '';
 		try {
-			// Medication edit mode: use PUT instead of POST
-			if (metric === 'medication' && editMedicationId) {
-				await apiClient.put(`/babies/${baby.id}/medications/${editMedicationId}`, data);
-				goto('/medications');
+			if (editId) {
+				await apiClient.put(`/babies/${baby.id}/${config.endpoint}/${editId}`, data);
+				if (metric === 'medication') {
+					goto('/medications');
+				} else {
+					goto('/logs');
+				}
 			} else {
 				await apiClient.post(`/babies/${baby.id}/${config.endpoint}`, data);
 				goto('/');
@@ -126,47 +136,45 @@
 	}
 </script>
 
-<a href="/" class="back-link">&larr; Back</a>
+<a href={editId ? '/logs' : '/'} class="back-link">&larr; Back</a>
 
 {#if !baby}
 	<p>No baby selected</p>
 {:else if !config}
 	<p>Unknown metric type</p>
+{:else if loadingEdit}
+	<div class="loading">Loading...</div>
 {:else}
-	<h1>{editMedicationId ? 'Edit' : 'Log'} {config.label}</h1>
+	<h1>{editId ? 'Edit' : 'Log'} {config.label}</h1>
 
 	{#if metric === 'feeding'}
-		<FeedingForm onsubmit={handleSubmit} {submitting} {error} />
+		<FeedingForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'urine'}
-		<UrineForm onsubmit={handleSubmit} {submitting} {error} />
+		<UrineForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'stool'}
-		<StoolForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<StoolForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'temperature'}
-		<TemperatureForm onsubmit={handleSubmit} {submitting} {error} />
+		<TemperatureForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'weight'}
-		<WeightForm onsubmit={handleSubmit} {submitting} {error} />
+		<WeightForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'abdomen'}
-		<AbdomenForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<AbdomenForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'skin'}
-		<SkinForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<SkinForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'bruising'}
-		<BruisingForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<BruisingForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'lab'}
-		<LabForm onsubmit={handleSubmit} {submitting} {error} />
+		<LabForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'notes'}
-		<NotesForm onsubmit={handleSubmit} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<NotesForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'medication'}
-		{#if loadingEdit}
-			<div class="loading">Loading medication...</div>
-		{:else}
-			<MedicationForm onsubmit={handleSubmit} initialData={editMedicationData} {submitting} {error} />
-		{/if}
+		<MedicationForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'med'}
-		<DoseLogForm onsubmit={handleSubmit} babyId={baby.id} {medicationId} {scheduledTime} {submitting} {error} />
+		<DoseLogForm onsubmit={handleSubmit} initialData={editData} babyId={baby.id} {medicationId} {scheduledTime} {submitting} {error} />
 	{:else if metric === 'other_intake'}
-		<FluidLogForm direction="intake" onsubmit={handleSubmit} {submitting} {error} />
+		<FluidLogForm direction="intake" onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'other_output'}
-		<FluidLogForm direction="output" onsubmit={handleSubmit} {submitting} {error} />
+		<FluidLogForm direction="output" onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{/if}
 {/if}
 

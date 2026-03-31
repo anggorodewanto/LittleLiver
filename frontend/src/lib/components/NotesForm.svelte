@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 	import PhotoUpload from './PhotoUpload.svelte';
 
 	export interface NotesPayload {
@@ -9,21 +9,35 @@
 		photo_keys?: string[];
 	}
 
+	export interface NotesInitialData {
+		timestamp: string;
+		content: string;
+		category?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: NotesPayload) => void;
 		onphotoupload: (file: File) => void;
+		initialData?: NotesInitialData;
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
 		photoKeys?: string[];
 	}
 
-	let { onsubmit, onphotoupload, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
+	let { onsubmit, onphotoupload, initialData, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let content = $state('');
 	let category = $state('');
 	let validationError = $state('');
+
+	$effect(() => {
+		timestamp = initialData ? fromISO8601(initialData.timestamp) : defaultTimestamp();
+		content = initialData?.content ?? '';
+		category = initialData?.category ?? '';
+		validationError = '';
+	});
 
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -87,6 +101,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Note'}
+		{submitting ? 'Logging...' : initialData ? 'Update Note' : 'Log Note'}
 	</button>
 </form>

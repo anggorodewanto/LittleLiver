@@ -94,4 +94,24 @@ describe('SkinForm', () => {
 
 		expect(screen.getByText('Failed')).toBeInTheDocument();
 	});
+
+	it('pre-populates fields when initialData is provided', () => {
+		const initialData = {
+			timestamp: '2025-01-15T10:30:00Z',
+			jaundice_level: 'mild_face',
+			scleral_icterus: true,
+			rashes: 'mild rash on cheeks',
+			bruising: 'small bruise on arm',
+			notes: 'looks better today'
+		};
+
+		render(SkinForm, { props: { onsubmit, onphotoupload, initialData } });
+
+		expect((screen.getByLabelText(/jaundice/i) as HTMLSelectElement).value).toBe('mild_face');
+		expect((screen.getByLabelText(/scleral icterus/i) as HTMLInputElement).checked).toBe(true);
+		expect((screen.getByLabelText(/rashes/i) as HTMLInputElement).value).toBe('mild rash on cheeks');
+		expect((screen.getByLabelText(/bruising/i) as HTMLInputElement).value).toBe('small bruise on arm');
+		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('looks better today');
+		expect(screen.getByRole('button', { name: /update skin/i })).toBeInTheDocument();
+	});
 });

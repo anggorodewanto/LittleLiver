@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 
 	export interface UrinePayload {
 		timestamp: string;
@@ -8,18 +8,35 @@
 		notes?: string;
 	}
 
+	export interface UrineInitialData {
+		timestamp: string;
+		color?: string;
+		volume_ml?: number;
+		notes?: string;
+	}
+
 	interface Props {
 		onsubmit: (data: UrinePayload) => void;
+		initialData?: UrineInitialData;
 		submitting?: boolean;
 		error?: string;
 	}
 
-	let { onsubmit, submitting = false, error = '' }: Props = $props();
+	let { onsubmit, initialData, submitting = false, error = '' }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let color = $state('');
 	let volumeMl = $state('');
 	let notes = $state('');
+
+	$effect(() => {
+		if (initialData) {
+			timestamp = fromISO8601(initialData.timestamp);
+			color = initialData.color ?? '';
+			volumeMl = String(initialData.volume_ml ?? '');
+			notes = initialData.notes ?? '';
+		}
+	});
 
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -73,6 +90,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : 'Log Urine'}
+		{submitting ? 'Logging...' : initialData ? 'Update Urine' : 'Log Urine'}
 	</button>
 </form>

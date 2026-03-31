@@ -16,6 +16,14 @@ export function toISO8601(datetimeLocal: string): string {
 	return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+/** Convert a UTC ISO 8601 string to a datetime-local value (YYYY-MM-DDTHH:MM) in the user's local timezone. */
+export function fromISO8601(iso: string): string {
+	const d = new Date(iso);
+	const offset = d.getTimezoneOffset();
+	const local = new Date(d.getTime() - offset * 60000);
+	return local.toISOString().slice(0, 16);
+}
+
 export function formatDateISO(date: Date): string {
 	return date.toISOString().split('T')[0];
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { defaultTimestamp, toISO8601 } from '$lib/datetime';
+	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 
 	export interface FluidLogPayload {
 		timestamp: string;
@@ -9,20 +9,36 @@
 		notes?: string;
 	}
 
+	export interface FluidLogInitialData {
+		timestamp: string;
+		method: string;
+		volume_ml?: number;
+		notes?: string;
+	}
+
 	interface Props {
 		direction: 'intake' | 'output';
 		onsubmit: (data: FluidLogPayload) => void;
+		initialData?: FluidLogInitialData;
 		submitting?: boolean;
 		error?: string;
 	}
 
-	let { direction, onsubmit, submitting = false, error = '' }: Props = $props();
+	let { direction, onsubmit, initialData, submitting = false, error = '' }: Props = $props();
 
 	let timestamp = $state(defaultTimestamp());
 	let method = $state('');
 	let volumeMl = $state('');
 	let notes = $state('');
 	let validationError = $state('');
+
+	$effect(() => {
+		timestamp = initialData ? fromISO8601(initialData.timestamp) : defaultTimestamp();
+		method = initialData?.method ?? '';
+		volumeMl = String(initialData?.volume_ml ?? '');
+		notes = initialData?.notes ?? '';
+		validationError = '';
+	});
 
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -80,6 +96,6 @@
 	{/if}
 
 	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : `Log ${direction === 'intake' ? 'Intake' : 'Output'}`}
+		{submitting ? 'Logging...' : initialData ? `Update ${direction === 'intake' ? 'Intake' : 'Output'}` : `Log ${direction === 'intake' ? 'Intake' : 'Output'}`}
 	</button>
 </form>
