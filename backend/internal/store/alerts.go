@@ -47,12 +47,12 @@ func FeverThreshold(method string) float64 {
 
 // IsDoseCovered checks whether a scheduled dose (as a UTC time) has a corresponding
 // med_log entry. A dose is covered if:
-//  1. A med_log has a scheduled_time matching the dose slot exactly, OR
-//  2. A given dose has given_at within +/-30 min of the scheduled time, OR
-//  3. A skipped dose (without scheduled_time) was created within +/-30 min.
+//  1. A med_log has a scheduled_time matching the dose slot (minute precision), OR
+//  2. A given dose (no scheduled_time) has given_at within -30 min to +6h of scheduled time, OR
+//  3. A skipped dose (no scheduled_time) was created within -30 min to +6h.
 func IsDoseCovered(db *sql.DB, medicationID string, scheduledUTC time.Time) (bool, error) {
 	windowStart := scheduledUTC.Add(-30 * time.Minute).Format(model.DateTimeFormat)
-	windowEnd := scheduledUTC.Add(30 * time.Minute).Format(model.DateTimeFormat)
+	windowEnd := scheduledUTC.Add(6 * time.Hour).Format(model.DateTimeFormat)
 	scheduledStr := scheduledUTC.Format(model.DateTimeFormat)
 
 	var count int

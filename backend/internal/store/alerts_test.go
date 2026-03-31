@@ -687,8 +687,8 @@ func TestIsDoseCovered_DoseOutsideWindowNoScheduledTime(t *testing.T) {
 	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil, nil)
 
 	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, time.UTC)
-	givenAt := time.Date(2026, 3, 18, 8, 45, 0, 0, time.UTC).Format(model.DateTimeFormat)
-	// Ad-hoc dose with no scheduled_time — only given_at is set
+	// 7 hours late with no scheduled_time — beyond the extended +6h window
+	givenAt := time.Date(2026, 3, 18, 15, 0, 0, 0, time.UTC).Format(model.DateTimeFormat)
 	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
 
 	covered, err := store.IsDoseCovered(db, med.ID, scheduledUTC)
@@ -696,7 +696,57 @@ func TestIsDoseCovered_DoseOutsideWindowNoScheduledTime(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if covered {
-		t.Error("expected dose to NOT be covered when no scheduled_time and given_at is outside window")
+		t.Error("expected dose to NOT be covered when no scheduled_time and given_at is beyond extended window")
+	}
+}
+
+func TestIsDoseCovered_LateDoseNoScheduledTimeWithinExtendedWindow(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	sched := `["08:00"]`
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil, nil)
+
+	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, time.UTC)
+	// Dose logged 2 hours late with no scheduled_time (pre-fix behavior)
+	givenAt := time.Date(2026, 3, 18, 10, 0, 0, 0, time.UTC).Format(model.DateTimeFormat)
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
+
+	covered, err := store.IsDoseCovered(db, med.ID, scheduledUTC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !covered {
+		t.Error("expected dose to be covered when given_at is within extended +6h window (no scheduled_time)")
+	}
+}
+
+func TestIsDoseCovered_LateDoseNoScheduledTimeBeyondExtendedWindow(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	sched := `["08:00"]`
+	med, _ := store.CreateMedication(db, baby.ID, user.ID, "TestMed", "10mg", "once_daily", &sched, &tz, nil, nil)
+
+	scheduledUTC := time.Date(2026, 3, 18, 8, 0, 0, 0, time.UTC)
+	// Dose logged 7 hours late with no scheduled_time — beyond extended window
+	givenAt := time.Date(2026, 3, 18, 15, 0, 0, 0, time.UTC).Format(model.DateTimeFormat)
+	store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
+
+	covered, err := store.IsDoseCovered(db, med.ID, scheduledUTC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if covered {
+		t.Error("expected dose to NOT be covered when given_at is beyond +6h extended window")
 	}
 }
 
