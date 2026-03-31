@@ -59,7 +59,7 @@ func TestGetDashboardSummary_WithData(t *testing.T) {
 
 	// Insert 2 feedings with calories
 	vol := 120.0
-	calDen := 20.0 // 20 kcal/oz
+	calDen := 0.676 // kcal/mL (~20 kcal/oz)
 	store.CreateFeeding(db, baby.ID, user.ID, ts, "formula", &vol, &calDen, nil, nil, 67.0)
 	store.CreateFeeding(db, baby.ID, user.ID, ts2, "breast_milk", nil, nil, nil, nil, 67.0)
 
@@ -86,8 +86,8 @@ func TestGetDashboardSummary_WithData(t *testing.T) {
 	if summary.TotalFeeds != 2 {
 		t.Errorf("expected 2 total_feeds, got %d", summary.TotalFeeds)
 	}
-	// formula: 120ml * (20 kcal/oz / 29.5735 ml/oz) ~= 81.13, breast_milk default: 67.0
-	expectedCal := 120.0*(20.0/29.5735) + 67.0
+	// formula: 120ml * 0.676 kcal/mL = 81.12, breast_milk default: 67.0
+	expectedCal := 120.0*0.676 + 67.0
 	if summary.TotalCalories < expectedCal-1.0 || summary.TotalCalories > expectedCal+1.0 {
 		t.Errorf("expected total_calories ~%.1f, got %.1f", expectedCal, summary.TotalCalories)
 	}

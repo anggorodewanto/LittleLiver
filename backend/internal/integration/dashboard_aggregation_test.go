@@ -198,8 +198,8 @@ func TestDashboardAggregation_Integration(t *testing.T) {
 	// Feedings: formula (today), breast_milk (today), solid (yesterday), formula (3 days ago)
 	vol120 := 120.0
 	vol80 := 80.0
-	calDen20 := 20.0
-	calDen24 := 24.0
+	calDen20 := 0.676
+	calDen24 := 0.811
 	f1, _ := store.CreateFeeding(db, babyID, userID, today+"T08:00:00Z", "formula", &vol120, &calDen20, nil, nil, 67.0)
 	f2, _ := store.CreateFeeding(db, babyID, userID, today+"T12:00:00Z", "breast_milk", nil, nil, nil, nil, 67.0)
 	store.CreateFeeding(db, babyID, userID, yesterday+"T09:00:00Z", "solid", &vol80, &calDen24, nil, nil, 67.0)

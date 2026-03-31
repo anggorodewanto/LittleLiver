@@ -25,7 +25,7 @@ func TestCreateFeeding_StoresFieldsCorrectly(t *testing.T) {
 
 	ts := "2025-07-01T10:30:00Z"
 	volMl := 120.0
-	calDensity := 20.0
+	calDensity := 0.676
 	durMin := 15
 	notes := "tolerated well"
 
@@ -55,8 +55,8 @@ func TestCreateFeeding_StoresFieldsCorrectly(t *testing.T) {
 	if feeding.VolumeMl == nil || *feeding.VolumeMl != 120.0 {
 		t.Errorf("expected volume_ml=120, got %v", feeding.VolumeMl)
 	}
-	if feeding.CalDensity == nil || *feeding.CalDensity != 20.0 {
-		t.Errorf("expected cal_density=20, got %v", feeding.CalDensity)
+	if feeding.CalDensity == nil || *feeding.CalDensity != 0.676 {
+		t.Errorf("expected cal_density=0.676, got %v", feeding.CalDensity)
 	}
 	if feeding.DurationMin == nil || *feeding.DurationMin != 15 {
 		t.Errorf("expected duration_min=15, got %v", feeding.DurationMin)
@@ -653,13 +653,13 @@ func TestCreateFeeding_FormulaWithCalDensity_CalculatesCalories(t *testing.T) {
 	}
 
 	vol := 120.0
-	calDen := 24.0
+	calDen := 0.8 // kcal/mL
 	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
 
-	expected := 120.0 * (24.0 / model.MlPerOz)
+	expected := 120.0 * 0.8 // 96.0
 	if feeding.Calories == nil {
 		t.Fatal("expected non-nil calories")
 	}
@@ -691,7 +691,7 @@ func TestCreateFeeding_BreastMilkNoCalDensity_DefaultsTo20(t *testing.T) {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
 
-	expected := 100.0 * (20.0 / model.MlPerOz)
+	expected := 100.0 * model.DefaultCalDensity
 	if feeding.Calories == nil {
 		t.Fatal("expected non-nil calories")
 	}
@@ -701,8 +701,8 @@ func TestCreateFeeding_BreastMilkNoCalDensity_DefaultsTo20(t *testing.T) {
 	if feeding.UsedDefaultCal {
 		t.Error("expected used_default_cal=false for breast_milk with volume")
 	}
-	if feeding.CalDensity == nil || *feeding.CalDensity != 20.0 {
-		t.Errorf("expected cal_density=20.0, got %v", feeding.CalDensity)
+	if feeding.CalDensity == nil || *feeding.CalDensity != model.DefaultCalDensity {
+		t.Errorf("expected cal_density=DefaultCalDensity, got %v", feeding.CalDensity)
 	}
 }
 
@@ -750,7 +750,7 @@ func TestCreateFeeding_BreastDirectWithCalDensity_ReturnsError(t *testing.T) {
 		t.Fatalf("CreateBaby failed: %v", err)
 	}
 
-	calDen := 24.0
+	calDen := 0.8
 	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "breast_milk", nil, &calDen, nil, nil, model.DefaultCalPerFeed)
 	if err == nil {
 		t.Fatal("expected error for breast-direct with cal_density, got nil")
@@ -772,20 +772,20 @@ func TestUpdateFeeding_RecalculatesCalories(t *testing.T) {
 	}
 
 	vol := 120.0
-	calDen := 20.0
+	calDen := 0.67 // kcal/mL
 	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &calDen, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding failed: %v", err)
 	}
 
 	// Update with different cal_density
-	newCalDen := 24.0
+	newCalDen := 0.8 // kcal/mL
 	updated, err := UpdateFeeding(db, baby.ID, feeding.ID, user.ID, "2025-07-01T10:30:00Z", "formula", &vol, &newCalDen, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("UpdateFeeding failed: %v", err)
 	}
 
-	expected := 120.0 * (24.0 / model.MlPerOz)
+	expected := 120.0 * 0.8 // 96.0
 	if updated.Calories == nil {
 		t.Fatal("expected non-nil calories after update")
 	}
@@ -820,7 +820,7 @@ func TestRecalculateFeedingCalories_UpdatesAffectedEntries(t *testing.T) {
 
 	// Create 1 formula feeding (used_default_cal=false) — should NOT be affected
 	vol := 120.0
-	calDen := 24.0
+	calDen := 0.8 // kcal/mL
 	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T18:30:00Z", "formula", &vol, &calDen, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding 3 failed: %v", err)

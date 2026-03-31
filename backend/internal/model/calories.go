@@ -3,10 +3,9 @@ package model
 import "fmt"
 
 const (
-	// MlPerOz is the conversion factor from oz to mL.
-	MlPerOz = 29.5735
-	// DefaultCalDensity is the default caloric density (kcal/oz) for breast_milk and formula.
-	DefaultCalDensity = 20.0
+	// DefaultCalDensity is the default caloric density (kcal/mL) for breast_milk and formula.
+	// Equivalent to ~20 kcal/oz.
+	DefaultCalDensity = 20.0 / 29.5735
 )
 
 // CalorieResult holds the computed calorie values for a feeding entry.
@@ -40,14 +39,14 @@ func CalculateCalories(feedType string, volumeMl, calDensity *float64, defaultCa
 	// Has volume — compute calories
 	if volumeMl != nil {
 		density := calDensity
-		// Auto-apply default 20 kcal/oz for breast_milk and formula when cal_density not provided
+		// Auto-apply default kcal/mL for breast_milk and formula when cal_density not provided
 		if density == nil && (feedType == FeedTypeBreastMilk || feedType == FeedTypeFormula) {
 			d := DefaultCalDensity
 			density = &d
 			result.CalDensity = &d
 		}
 		if density != nil {
-			cal := *volumeMl * (*density / MlPerOz)
+			cal := *volumeMl * *density
 			result.Calories = &cal
 		}
 		return result, nil

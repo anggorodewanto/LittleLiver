@@ -334,7 +334,7 @@ func TestRecalculateFeedingCalories_NoAffectedRows(t *testing.T) {
 
 	// Create only formula feedings (used_default_cal=false)
 	vol := 120.0
-	calDen := 20.0
+	calDen := 0.676
 	_, err = CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:00:00Z", "formula", &vol, &calDen, nil, nil, model.DefaultCalPerFeed)
 	if err != nil {
 		t.Fatalf("CreateFeeding: %v", err)
@@ -508,7 +508,7 @@ func TestCreateFeeding_AllOptionalFieldsPopulated(t *testing.T) {
 	}
 
 	vol := 120.0
-	calDen := 24.0
+	calDen := 0.811
 	durMin := 15
 	notes := "feeding notes"
 	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-07-01T10:00:00Z", "formula", &vol, &calDen, &durMin, &notes, model.DefaultCalPerFeed)
@@ -519,8 +519,8 @@ func TestCreateFeeding_AllOptionalFieldsPopulated(t *testing.T) {
 	if feeding.VolumeMl == nil || *feeding.VolumeMl != 120.0 {
 		t.Errorf("expected volume_ml=120, got %v", feeding.VolumeMl)
 	}
-	if feeding.CalDensity == nil || *feeding.CalDensity != 24.0 {
-		t.Errorf("expected cal_density=24, got %v", feeding.CalDensity)
+	if feeding.CalDensity == nil || *feeding.CalDensity != 0.811 {
+		t.Errorf("expected cal_density=0.811, got %v", feeding.CalDensity)
 	}
 	if feeding.DurationMin == nil || *feeding.DurationMin != 15 {
 		t.Errorf("expected duration_min=15, got %v", feeding.DurationMin)

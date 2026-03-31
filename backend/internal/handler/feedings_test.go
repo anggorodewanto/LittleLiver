@@ -24,7 +24,7 @@ func TestCreateFeedingHandler_Success(t *testing.T) {
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"breast_milk","volume_ml":120,"cal_density":20,"duration_min":15,"notes":"tolerated well"}`
+	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"breast_milk","volume_ml":120,"cal_density":0.676,"duration_min":15,"notes":"tolerated well"}`
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/feedings")
 	req.Body = io.NopCloser(bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -792,7 +792,7 @@ func TestCreateFeedingHandler_FormulaWithCalDensity_CalculatesCalories(t *testin
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"formula","volume_ml":120,"cal_density":24}`
+	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"formula","volume_ml":120,"cal_density":0.8}`
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/feedings")
 	req.Body = io.NopCloser(bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -817,10 +817,10 @@ func TestCreateFeedingHandler_FormulaWithCalDensity_CalculatesCalories(t *testin
 	if resp["calories"] == nil {
 		t.Fatal("expected non-nil calories in response")
 	}
-	// 120 * 24 / 29.5735 ≈ 97.4
+	// 120 * 0.8 = 96.0
 	cal := resp["calories"].(float64)
-	if cal < 97.0 || cal > 98.0 {
-		t.Errorf("expected calories ~97.4, got %.2f", cal)
+	if cal < 95.5 || cal > 96.5 {
+		t.Errorf("expected calories ~96.0, got %.2f", cal)
 	}
 	if resp["used_default_cal"] != false {
 		t.Errorf("expected used_default_cal=false, got %v", resp["used_default_cal"])
@@ -877,7 +877,7 @@ func TestCreateFeedingHandler_BreastDirectWithCalDensity_Returns400(t *testing.T
 	user := testutil.CreateTestUser(t, db)
 	baby := testutil.CreateTestBaby(t, db, user.ID)
 
-	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"breast_milk","cal_density":24}`
+	body := `{"timestamp":"2025-07-01T10:30:00Z","feed_type":"breast_milk","cal_density":0.8}`
 	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/feedings")
 	req.Body = io.NopCloser(bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -926,7 +926,7 @@ func TestCreateFeedingHandler_BreastMilkWithVolume_DefaultsCal(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
-	// 100 * 20 / 29.5735 ≈ 67.6
+	// 100 * DefaultCalDensity ≈ 67.6
 	if resp["calories"] == nil {
 		t.Fatal("expected non-nil calories")
 	}
@@ -934,8 +934,10 @@ func TestCreateFeedingHandler_BreastMilkWithVolume_DefaultsCal(t *testing.T) {
 	if cal < 67.0 || cal > 68.0 {
 		t.Errorf("expected calories ~67.6, got %.2f", cal)
 	}
-	if resp["cal_density"] != 20.0 {
-		t.Errorf("expected cal_density=20.0, got %v", resp["cal_density"])
+	// cal_density should be auto-applied default (~0.676 kcal/mL)
+	calDensity := resp["cal_density"].(float64)
+	if calDensity < 0.67 || calDensity > 0.68 {
+		t.Errorf("expected cal_density ~0.676, got %v", calDensity)
 	}
 	if resp["used_default_cal"] != false {
 		t.Errorf("expected used_default_cal=false, got %v", resp["used_default_cal"])

@@ -102,8 +102,8 @@
 	</div>
 
 	<div>
-		<label for="feeding-cal-density">Caloric density (kcal/oz)</label>
-		<input id="feeding-cal-density" type="number" step="any" min="0" bind:value={calDensity} />
+		<label for="feeding-cal-density">Caloric density (kcal/mL)</label>
+		<input id="feeding-cal-density" type="number" step="any" min="0" bind:value={calDensity} placeholder="0.676 (default)" />
 	</div>
 
 	<div>
