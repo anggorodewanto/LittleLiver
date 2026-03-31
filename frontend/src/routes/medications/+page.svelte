@@ -16,7 +16,7 @@
 		babyId={baby.id}
 		oncreate={() => goto('/log/medication')}
 		onedit={(medicationId) => goto(`/log/medication?edit=${medicationId}`)}
-		onviewlogs={(medicationId) => goto(`/log/med?medication_id=${medicationId}`)}
+		onaddlog={(medicationId) => goto(`/log/med?medication_id=${medicationId}`)}
 	/>
 {/if}
 

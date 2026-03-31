@@ -8,10 +8,10 @@
 		babyId: string;
 		oncreate?: () => void;
 		onedit?: (medicationId: string) => void;
-		onviewlogs?: (medicationId: string) => void;
+		onaddlog?: (medicationId: string) => void;
 	}
 
-	let { babyId, oncreate, onedit, onviewlogs }: Props = $props();
+	let { babyId, oncreate, onedit, onaddlog }: Props = $props();
 
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -78,8 +78,8 @@
 					{#if onedit}
 						<button type="button" onclick={() => onedit(med.id)}>Edit</button>
 					{/if}
-					{#if onviewlogs}
-						<button type="button" onclick={() => onviewlogs(med.id)}>View Logs</button>
+					{#if onaddlog}
+						<button type="button" onclick={() => onaddlog(med.id)}>Add Log</button>
 					{/if}
 				</div>
 			</div>

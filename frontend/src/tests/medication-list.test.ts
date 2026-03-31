@@ -158,15 +158,15 @@ describe('MedicationList', () => {
 		expect(onedit).toHaveBeenCalledWith('med-1');
 	});
 
-	it('calls onviewlogs when View Logs button is clicked', async () => {
-		const onviewlogs = vi.fn();
-		render(MedicationList, { props: { babyId: 'baby-1', onviewlogs } });
+	it('calls onaddlog when Add Log button is clicked', async () => {
+		const onaddlog = vi.fn();
+		render(MedicationList, { props: { babyId: 'baby-1', onaddlog } });
 
 		await screen.findByText('UDCA (ursodiol)');
-		const logButtons = screen.getAllByRole('button', { name: /view logs/i });
+		const logButtons = screen.getAllByRole('button', { name: /add log/i });
 		await fireEvent.click(logButtons[0]);
 
-		expect(onviewlogs).toHaveBeenCalledWith('med-1');
+		expect(onaddlog).toHaveBeenCalledWith('med-1');
 	});
 
 	it('shows empty state when no medications exist', async () => {
