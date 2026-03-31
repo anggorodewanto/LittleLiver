@@ -55,7 +55,7 @@ describe('RawLogList', () => {
 		expect(screen.getByText('Loading...')).toBeInTheDocument();
 	});
 
-	it('fetches all log types and renders entries', async () => {
+	it('fetches all log types and renders grouped by type with headings', async () => {
 		mockAllEndpoints({
 			feedings: {
 				data: [
@@ -73,8 +73,12 @@ describe('RawLogList', () => {
 
 		render(RawLogList, { props: { babyId: 'baby-1' } });
 
-		// 120 mL appears in both the row and the total, so use getAllByText
-		const matches = await screen.findAllByText(/120\s*mL/);
+		// Should show type headings
+		expect(await screen.findByText('Feedings')).toBeInTheDocument();
+		expect(screen.getByText('Stools')).toBeInTheDocument();
+
+		// Should show entry data
+		const matches = screen.getAllByText(/120\s*mL/);
 		expect(matches.length).toBeGreaterThanOrEqual(1);
 		expect(screen.getByText(/4\/7/)).toBeInTheDocument();
 	});
@@ -99,8 +103,8 @@ describe('RawLogList', () => {
 		mockAllEndpoints({
 			feedings: {
 				data: [
-					{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 },
-					{ id: 'f2', timestamp: '2026-03-31T10:00:00Z', feed_type: 'breast_milk', volume_ml: 90 }
+					{ id: 'f1', timestamp: '2026-03-31T10:00:00Z', feed_type: 'formula', volume_ml: 90 },
+					{ id: 'f2', timestamp: '2026-03-31T14:00:00Z', feed_type: 'breast_milk', volume_ml: 120 }
 				],
 				next_cursor: null
 			}
@@ -109,8 +113,10 @@ describe('RawLogList', () => {
 
 		render(RawLogList, { props: { babyId: 'baby-1' } });
 
-		await screen.findByText(/120\s*mL/);
+		// Wait for entries (ascending sort: f1 at 10:00 first, f2 at 14:00 second)
+		await screen.findAllByText(/mL/);
 
+		// Delete the first entry (f1, 90 mL)
 		const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
 		await fireEvent.click(deleteButtons[0]);
 
@@ -122,12 +128,10 @@ describe('RawLogList', () => {
 		});
 
 		await waitFor(() => {
-			// After deleting f1 (120 mL), only the total "Feeding: 90 mL" should contain mL for 90
-			expect(screen.queryByText(/120\s*mL/)).not.toBeInTheDocument();
+			expect(screen.queryByText(/90\s*mL/)).not.toBeInTheDocument();
 		});
 
-		// 90 mL appears in both the row and the feeding total
-		const remaining = screen.getAllByText(/90\s*mL/);
+		const remaining = screen.getAllByText(/120\s*mL/);
 		expect(remaining.length).toBeGreaterThanOrEqual(1);
 	});
 

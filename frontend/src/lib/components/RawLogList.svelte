@@ -50,7 +50,7 @@
 			merged.sort((a, b) => {
 				const ta = entryTimestamp(a.entry);
 				const tb = entryTimestamp(b.entry);
-				return tb.localeCompare(ta); // newest first
+				return ta.localeCompare(tb); // oldest first
 			});
 
 			entries = merged;
@@ -83,6 +83,26 @@
 			// Non-critical
 		}
 	}
+
+	interface TypeGroup {
+		logType: LogTypeConfig;
+		items: TypedEntry[];
+	}
+
+	let groupedEntries: TypeGroup[] = $derived.by(() => {
+		const groups: TypeGroup[] = [];
+		const seen = new Map<string, TypeGroup>();
+		for (const te of entries) {
+			let group = seen.get(te.logType.key);
+			if (!group) {
+				group = { logType: te.logType, items: [] };
+				seen.set(te.logType.key, group);
+				groups.push(group);
+			}
+			group.items.push(te);
+		}
+		return groups;
+	});
 
 	let feedingTotalMl = $derived(
 		entries
@@ -128,11 +148,14 @@
 				{/if}
 			</div>
 		{/if}
-		<div class="entry-list">
-			{#each entries as { entry, logType } (entry.id)}
-				<LogEntryRow {entry} {logType} ondelete={(id) => handleDelete(logType, id)} {medNames} />
-			{/each}
-		</div>
+		{#each groupedEntries as group (group.logType.key)}
+			<h2 class="type-heading">{group.logType.label}</h2>
+			<div class="entry-list">
+				{#each group.items as { entry, logType } (entry.id)}
+					<LogEntryRow {entry} {logType} ondelete={(id) => handleDelete(logType, id)} {medNames} />
+				{/each}
+			</div>
+		{/each}
 
 		{#if loading}
 			<div class="loading">Loading...</div>
@@ -154,6 +177,14 @@
 
 	.date-filters input {
 		flex: 1;
+	}
+
+	.type-heading {
+		font-size: var(--font-size-sm);
+		font-weight: 600;
+		color: var(--color-text-muted);
+		margin: var(--space-3) 0 0 0;
+		padding: var(--space-1) var(--space-3);
 	}
 
 	.entry-list {
