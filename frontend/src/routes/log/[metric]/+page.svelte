@@ -128,6 +128,11 @@
 				} else {
 					goto('/logs');
 				}
+			} else if (Array.isArray(data)) {
+				for (const entry of data) {
+					await apiClient.post(`/babies/${baby.id}/${config.endpoint}`, entry);
+				}
+				goto('/');
 			} else {
 				await apiClient.post(`/babies/${baby.id}/${config.endpoint}`, data);
 				goto('/');

@@ -205,4 +205,172 @@ describe('LabForm', () => {
 		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('slightly elevated');
 		expect(screen.getByRole('button', { name: /update lab/i })).toBeInTheDocument();
 	});
+
+	describe('batch entry (Add More)', () => {
+		it('shows "Add More" button in create mode', () => {
+			render(LabForm, { props: { onsubmit } });
+
+			expect(screen.getByRole('button', { name: /add more/i })).toBeInTheDocument();
+		});
+
+		it('does not show "Add More" button in edit mode', () => {
+			const initialData = {
+				timestamp: '2025-01-15T10:30:00Z',
+				test_name: 'total_bilirubin',
+				value: '1.5'
+			};
+			render(LabForm, { props: { onsubmit, initialData } });
+
+			expect(screen.queryByRole('button', { name: /add more/i })).not.toBeInTheDocument();
+		});
+
+		it('validates current entry before adding', async () => {
+			render(LabForm, { props: { onsubmit } });
+
+			// Click add more with empty form
+			await fireEvent.click(screen.getByRole('button', { name: /add more/i }));
+
+			expect(screen.getByText(/test name is required/i)).toBeInTheDocument();
+		});
+
+		it('adds entry to saved list and resets form fields', async () => {
+			render(LabForm, { props: { onsubmit } });
+
+			// Fill in a lab entry
+			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
+			await fireEvent.input(screen.getByLabelText(/^value$/i), {
+				target: { value: '2.5' }
+			});
+
+			// Click Add More
+			await fireEvent.click(screen.getByRole('button', { name: /add more/i }));
+
+			// Entry should appear in saved list with value
+			expect(screen.getByText(/2\.5/)).toBeInTheDocument();
+
+			// Form fields should be reset
+			expect((screen.getByLabelText(/test name/i) as HTMLInputElement).value).toBe('');
+			expect((screen.getByLabelText(/^value$/i) as HTMLInputElement).value).toBe('');
+			expect((screen.getByLabelText(/unit/i) as HTMLInputElement).value).toBe('');
+		});
+
+		it('preserves timestamp after adding entry', async () => {
+			render(LabForm, { props: { onsubmit } });
+
+			const timestampInput = screen.getByLabelText(/timestamp/i) as HTMLInputElement;
+			const originalTimestamp = timestampInput.value;
+
+			await fireEvent.click(screen.getByRole('button', { name: /^ALT$/i }));
+			await fireEvent.input(screen.getByLabelText(/^value$/i), {
+				target: { value: '30' }
+			});
+			await fireEvent.click(screen.getByRole('button', { name: /add more/i }));
+
+			expect((screen.getByLabelText(/timestamp/i) as HTMLInputElement).value).toBe(originalTimestamp);
+		});
+
+		it('can remove a saved entry', async () => {
+			render(LabForm, { props: { onsubmit } });
+
+			// Add an entry
+			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
+			await fireEvent.input(screen.getByLabelText(/^value$/i), {
+				target: { value: '2.5' }
+			});
+			await fireEvent.click(screen.getByRole('button', { name: /add more/i }));
+
+			// Verify it's there (value displayed in saved entries)
+			expect(screen.getByText(/2\.5/)).toBeInTheDocument();
+
+			// Remove it
+			await fireEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+			// Should be gone (only the quick-pick button remains, not the saved entry summary)
+			expect(screen.queryByText(/2\.5/)).not.toBeInTheDocument();
+		});
+
+		it('submits all saved entries plus current form as array', async () => {
+			render(LabForm, { props: { onsubmit } });
+
+			// Add first entry
+			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
+			await fireEvent.input(screen.getByLabelText(/^value$/i), {
+				target: { value: '2.5' }
+			});
+			await fireEvent.click(screen.getByRole('button', { name: /add more/i }));
+
+			// Fill second entry in form
+			await fireEvent.click(screen.getByRole('button', { name: /^ALT$/i }));
+			await fireEvent.input(screen.getByLabelText(/^value$/i), {
+				target: { value: '45' }
+			});
+
+			// Submit
+			await fireEvent.click(screen.getByRole('button', { name: /log labs/i }));
+
+			expect(onsubmit).toHaveBeenCalledTimes(1);
+			const payload = onsubmit.mock.calls[0][0];
+			expect(Array.isArray(payload)).toBe(true);
+			expect(payload).toHaveLength(2);
+			expect(payload[0].test_name).toBe('total_bilirubin');
+			expect(payload[0].value).toBe('2.5');
+			expect(payload[1].test_name).toBe('ALT');
+			expect(payload[1].value).toBe('45');
+		});
+
+		it('submits only saved entries when current form is empty', async () => {
+			render(LabForm, { props: { onsubmit } });
+
+			// Add an entry
+			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
+			await fireEvent.input(screen.getByLabelText(/^value$/i), {
+				target: { value: '2.5' }
+			});
+			await fireEvent.click(screen.getByRole('button', { name: /add more/i }));
+
+			// Leave form empty and submit
+			await fireEvent.click(screen.getByRole('button', { name: /log labs/i }));
+
+			expect(onsubmit).toHaveBeenCalledTimes(1);
+			const payload = onsubmit.mock.calls[0][0];
+			expect(Array.isArray(payload)).toBe(true);
+			expect(payload).toHaveLength(1);
+			expect(payload[0].test_name).toBe('total_bilirubin');
+		});
+
+		it('shows entry count on submit button when entries are saved', async () => {
+			render(LabForm, { props: { onsubmit } });
+
+			// Add an entry
+			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
+			await fireEvent.input(screen.getByLabelText(/^value$/i), {
+				target: { value: '2.5' }
+			});
+			await fireEvent.click(screen.getByRole('button', { name: /add more/i }));
+
+			// Submit button should indicate batch
+			expect(screen.getByRole('button', { name: /log labs/i })).toBeInTheDocument();
+		});
+
+		it('shares the same timestamp across all batch entries', async () => {
+			render(LabForm, { props: { onsubmit } });
+
+			// Add first entry
+			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
+			await fireEvent.input(screen.getByLabelText(/^value$/i), {
+				target: { value: '2.5' }
+			});
+			await fireEvent.click(screen.getByRole('button', { name: /add more/i }));
+
+			// Add second entry via form and submit
+			await fireEvent.click(screen.getByRole('button', { name: /^ALT$/i }));
+			await fireEvent.input(screen.getByLabelText(/^value$/i), {
+				target: { value: '45' }
+			});
+			await fireEvent.click(screen.getByRole('button', { name: /log labs/i }));
+
+			const payload = onsubmit.mock.calls[0][0];
+			expect(payload[0].timestamp).toBe(payload[1].timestamp);
+		});
+	});
 });
