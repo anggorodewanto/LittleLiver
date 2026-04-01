@@ -5,9 +5,10 @@
 		tests: string[];
 		selected: Set<string>;
 		onchange: (selected: Set<string>) => void;
+		colors?: Map<string, string>;
 	}
 
-	let { tests, selected, onchange }: Props = $props();
+	let { tests, selected, onchange, colors }: Props = $props();
 
 	function selectAll(): void {
 		onchange(new Set());
@@ -35,7 +36,7 @@
 			type="button"
 			class={selected.has(test) ? 'active' : ''}
 			onclick={() => toggleTest(test)}
-		>{labTestLabel(test)}</button>
+		>{#if colors?.has(test)}<span class="color-dot" style="background-color: {colors.get(test)}"></span>{/if}{labTestLabel(test)}</button>
 	{/each}
 </div>
 
@@ -60,6 +61,15 @@
 	.test-filter button:hover {
 		border-color: var(--color-primary);
 		background: var(--color-primary-light);
+	}
+
+	.color-dot {
+		display: inline-block;
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		margin-right: var(--space-1, 4px);
+		vertical-align: middle;
 	}
 
 	.test-filter button.active {

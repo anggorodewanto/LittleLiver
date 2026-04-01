@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import '$lib/chart-setup';
 	import { apiClient } from '$lib/api';
+	import { testColorMap } from '$lib/chart-utils';
 	import { formatDateISO } from '$lib/datetime';
 	import type { LabResult, LabResultsPage } from '$lib/types/lab';
 	import DateRangeSelector from './DateRangeSelector.svelte';
@@ -73,6 +74,8 @@
 		Array.from(new Set(allResults.map((r) => r.test_name))).sort()
 	);
 
+	let testColors = $derived(testColorMap(availableTests));
+
 	let filteredResults = $derived(
 		selectedTests.size === 0
 			? allResults
@@ -124,11 +127,11 @@
 	{:else if allResults.length === 0}
 		<div class="empty">No lab results found for this period.</div>
 	{:else}
-		<TestFilter tests={availableTests} selected={selectedTests} onchange={handleTestFilterChange} />
+		<TestFilter tests={availableTests} selected={selectedTests} onchange={handleTestFilterChange} colors={testColors} />
 
 		<section class="chart-section">
 			<h3>Lab Trends</h3>
-			<LabTrendsChart data={chartData} />
+			<LabTrendsChart data={chartData} colors={testColors} />
 		</section>
 
 		<div class="date-groups">

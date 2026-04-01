@@ -1,5 +1,25 @@
 import type { LegendItem, ChartDataset } from 'chart.js';
 
+export const LINE_COLORS = [
+	'#ef4444',
+	'#3b82f6',
+	'#22c55e',
+	'#f59e0b',
+	'#8b5cf6',
+	'#ec4899',
+	'#06b6d4',
+	'#84cc16'
+];
+
+/** Maps an ordered list of test names to their chart line colors */
+export function testColorMap(testNames: string[]): Map<string, string> {
+	const map = new Map<string, string>();
+	for (let i = 0; i < testNames.length; i++) {
+		map.set(testNames[i], LINE_COLORS[i % LINE_COLORS.length]);
+	}
+	return map;
+}
+
 export const dateTickCallback = (value: string | number) =>
 	new Date(value as number).toLocaleDateString();
 

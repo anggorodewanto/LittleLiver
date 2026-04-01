@@ -137,6 +137,32 @@ describe('LabTrendsChart', () => {
 		expect(bilirubinDs!.data[1].y).toBe(1.8);
 	});
 
+	it('hides chart legend', () => {
+		render(LabTrendsChart, { props: { data: mockLabData } });
+
+		const config = chartConstructorCalls[0][1] as {
+			options: { plugins: { legend: { display: boolean } } };
+		};
+		expect(config.options.plugins.legend.display).toBe(false);
+	});
+
+	it('uses colors from colors prop when provided', () => {
+		const colors = new Map([
+			['total_bilirubin', '#111111'],
+			['ALT', '#222222'],
+			['GGT', '#333333']
+		]);
+		render(LabTrendsChart, { props: { data: mockLabData, colors } });
+
+		const config = chartConstructorCalls[0][1] as {
+			data: { datasets: { label: string; borderColor: string }[] };
+		};
+		const bilirubinDs = config.data.datasets.find((d) => d.label.includes('total_bilirubin') && !d.label.includes('Normal'));
+		const altDs = config.data.datasets.find((d) => d.label.includes('ALT') && !d.label.includes('Normal'));
+		expect(bilirubinDs!.borderColor).toBe('#111111');
+		expect(altDs!.borderColor).toBe('#222222');
+	});
+
 	it('includes units in dataset labels', () => {
 		render(LabTrendsChart, { props: { data: mockLabData } });
 

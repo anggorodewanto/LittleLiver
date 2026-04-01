@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ChartConfiguration } from 'chart.js';
 	import ChartWrapper from './ChartWrapper.svelte';
-	import { dateTickCallback, legendFilter } from '$lib/chart-utils';
+	import { dateTickCallback, LINE_COLORS } from '$lib/chart-utils';
 
 	interface LabDataPoint {
 		timestamp: string;
@@ -12,20 +12,10 @@
 
 	interface Props {
 		data: Record<string, LabDataPoint[]>;
+		colors?: Map<string, string>;
 	}
 
-	let { data }: Props = $props();
-
-	const LINE_COLORS = [
-		'#ef4444',
-		'#3b82f6',
-		'#22c55e',
-		'#f59e0b',
-		'#8b5cf6',
-		'#ec4899',
-		'#06b6d4',
-		'#84cc16'
-	];
+	let { data, colors }: Props = $props();
 
 	const NORMAL_RANGES: Record<string, { min: number; max: number }> = {
 		total_bilirubin: { min: 0, max: 2.0 },
@@ -47,7 +37,7 @@
 
 		for (const testName of testNames) {
 			const points = data[testName];
-			const color = LINE_COLORS[colorIdx % LINE_COLORS.length];
+			const color = colors?.get(testName) ?? LINE_COLORS[colorIdx % LINE_COLORS.length];
 			const unit = points.length > 0 ? points[0].unit : '';
 
 			const mappedPoints = points
@@ -100,7 +90,7 @@
 			options: {
 				responsive: true,
 				plugins: {
-					legend: { labels: { filter: legendFilter } }
+					legend: { display: false }
 				},
 				scales: {
 					x: {

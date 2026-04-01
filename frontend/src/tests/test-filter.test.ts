@@ -73,6 +73,37 @@ describe('TestFilter', () => {
 		expect(astBtn.classList.contains('active')).toBe(false);
 	});
 
+	it('renders color dots when colors prop is provided', () => {
+		const colors = new Map([['ALT', '#ef4444'], ['AST', '#3b82f6']]);
+		const { container } = render(TestFilter, {
+			props: { tests: ['ALT', 'AST'], selected: new Set<string>(), onchange: vi.fn(), colors }
+		});
+
+		const dots = container.querySelectorAll('.color-dot');
+		expect(dots).toHaveLength(2);
+		expect((dots[0] as HTMLElement).style.backgroundColor).toBe('rgb(239, 68, 68)');
+		expect((dots[1] as HTMLElement).style.backgroundColor).toBe('rgb(59, 130, 246)');
+	});
+
+	it('does not render color dots when colors prop is absent', () => {
+		const { container } = render(TestFilter, {
+			props: { tests: ['ALT', 'AST'], selected: new Set<string>(), onchange: vi.fn() }
+		});
+
+		const dots = container.querySelectorAll('.color-dot');
+		expect(dots).toHaveLength(0);
+	});
+
+	it('"All" button never has a color dot', () => {
+		const colors = new Map([['ALT', '#ef4444']]);
+		render(TestFilter, {
+			props: { tests: ['ALT'], selected: new Set<string>(), onchange: vi.fn(), colors }
+		});
+
+		const allBtn = screen.getByRole('button', { name: /all/i });
+		expect(allBtn.querySelector('.color-dot')).toBeNull();
+	});
+
 	it('displays friendly labels for known test names', () => {
 		render(TestFilter, {
 			props: { tests: ['direct_bilirubin', 'GGT'], selected: new Set<string>(), onchange: vi.fn() }
