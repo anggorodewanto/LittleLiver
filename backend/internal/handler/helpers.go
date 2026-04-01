@@ -131,6 +131,7 @@ func mapMetricPage[M any, R any](page *model.MetricPage[M], convert func(*M) R) 
 
 // photoResponse represents a photo with signed URLs in API responses.
 type photoResponse struct {
+	Key          string `json:"key"`
 	URL          string `json:"url"`
 	ThumbnailURL string `json:"thumbnail_url"`
 }
@@ -167,7 +168,7 @@ func resolvePhotos(ctx context.Context, db *sql.DB, objStore storage.ObjectStore
 				log.Printf("sign thumbnail URL for %s: %v", *p.ThumbnailKey, err)
 			}
 		}
-		result = append(result, photoResponse{URL: url, ThumbnailURL: thumbURL})
+		result = append(result, photoResponse{Key: p.R2Key, URL: url, ThumbnailURL: thumbURL})
 	}
 	return result
 }

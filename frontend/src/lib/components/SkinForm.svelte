@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 	import PhotoUpload from './PhotoUpload.svelte';
+	import PhotoThumbnails from './PhotoThumbnails.svelte';
+	import PhotoLightbox from './PhotoLightbox.svelte';
 
 	export interface SkinPayload {
 		timestamp: string;
@@ -21,17 +23,27 @@
 		notes?: string;
 	}
 
+	interface PhotoInfo {
+		key: string;
+		url: string;
+		thumbnail_url: string;
+	}
+
 	interface Props {
 		onsubmit: (data: SkinPayload) => void;
 		onphotoupload: (file: File) => void;
+		onphotoremove?: (key: string) => void;
 		initialData?: SkinInitialData;
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
 		photoKeys?: string[];
+		existingPhotos?: PhotoInfo[];
 	}
 
-	let { onsubmit, onphotoupload, initialData, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
+	let { onsubmit, onphotoupload, onphotoremove, initialData, submitting = false, error = '', uploading = false, photoKeys = [], existingPhotos = [] }: Props = $props();
+
+	let lightboxUrl = $state('');
 
 	let timestamp = $state(defaultTimestamp());
 	let jaundiceLevel = $state('');
@@ -112,6 +124,19 @@
 		<label for="skin-bruising">Bruising</label>
 		<input id="skin-bruising" type="text" bind:value={bruising} />
 	</div>
+
+	{#if existingPhotos.length > 0}
+		<PhotoThumbnails
+			photos={existingPhotos}
+			removable={true}
+			onremove={onphotoremove}
+			onphotoclick={(url) => { lightboxUrl = url; }}
+		/>
+	{/if}
+
+	{#if lightboxUrl}
+		<PhotoLightbox url={lightboxUrl} onclose={() => { lightboxUrl = ''; }} />
+	{/if}
 
 	<PhotoUpload onupload={onphotoupload} {uploading} multiple={true} currentCount={photoKeys.length} hint="Consistent lighting recommended" />
 	<p>{photoKeys.length} / 4 photos</p>

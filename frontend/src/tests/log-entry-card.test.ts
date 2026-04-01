@@ -170,6 +170,43 @@ describe('LogEntryCard', () => {
 		expect(screen.getByText('Vitamin D 400IU')).toBeInTheDocument();
 	});
 
+	it('renders photo thumbnails when entry has photos', () => {
+		const stoolType: LogTypeConfig = {
+			key: 'stool',
+			label: 'Stools',
+			endpoint: 'stools',
+			metricParam: 'stool'
+		};
+		const entry = {
+			id: 's1',
+			timestamp: '2026-03-20T10:00:00Z',
+			color_rating: 5,
+			photos: [
+				{ key: 'photos/a.jpg', url: 'https://example.com/a.jpg', thumbnail_url: 'https://example.com/thumb_a.jpg' }
+			]
+		};
+
+		const { container } = render(LogEntryCard, { props: { entry, logType: stoolType, ondelete } });
+
+		const thumbnails = container.querySelector('.photo-thumbnails');
+		expect(thumbnails).toBeInTheDocument();
+		const imgs = container.querySelectorAll('.photo-thumbnails img');
+		expect(imgs).toHaveLength(1);
+		expect(imgs[0]).toHaveAttribute('src', 'https://example.com/thumb_a.jpg');
+	});
+
+	it('does not render photo section when no photos', () => {
+		const entry = {
+			id: 'f6',
+			timestamp: '2026-03-20T14:30:00Z',
+			feed_type: 'formula',
+			photos: []
+		};
+
+		const { container } = render(LogEntryCard, { props: { entry, logType: feedingType, ondelete } });
+		expect(container.querySelector('.photo-thumbnails')).not.toBeInTheDocument();
+	});
+
 	it('renders med-log created_at as header when skipped (no given_at)', () => {
 		const entry = {
 			id: 'm3',

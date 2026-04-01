@@ -124,6 +124,9 @@
 			{#each summaryParts() as part, i}
 				{#if i > 0}<span class="sep"> · </span>{/if}{part}
 			{/each}
+			{#if Array.isArray(entry.photos) && (entry.photos as unknown[]).length > 0}
+				<span class="photo-indicator" aria-label="{(entry.photos as unknown[]).length} photo(s)">📷 {(entry.photos as unknown[]).length}</span>
+			{/if}
 		</span>
 		<div class="row-actions">
 			<button class="btn-sm btn-edit" onclick={handleEdit} aria-label="Edit">✏️</button>
@@ -159,6 +162,12 @@
 
 	.sep {
 		color: var(--color-text-muted);
+	}
+
+	.photo-indicator {
+		font-size: var(--font-size-xs);
+		color: var(--color-text-muted);
+		margin-left: var(--space-1);
 	}
 
 	.row-confirm {

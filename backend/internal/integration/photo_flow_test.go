@@ -212,6 +212,15 @@ func TestPhotoFlowLifecycle(t *testing.T) {
 		t.Errorf("step 3: expected thumbnail URL to contain 'thumb_', got %s", thumbURL)
 	}
 
+	// Verify the key field is present (needed by frontend for edit mode)
+	photoKey, ok := firstPhoto["key"].(string)
+	if !ok || photoKey == "" {
+		t.Fatalf("step 3: expected non-empty key in photo, got %v", firstPhoto["key"])
+	}
+	if photoKey != r2Key {
+		t.Errorf("step 3: expected photo key %q, got %q", r2Key, photoKey)
+	}
+
 	// === Step 4: Update entry removing photo -> verify linked_at nulled ===
 	status, updateResp := client.doJSON(http.MethodPut, fmt.Sprintf("%s/%s", stoolPath, stoolID), map[string]any{
 		"timestamp":    "2025-06-15T10:00:00Z",
@@ -375,6 +384,9 @@ func TestPhotoFlow_4PhotoLimit(t *testing.T) {
 		}
 		if photo["thumbnail_url"] == nil || photo["thumbnail_url"] == "" {
 			t.Errorf("photo %d: expected non-empty thumbnail_url", i)
+		}
+		if photo["key"] == nil || photo["key"] == "" {
+			t.Errorf("photo %d: expected non-empty key", i)
 		}
 	}
 }

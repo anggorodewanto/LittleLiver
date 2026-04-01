@@ -200,6 +200,34 @@ describe('LogEntryRow', () => {
 		expect(ondelete).toHaveBeenCalledWith('f4');
 	});
 
+	it('shows photo indicator when entry has photos', () => {
+		const entry = {
+			id: 's2',
+			timestamp: '2026-03-20T10:00:00Z',
+			color_rating: 5,
+			photos: [
+				{ key: 'photos/a.jpg', url: 'https://example.com/a.jpg', thumbnail_url: 'https://example.com/thumb_a.jpg' },
+				{ key: 'photos/b.jpg', url: 'https://example.com/b.jpg', thumbnail_url: 'https://example.com/thumb_b.jpg' }
+			]
+		};
+
+		render(LogEntryRow, { props: { entry, logType: stoolType, ondelete } });
+		expect(screen.getByText(/2/)).toBeInTheDocument();
+		expect(screen.getByLabelText(/photo/i)).toBeInTheDocument();
+	});
+
+	it('does not show photo indicator when entry has no photos', () => {
+		const entry = {
+			id: 's3',
+			timestamp: '2026-03-20T10:00:00Z',
+			color_rating: 5,
+			photos: []
+		};
+
+		render(LogEntryRow, { props: { entry, logType: stoolType, ondelete } });
+		expect(screen.queryByLabelText(/photo/i)).not.toBeInTheDocument();
+	});
+
 	it('Cancel delete restores row', async () => {
 		const entry = {
 			id: 'f5',

@@ -44,14 +44,22 @@
 	let baby = $derived($activeBaby);
 	let config = $derived(METRIC_CONFIG[metric]);
 
+	interface PhotoInfo {
+		key: string;
+		url: string;
+		thumbnail_url: string;
+	}
+
 	let submitting = $state(false);
 	let error = $state('');
 	let uploading = $state(false);
 	let photoKeys = $state<string[]>([]);
+	let existingPhotos = $state<PhotoInfo[]>([]);
 
 	$effect(() => {
 		void metric;  // track the metric reactive dependency
 		photoKeys = [];
+		existingPhotos = [];
 		error = '';
 		submitting = false;
 		uploading = false;
@@ -92,7 +100,14 @@
 			loadingEdit = true;
 			editData = undefined;
 			apiClient.get<Record<string, unknown>>(`/babies/${baby.id}/${config.endpoint}/${editId}`)
-				.then((raw) => { editData = transformForEdit(metric, raw); })
+				.then((raw) => {
+					editData = transformForEdit(metric, raw);
+					if (Array.isArray(raw.photos) && raw.photos.length > 0) {
+						const photos = raw.photos as PhotoInfo[];
+						photoKeys = photos.map(p => p.key);
+						existingPhotos = photos;
+					}
+				})
 				.catch(() => { error = 'Failed to load entry'; })
 				.finally(() => { loadingEdit = false; });
 		} else {
@@ -105,6 +120,11 @@
 		formData.append('file', file);
 		const data = await apiClient.postForm<{ r2_key: string }>(`/babies/${babyId}/upload`, formData);
 		return data.r2_key;
+	}
+
+	function handlePhotoRemove(key: string): void {
+		photoKeys = photoKeys.filter(k => k !== key);
+		existingPhotos = existingPhotos.filter(p => p.key !== key);
 	}
 
 	async function handlePhotoUpload(file: File): Promise<void> {
@@ -165,21 +185,21 @@
 	{:else if metric === 'urine'}
 		<UrineForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'stool'}
-		<StoolForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<StoolForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} onphotoremove={handlePhotoRemove} {submitting} {error} {uploading} {photoKeys} {existingPhotos} />
 	{:else if metric === 'temperature'}
 		<TemperatureForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'weight'}
 		<WeightForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'abdomen'}
-		<AbdomenForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<AbdomenForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} onphotoremove={handlePhotoRemove} {submitting} {error} {uploading} {photoKeys} {existingPhotos} />
 	{:else if metric === 'skin'}
-		<SkinForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<SkinForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} onphotoremove={handlePhotoRemove} {submitting} {error} {uploading} {photoKeys} {existingPhotos} />
 	{:else if metric === 'bruising'}
-		<BruisingForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<BruisingForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} onphotoremove={handlePhotoRemove} {submitting} {error} {uploading} {photoKeys} {existingPhotos} />
 	{:else if metric === 'lab'}
 		<LabForm onsubmit={handleSubmit} initialData={editData} babyId={baby.id} {submitting} {error} />
 	{:else if metric === 'notes'}
-		<NotesForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
+		<NotesForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} onphotoremove={handlePhotoRemove} {submitting} {error} {uploading} {photoKeys} {existingPhotos} />
 	{:else if metric === 'medication'}
 		<MedicationForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'med'}

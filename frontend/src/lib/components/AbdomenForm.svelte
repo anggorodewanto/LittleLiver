@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
 	import PhotoUpload from './PhotoUpload.svelte';
+	import PhotoThumbnails from './PhotoThumbnails.svelte';
+	import PhotoLightbox from './PhotoLightbox.svelte';
 
 	export interface AbdomenPayload {
 		timestamp: string;
@@ -19,17 +21,27 @@
 		notes?: string;
 	}
 
+	interface PhotoInfo {
+		key: string;
+		url: string;
+		thumbnail_url: string;
+	}
+
 	interface Props {
 		onsubmit: (data: AbdomenPayload) => void;
 		onphotoupload: (file: File) => void;
+		onphotoremove?: (key: string) => void;
 		initialData?: AbdomenInitialData;
 		submitting?: boolean;
 		error?: string;
 		uploading?: boolean;
 		photoKeys?: string[];
+		existingPhotos?: PhotoInfo[];
 	}
 
-	let { onsubmit, onphotoupload, initialData, submitting = false, error = '', uploading = false, photoKeys = [] }: Props = $props();
+	let { onsubmit, onphotoupload, onphotoremove, initialData, submitting = false, error = '', uploading = false, photoKeys = [], existingPhotos = [] }: Props = $props();
+
+	let lightboxUrl = $state('');
 
 	let timestamp = $state(defaultTimestamp());
 	let firmness = $state('');
@@ -104,6 +116,19 @@
 		<label for="abdomen-girth">Girth (cm)</label>
 		<input id="abdomen-girth" type="number" step="0.1" min="0" bind:value={girthCm} />
 	</div>
+
+	{#if existingPhotos.length > 0}
+		<PhotoThumbnails
+			photos={existingPhotos}
+			removable={true}
+			onremove={onphotoremove}
+			onphotoclick={(url) => { lightboxUrl = url; }}
+		/>
+	{/if}
+
+	{#if lightboxUrl}
+		<PhotoLightbox url={lightboxUrl} onclose={() => { lightboxUrl = ''; }} />
+	{/if}
 
 	<PhotoUpload onupload={onphotoupload} {uploading} multiple={true} currentCount={photoKeys.length} />
 	<p>{photoKeys.length} / 4 photos</p>

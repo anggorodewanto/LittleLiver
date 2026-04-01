@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { formatDateTime } from '$lib/datetime';
 	import type { LogTypeConfig } from '$lib/types/logs';
+	import PhotoThumbnails from './PhotoThumbnails.svelte';
+	import PhotoLightbox from './PhotoLightbox.svelte';
 
 	interface Props {
 		entry: Record<string, unknown>;
@@ -13,6 +15,7 @@
 	let { entry, logType, ondelete, medNames = {} }: Props = $props();
 
 	let confirmingDelete = $state(false);
+	let lightboxUrl = $state('');
 
 	function handleEdit(): void {
 		goto(`/log/${logType.metricParam}?edit=${entry.id}`);
@@ -110,7 +113,18 @@
 		{#if entry.notes && logType.key !== 'note'}
 			<div class="notes">{truncate(entry.notes, 100)}</div>
 		{/if}
+
+		{#if Array.isArray(entry.photos) && (entry.photos as unknown[]).length > 0}
+			<PhotoThumbnails
+				photos={entry.photos as Array<{key: string, url: string, thumbnail_url: string}>}
+				onphotoclick={(url) => { lightboxUrl = url; }}
+			/>
+		{/if}
 	</div>
+
+	{#if lightboxUrl}
+		<PhotoLightbox url={lightboxUrl} onclose={() => { lightboxUrl = ''; }} />
+	{/if}
 
 	<div class="card-footer">
 		{#if confirmingDelete}
