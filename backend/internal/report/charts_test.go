@@ -165,6 +165,121 @@ func TestRenderLabTrendsChart_Empty(t *testing.T) {
 	}
 }
 
+func TestCategorizeLabTrends_KnownTests(t *testing.T) {
+	t.Parallel()
+	unit := "U/L"
+	trends := map[string][]store.LabTrendEntry{
+		"SGOT/AST":  {{TestName: "SGOT/AST", Value: "128", Unit: &unit}},
+		"Hemoglobin": {{TestName: "Hemoglobin", Value: "9.6", Unit: &unit}},
+		"Natrium":    {{TestName: "Natrium", Value: "131", Unit: &unit}},
+	}
+
+	result := categorizeLabTrends(trends)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if _, ok := result["Liver Function"]["SGOT/AST"]; !ok {
+		t.Error("SGOT/AST should be in Liver Function")
+	}
+	if _, ok := result["Hematology"]["Hemoglobin"]; !ok {
+		t.Error("Hemoglobin should be in Hematology")
+	}
+	if _, ok := result["Electrolytes"]["Natrium"]; !ok {
+		t.Error("Natrium should be in Electrolytes")
+	}
+}
+
+func TestCategorizeLabTrends_CaseInsensitive(t *testing.T) {
+	t.Parallel()
+	unit := "g/dL"
+	trends := map[string][]store.LabTrendEntry{
+		"albumin": {{TestName: "albumin", Value: "3.46", Unit: &unit}},
+	}
+
+	result := categorizeLabTrends(trends)
+	if _, ok := result["Liver Function"]["albumin"]; !ok {
+		t.Error("lowercase 'albumin' should match Liver Function category")
+	}
+}
+
+func TestCategorizeLabTrends_UnknownTest(t *testing.T) {
+	t.Parallel()
+	trends := map[string][]store.LabTrendEntry{
+		"BloodType": {{TestName: "BloodType", Value: "A+"}},
+	}
+
+	result := categorizeLabTrends(trends)
+	if _, ok := result["Other"]["BloodType"]; !ok {
+		t.Error("unknown test should be in Other category")
+	}
+}
+
+func TestCategorizeLabTrends_Empty(t *testing.T) {
+	t.Parallel()
+	result := categorizeLabTrends(nil)
+	if result != nil {
+		t.Error("expected nil for empty input")
+	}
+}
+
+func TestRenderLabTrendCharts_SeparateCategories(t *testing.T) {
+	t.Parallel()
+	unitUL := "U/L"
+	unitGdL := "g/dL"
+	trends := map[string][]store.LabTrendEntry{
+		"SGOT/AST": {
+			{Timestamp: "2025-08-01 08:00:00", TestName: "SGOT/AST", Value: "128", Unit: &unitUL},
+			{Timestamp: "2025-08-15 08:00:00", TestName: "SGOT/AST", Value: "100", Unit: &unitUL},
+		},
+		"Hemoglobin": {
+			{Timestamp: "2025-08-01 08:00:00", TestName: "Hemoglobin", Value: "9.6", Unit: &unitGdL},
+			{Timestamp: "2025-08-15 08:00:00", TestName: "Hemoglobin", Value: "10.0", Unit: &unitGdL},
+		},
+	}
+
+	charts, err := renderLabTrendCharts(trends)
+	if err != nil {
+		t.Fatalf("renderLabTrendCharts: %v", err)
+	}
+	if len(charts) != 2 {
+		t.Fatalf("expected 2 category charts, got %d", len(charts))
+	}
+	if _, ok := charts["Liver Function"]; !ok {
+		t.Error("expected Liver Function chart")
+	}
+	if _, ok := charts["Hematology"]; !ok {
+		t.Error("expected Hematology chart")
+	}
+}
+
+func TestRenderLabTrendCharts_Empty(t *testing.T) {
+	t.Parallel()
+	charts, err := renderLabTrendCharts(nil)
+	if err != nil {
+		t.Fatalf("renderLabTrendCharts with nil: %v", err)
+	}
+	if charts != nil {
+		t.Fatal("expected nil for empty input")
+	}
+}
+
+func TestRenderLabTrendCharts_NonNumericSkipped(t *testing.T) {
+	t.Parallel()
+	trends := map[string][]store.LabTrendEntry{
+		"BloodType": {
+			{Timestamp: "2025-08-01 08:00:00", TestName: "BloodType", Value: "A+"},
+		},
+	}
+
+	charts, err := renderLabTrendCharts(trends)
+	if err != nil {
+		t.Fatalf("renderLabTrendCharts: %v", err)
+	}
+	if charts != nil {
+		t.Fatal("expected nil when all values non-numeric")
+	}
+}
+
 func TestRenderLabTrendsChart_NonNumericValues(t *testing.T) {
 	t.Parallel()
 	// Lab values that aren't parseable as float should be skipped

@@ -451,8 +451,8 @@ func TestGeneratePDF_WithLabTrendsChart(t *testing.T) {
 	}
 
 	pdfStr := string(buf.Bytes())
-	if !containsText(pdfStr, "Lab Results Trends") {
-		t.Error("PDF should contain 'Lab Results Trends' chart section")
+	if !containsText(pdfStr, "Lab Trends:") {
+		t.Error("PDF should contain 'Lab Trends:' chart section")
 	}
 }
 
@@ -535,7 +535,7 @@ func TestGeneratePDF_FullReport_ValidPDF(t *testing.T) {
 		"Medication",
 		"Stool Color Distribution",
 		"Weight Chart",
-		"Lab Results Trends",
+		"Lab Trends:",
 		"Photo Appendix",
 	}
 	for _, frag := range expected {

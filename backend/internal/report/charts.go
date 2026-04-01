@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"gonum.org/v1/plot"
@@ -32,6 +33,149 @@ var percentileColors = []color.RGBA{
 	{R: 50, G: 150, B: 50, A: 255},   // 50th
 	{R: 150, G: 200, B: 150, A: 255}, // 85th
 	{R: 200, G: 200, B: 200, A: 255}, // 97th
+}
+
+// labCategoryOrder defines the rendering order for lab chart categories.
+var labCategoryOrder = []string{"Liver Function", "Hematology", "Electrolytes", "Other"}
+
+// labCategories maps category names to the test names that belong in each.
+// Matching is case-insensitive.
+var labCategories = map[string][]string{
+	"Liver Function": {"SGOT/AST", "SGPT/ALT", "Gamma GT", "Bilirubin Total", "Bilirubin Direk", "albumin"},
+	"Hematology":     {"Hemoglobin", "Hematokrit", "Eritrosit", "Leukosit", "MCH", "MCHC", "MCV", "RDW-CV", "RDW-SD", "NRBC#", "NRBC%"},
+	"Electrolytes":   {"Natrium", "Kalium", "Kalsium", "Klorida", "Magnesium"},
+}
+
+// categorizeLabTrends groups lab trend entries by clinical category.
+// Tests that don't match any category go into "Other".
+func categorizeLabTrends(trends map[string][]store.LabTrendEntry) map[string]map[string][]store.LabTrendEntry {
+	if len(trends) == 0 {
+		return nil
+	}
+
+	// Build a lowercase lookup: lowercase test name -> category
+	lookup := make(map[string]string)
+	for cat, tests := range labCategories {
+		for _, t := range tests {
+			lookup[strings.ToLower(t)] = cat
+		}
+	}
+
+	result := make(map[string]map[string][]store.LabTrendEntry)
+	for testName, entries := range trends {
+		cat, ok := lookup[strings.ToLower(testName)]
+		if !ok {
+			cat = "Other"
+		}
+		if result[cat] == nil {
+			result[cat] = make(map[string][]store.LabTrendEntry)
+		}
+		result[cat][testName] = entries
+	}
+	return result
+}
+
+// renderLabTrendCharts renders separate lab trend charts per clinical category.
+// Returns map[categoryName]pngBytes. Categories with no numeric data are omitted.
+func renderLabTrendCharts(trends map[string][]store.LabTrendEntry) (map[string][]byte, error) {
+	categorized := categorizeLabTrends(trends)
+	if len(categorized) == 0 {
+		return nil, nil
+	}
+
+	result := make(map[string][]byte)
+	for _, cat := range labCategoryOrder {
+		catTrends, ok := categorized[cat]
+		if !ok {
+			continue
+		}
+		png, err := renderSingleLabChart(cat, catTrends)
+		if err != nil {
+			return nil, fmt.Errorf("render %s chart: %w", cat, err)
+		}
+		if png != nil {
+			result[cat] = png
+		}
+	}
+
+	if len(result) == 0 {
+		return nil, nil
+	}
+	return result, nil
+}
+
+// renderSingleLabChart renders a single lab trends chart for one category.
+func renderSingleLabChart(category string, trends map[string][]store.LabTrendEntry) ([]byte, error) {
+	if len(trends) == 0 {
+		return nil, nil
+	}
+
+	p := plot.New()
+	p.Title.Text = "Lab Trends: " + category
+	p.X.Label.Text = "Date"
+	p.Y.Label.Text = "Value"
+
+	names := make([]string, 0, len(trends))
+	for name := range trends {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	hasData := false
+	colorIdx := 0
+
+	for _, name := range names {
+		entries := trends[name]
+		pts := make(plotter.XYs, 0, len(entries))
+
+		for _, e := range entries {
+			val, err := strconv.ParseFloat(e.Value, 64)
+			if err != nil {
+				continue
+			}
+			ts, err := store.ParseTime(e.Timestamp)
+			if err != nil {
+				continue
+			}
+			pts = append(pts, plotter.XY{
+				X: float64(ts.Unix()),
+				Y: val,
+			})
+		}
+
+		if len(pts) == 0 {
+			continue
+		}
+
+		hasData = true
+
+		line, err := plotter.NewLine(pts)
+		if err != nil {
+			return nil, fmt.Errorf("create lab trend line: %w", err)
+		}
+		ci := colorIdx % len(labLineColors)
+		line.Color = labLineColors[ci]
+		line.Width = vg.Points(2)
+		colorIdx++
+
+		p.Add(line)
+
+		unit := ""
+		if len(entries) > 0 && entries[0].Unit != nil {
+			unit = " (" + *entries[0].Unit + ")"
+		}
+		p.Legend.Add(name+unit, line)
+	}
+
+	if !hasData {
+		return nil, nil
+	}
+
+	p.X.Tick.Marker = dateTicker{}
+	p.Legend.Top = true
+	p.Legend.Left = true
+
+	return renderPlotToPNG(p)
 }
 
 // labLineColors for different lab test names.
@@ -160,81 +304,10 @@ func renderWeightChart(weights []store.WeightSeriesEntry, curves []who.Percentil
 	return renderPlotToPNG(p)
 }
 
-// renderLabTrendsChart renders lab trends grouped by test name as PNG bytes.
-// Returns nil if there are no lab trend entries or all values are non-numeric.
+// renderLabTrendsChart renders lab trends as a single combined chart.
+// Kept for backward compatibility with existing tests; delegates to renderSingleLabChart.
 func renderLabTrendsChart(trends map[string][]store.LabTrendEntry) ([]byte, error) {
-	if len(trends) == 0 {
-		return nil, nil
-	}
-
-	p := plot.New()
-	p.Title.Text = "Lab Results Trends"
-	p.X.Label.Text = "Date"
-	p.Y.Label.Text = "Value"
-
-	// Sort test names for deterministic ordering
-	names := make([]string, 0, len(trends))
-	for name := range trends {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	hasData := false
-	colorIdx := 0
-
-	for _, name := range names {
-		entries := trends[name]
-		pts := make(plotter.XYs, 0, len(entries))
-
-		for _, e := range entries {
-			val, err := strconv.ParseFloat(e.Value, 64)
-			if err != nil {
-				continue // skip non-numeric values
-			}
-			ts, err := store.ParseTime(e.Timestamp)
-			if err != nil {
-				continue
-			}
-			pts = append(pts, plotter.XY{
-				X: float64(ts.Unix()),
-				Y: val,
-			})
-		}
-
-		if len(pts) == 0 {
-			continue
-		}
-
-		hasData = true
-
-		line, err := plotter.NewLine(pts)
-		if err != nil {
-			return nil, fmt.Errorf("create lab trend line: %w", err)
-		}
-		ci := colorIdx % len(labLineColors)
-		line.Color = labLineColors[ci]
-		line.Width = vg.Points(2)
-		colorIdx++
-
-		p.Add(line)
-
-		unit := ""
-		if len(entries) > 0 && entries[0].Unit != nil {
-			unit = " (" + *entries[0].Unit + ")"
-		}
-		p.Legend.Add(name+unit, line)
-	}
-
-	if !hasData {
-		return nil, nil
-	}
-
-	// Format X axis as dates
-	p.X.Tick.Marker = dateTicker{}
-	p.Legend.Top = true
-	p.Legend.Left = true
-
-	return renderPlotToPNG(p)
+	return renderSingleLabChart("Lab Results Trends", trends)
 }
 
 // dateTicker formats unix timestamps as date strings on the X axis.

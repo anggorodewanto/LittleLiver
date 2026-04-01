@@ -315,7 +315,7 @@ func TestReportGeneration_FullIntegration(t *testing.T) {
 		"Notable Observations",
 		"Stool Color Distribution",
 		"Weight Chart",
-		"Lab Results Trends",
+		"Lab Trends:",
 		"Photo Appendix",
 	}
 	for _, section := range sections {

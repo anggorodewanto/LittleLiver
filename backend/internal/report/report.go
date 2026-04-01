@@ -439,23 +439,26 @@ func addWeightChartSection(m core.Maroto, weights []store.WeightSeriesEntry, cur
 	embedChartPNG(m, "Weight Chart (WHO Percentiles)", chartPNG)
 }
 
-// addLabTrendsSection renders a lab trends chart and results table.
+// addLabTrendsSection renders lab trends charts per clinical category and a results table.
 func addLabTrendsSection(m core.Maroto, trends map[string][]store.LabTrendEntry) {
-	chartPNG, err := renderLabTrendsChart(trends)
-	if err == nil && chartPNG != nil {
-		embedChartPNG(m, "Lab Results Trends", chartPNG)
+	charts, err := renderLabTrendCharts(trends)
+	if err == nil && charts != nil {
+		for _, cat := range labCategoryOrder {
+			if png, ok := charts[cat]; ok {
+				embedChartPNG(m, "Lab Trends: "+cat, png)
+			}
+		}
 	}
 
 	addLabResultsTable(m, trends)
 }
 
-// addLabResultsTable adds a table of lab results after the chart.
+// addLabResultsTable adds a table of lab results grouped by date.
 func addLabResultsTable(m core.Maroto, trends map[string][]store.LabTrendEntry) {
 	if len(trends) == 0 {
 		return
 	}
 
-	// Flatten all entries and sort by timestamp then test name
 	type flatEntry struct {
 		date        string
 		testName    string
@@ -497,23 +500,41 @@ func addLabResultsTable(m core.Maroto, trends map[string][]store.LabTrendEntry) 
 		return entries[i].testName < entries[j].testName
 	})
 
-	m.AddRows(text.NewRow(8, "Lab Results Table", sectionStyle))
+	m.AddRows(text.NewRow(12, "Lab Results", sectionStyle))
 
-	// Table header
-	m.AddRows(row.New(7).Add(
-		text.NewCol(2, "Date", tableHeaderStyle),
-		text.NewCol(3, "Test Name", tableHeaderStyle),
-		text.NewCol(2, "Value", tableHeaderStyle),
-		text.NewCol(2, "Unit", tableHeaderStyle),
-		text.NewCol(3, "Normal Range", tableHeaderStyle),
-	).WithStyle(headerBg))
-
+	// Group entries by date (just the date part, not time)
+	currentDate := ""
 	for _, e := range entries {
+		dateOnly := e.date
+		if len(dateOnly) >= 10 {
+			dateOnly = dateOnly[:10]
+		}
+
+		if dateOnly != currentDate {
+			currentDate = dateOnly
+			// Date subheader
+			m.AddRows(row.New(7).Add(
+				text.NewCol(12, dateOnly, props.Text{
+					Size:  10,
+					Style: fontstyle.Bold,
+					Top:   1,
+				}),
+			).WithStyle(&props.Cell{
+				BackgroundColor: &props.Color{Red: 240, Green: 240, Blue: 240},
+			}))
+			// Table header per date group
+			m.AddRows(row.New(7).Add(
+				text.NewCol(4, "Test Name", tableHeaderStyle),
+				text.NewCol(2, "Value", tableHeaderStyle),
+				text.NewCol(3, "Unit", tableHeaderStyle),
+				text.NewCol(3, "Normal Range", tableHeaderStyle),
+			).WithStyle(headerBg))
+		}
+
 		m.AddRows(row.New(6).Add(
-			text.NewCol(2, e.date, tableCellStyle),
-			text.NewCol(3, e.testName, tableCellStyle),
+			text.NewCol(4, e.testName, tableCellStyle),
 			text.NewCol(2, e.value, tableCellStyle),
-			text.NewCol(2, e.unit, tableCellStyle),
+			text.NewCol(3, e.unit, tableCellStyle),
 			text.NewCol(3, e.normalRange, tableCellStyle),
 		).WithStyle(cellBorder))
 	}
@@ -527,7 +548,7 @@ func addPhotoAppendix(m core.Maroto, thumbs [][]byte) {
 		return
 	}
 
-	m.AddRows(text.NewRow(8, "Photo Appendix", sectionStyle))
+	m.AddRows(text.NewRow(12, "Photo Appendix", sectionStyle))
 
 	// Layout: 3 photos per row
 	for i := 0; i < len(thumbs); i += 3 {
@@ -678,7 +699,7 @@ func ordinalSuffix(n int) string {
 
 // addSummarySection adds the summary section.
 func addSummarySection(m core.Maroto, summary *store.DashboardSummary, baby *model.Baby, now time.Time, activeMeds []model.Medication) {
-	m.AddRows(text.NewRow(8, "Summary", sectionStyle))
+	m.AddRows(text.NewRow(12, "Summary", sectionStyle))
 
 	m.AddRow(7,
 		text.NewCol(3, fmt.Sprintf("Total Feeds: %d", summary.TotalFeeds), valueStyle),
@@ -711,15 +732,19 @@ func addSummarySection(m core.Maroto, summary *store.DashboardSummary, baby *mod
 		text.NewCol(4, fmt.Sprintf("Last Weight: %s", weightStr), valueStyle),
 	)
 
-	// Current Medications subsection
+	// Current Medications subsection (compact comma-separated)
 	if len(activeMeds) > 0 {
 		m.AddRows(spacerRow(2))
-		m.AddRows(text.NewRow(7, "Current Medications:", labelStyle))
-		for _, med := range activeMeds {
-			m.AddRow(6,
-				text.NewCol(6, fmt.Sprintf("  %s - %s", med.Name, med.Dose), valueStyle),
-			)
+		medList := ""
+		for i, med := range activeMeds {
+			if i > 0 {
+				medList += ", "
+			}
+			medList += fmt.Sprintf("%s %s", med.Name, med.Dose)
 		}
+		m.AddRow(7,
+			text.NewCol(12, fmt.Sprintf("Current Medications: %s", medList), labelStyle),
+		)
 	}
 
 	m.AddRows(spacerRow(3))
@@ -727,7 +752,7 @@ func addSummarySection(m core.Maroto, summary *store.DashboardSummary, baby *mod
 
 // addStoolColorTable adds the stool color log table.
 func addStoolColorTable(m core.Maroto, stools []store.StoolColorSeriesEntry) {
-	m.AddRows(text.NewRow(8, "Stool Color Log", sectionStyle))
+	m.AddRows(text.NewRow(12, "Stool Color Log", sectionStyle))
 
 	if len(stools) == 0 {
 		m.AddRows(text.NewRow(6, "No stool entries in this period.", valueStyle))
@@ -737,15 +762,15 @@ func addStoolColorTable(m core.Maroto, stools []store.StoolColorSeriesEntry) {
 
 	// Table header
 	m.AddRows(row.New(7).Add(
-		text.NewCol(4, "Timestamp", tableHeaderStyle),
-		text.NewCol(4, "Color Score", tableHeaderStyle),
+		text.NewCol(6, "Timestamp", tableHeaderStyle),
+		text.NewCol(6, "Color Score", tableHeaderStyle),
 	).WithStyle(headerBg))
 
 	for _, s := range stools {
 		ts := formatTimestamp(s.Timestamp)
 		m.AddRows(row.New(6).Add(
-			text.NewCol(4, ts, tableCellStyle),
-			text.NewCol(4, fmt.Sprintf("%d", s.ColorScore), tableCellStyle),
+			text.NewCol(6, ts, tableCellStyle),
+			text.NewCol(6, fmt.Sprintf("%d", s.ColorScore), tableCellStyle),
 		).WithStyle(cellBorder))
 	}
 
@@ -754,7 +779,7 @@ func addStoolColorTable(m core.Maroto, stools []store.StoolColorSeriesEntry) {
 
 // addTemperatureTable adds the temperature log table with fever flags.
 func addTemperatureTable(m core.Maroto, temps []store.TemperatureSeriesEntry) {
-	m.AddRows(text.NewRow(8, "Temperature Log", sectionStyle))
+	m.AddRows(text.NewRow(12, "Temperature Log", sectionStyle))
 
 	if len(temps) == 0 {
 		m.AddRows(text.NewRow(6, "No temperature entries in this period.", valueStyle))
@@ -796,7 +821,7 @@ func addTemperatureTable(m core.Maroto, temps []store.TemperatureSeriesEntry) {
 
 // addFeedingSummary adds the feeding summary section.
 func addFeedingSummary(m core.Maroto, feedings []store.FeedingDailyEntry) {
-	m.AddRows(text.NewRow(8, "Feeding Summary", sectionStyle))
+	m.AddRows(text.NewRow(12, "Feeding Summary", sectionStyle))
 
 	if len(feedings) == 0 {
 		m.AddRows(text.NewRow(6, "No feeding entries in this period.", valueStyle))
@@ -842,7 +867,7 @@ func addFeedingSummary(m core.Maroto, feedings []store.FeedingDailyEntry) {
 
 // addMedicationAdherence adds the medication adherence section.
 func addMedicationAdherence(m core.Maroto, meds []medAdherence) {
-	m.AddRows(text.NewRow(8, "Medication Adherence", sectionStyle))
+	m.AddRows(text.NewRow(12, "Medication Adherence", sectionStyle))
 
 	if len(meds) == 0 {
 		m.AddRows(text.NewRow(6, "No medication logs in this period.", valueStyle))
@@ -877,13 +902,13 @@ func addMedicationAdherence(m core.Maroto, meds []medAdherence) {
 }
 
 // addNotableObservations adds the notable observations section.
+// Omitted entirely when there are no observations.
 func addNotableObservations(m core.Maroto, notes []noteEntry, bruisingEntries []bruisingEntry) {
-	m.AddRows(text.NewRow(8, "Notable Observations", sectionStyle))
-
 	if len(notes) == 0 && len(bruisingEntries) == 0 {
-		m.AddRows(text.NewRow(6, "No observations in this period.", valueStyle))
 		return
 	}
+
+	m.AddRows(text.NewRow(12, "Notable Observations", sectionStyle))
 
 	for _, n := range notes {
 		ts := formatTimestamp(n.Timestamp)
