@@ -177,7 +177,7 @@
 	{:else if metric === 'bruising'}
 		<BruisingForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'lab'}
-		<LabForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
+		<LabForm onsubmit={handleSubmit} initialData={editData} babyId={baby.id} {submitting} {error} />
 	{:else if metric === 'notes'}
 		<NotesForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} {submitting} {error} {uploading} {photoKeys} />
 	{:else if metric === 'medication'}

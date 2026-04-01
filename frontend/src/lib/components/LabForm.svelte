@@ -1,5 +1,12 @@
 <script lang="ts">
 	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
+	import { apiClient } from '$lib/api';
+
+	export interface LabTestSuggestion {
+		test_name: string;
+		unit?: string;
+		normal_range?: string;
+	}
 
 	export interface LabPayload {
 		timestamp: string;
@@ -28,12 +35,13 @@
 
 	interface Props {
 		onsubmit: (data: LabPayload | LabPayload[]) => void;
+		babyId?: string;
 		initialData?: LabInitialData;
 		submitting?: boolean;
 		error?: string;
 	}
 
-	let { onsubmit, initialData, submitting = false, error = '' }: Props = $props();
+	let { onsubmit, babyId, initialData, submitting = false, error = '' }: Props = $props();
 
 	const QUICK_PICKS = [
 		{ label: 'Total Bilirubin', testName: 'total_bilirubin', unit: 'mg/dL' },
@@ -55,8 +63,33 @@
 	let validationError = $state('');
 	let savedEntries = $state<SavedEntry[]>([]);
 
+	let dbSuggestions = $state<LabTestSuggestion[]>([]);
+
 	let isEditMode = $derived(!!initialData);
 	let hasSavedEntries = $derived(savedEntries.length > 0);
+
+	let allSuggestions = $derived.by(() => {
+		const map = new Map<string, LabTestSuggestion>();
+		for (const s of dbSuggestions) {
+			map.set(s.test_name, s);
+		}
+		for (const pick of QUICK_PICKS) {
+			if (!map.has(pick.testName)) {
+				map.set(pick.testName, {
+					test_name: pick.testName,
+					unit: pick.unit || undefined,
+				});
+			}
+		}
+		return Array.from(map.values());
+	});
+
+	$effect(() => {
+		if (!babyId) return;
+		apiClient.get<LabTestSuggestion[]>(`/babies/${babyId}/labs/tests`)
+			.then(data => { dbSuggestions = data; })
+			.catch(() => {});
+	});
 
 	$effect(() => {
 		timestamp = initialData ? fromISO8601(initialData.timestamp) : defaultTimestamp();
@@ -71,7 +104,16 @@
 
 	function selectQuickPick(pick: typeof QUICK_PICKS[number]) {
 		testName = pick.testName;
-		unit = pick.unit;
+		const dbMatch = dbSuggestions.find(s => s.test_name === pick.testName);
+		unit = dbMatch?.unit ?? pick.unit;
+		normalRange = dbMatch?.normal_range ?? '';
+	}
+
+	function handleTestNameInput() {
+		const match = allSuggestions.find(s => s.test_name === testName);
+		if (!match) return;
+		unit = match.unit ?? '';
+		normalRange = match.normal_range ?? '';
 	}
 
 	function validateCurrentEntry(): boolean {
@@ -211,7 +253,12 @@
 
 	<div>
 		<label for="lab-test-name">Test name</label>
-		<input id="lab-test-name" type="text" bind:value={testName} />
+		<input id="lab-test-name" type="text" list="lab-test-suggestions" bind:value={testName} oninput={handleTestNameInput} />
+		<datalist id="lab-test-suggestions">
+			{#each allSuggestions as suggestion (suggestion.test_name)}
+				<option value={suggestion.test_name}></option>
+			{/each}
+		</datalist>
 	</div>
 
 	<div>

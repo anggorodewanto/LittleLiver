@@ -195,6 +195,34 @@ func UpdateLabResultHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// ListLabTestSuggestionsHandler handles GET /api/babies/{id}/labs/tests.
+func ListLabTestSuggestionsHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+
+		baby, ok := requireBabyAccess(w, r, db, user.ID)
+		if !ok {
+			return
+		}
+
+		suggestions, err := store.ListDistinctLabTests(db, baby.ID)
+		if err != nil {
+			log.Printf("list lab test suggestions: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		if suggestions == nil {
+			suggestions = []store.LabTestSuggestion{}
+		}
+
+		writeJSON(w, http.StatusOK, suggestions)
+	}
+}
+
 // DeleteLabResultHandler handles DELETE /api/babies/{id}/labs/{entryId}.
 func DeleteLabResultHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

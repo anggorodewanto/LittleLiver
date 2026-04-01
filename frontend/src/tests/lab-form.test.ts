@@ -1,16 +1,25 @@
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import LabForm from '$lib/components/LabForm.svelte';
+
+vi.mock('$lib/api', () => ({
+	apiClient: {
+		get: vi.fn()
+	}
+}));
+
+import { apiClient } from '$lib/api';
 
 describe('LabForm', () => {
 	let onsubmit: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		onsubmit = vi.fn();
+		vi.mocked(apiClient.get).mockResolvedValue([]);
 	});
 
 	it('renders timestamp, test name, value, unit, normal range, and notes fields', () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		expect(screen.getByLabelText(/timestamp/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/test name/i)).toBeInTheDocument();
@@ -21,7 +30,7 @@ describe('LabForm', () => {
 	});
 
 	it('renders quick-pick buttons for common lab tests', () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		expect(screen.getByRole('button', { name: /total.?bilirubin/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /direct.?bilirubin/i })).toBeInTheDocument();
@@ -34,7 +43,7 @@ describe('LabForm', () => {
 	});
 
 	it('clicking total bilirubin quick-pick pre-fills test_name and unit', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
 
@@ -45,7 +54,7 @@ describe('LabForm', () => {
 	});
 
 	it('clicking ALT quick-pick pre-fills test_name and unit', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		await fireEvent.click(screen.getByRole('button', { name: /^ALT$/i }));
 
@@ -56,7 +65,7 @@ describe('LabForm', () => {
 	});
 
 	it('clicking INR quick-pick pre-fills test_name with empty unit', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		await fireEvent.click(screen.getByRole('button', { name: /^INR$/i }));
 
@@ -67,7 +76,7 @@ describe('LabForm', () => {
 	});
 
 	it('clicking platelets quick-pick pre-fills correctly', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		await fireEvent.click(screen.getByRole('button', { name: /platelets/i }));
 
@@ -78,7 +87,7 @@ describe('LabForm', () => {
 	});
 
 	it('validates that test name is required', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		await fireEvent.input(screen.getByLabelText(/^value$/i), {
 			target: { value: '1.5' }
@@ -90,7 +99,7 @@ describe('LabForm', () => {
 	});
 
 	it('validates that value is required', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		await fireEvent.input(screen.getByLabelText(/test name/i), {
 			target: { value: 'total_bilirubin' }
@@ -102,7 +111,7 @@ describe('LabForm', () => {
 	});
 
 	it('submits correct payload with required fields', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		await fireEvent.input(screen.getByLabelText(/test name/i), {
 			target: { value: 'total_bilirubin' }
@@ -120,7 +129,7 @@ describe('LabForm', () => {
 	});
 
 	it('submits correct payload with all fields', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		await fireEvent.input(screen.getByLabelText(/test name/i), {
 			target: { value: 'ALT' }
@@ -149,10 +158,10 @@ describe('LabForm', () => {
 	});
 
 	it('omits optional fields when not provided', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		await fireEvent.input(screen.getByLabelText(/test name/i), {
-			target: { value: 'GGT' }
+			target: { value: 'some_custom_test' }
 		});
 		await fireEvent.input(screen.getByLabelText(/^value$/i), {
 			target: { value: '100' }
@@ -166,19 +175,19 @@ describe('LabForm', () => {
 	});
 
 	it('disables submit button when submitting', () => {
-		render(LabForm, { props: { onsubmit, submitting: true } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1', submitting: true } });
 
 		expect(screen.getByRole('button', { name: /logging/i })).toBeDisabled();
 	});
 
 	it('shows error message when error prop is set', () => {
-		render(LabForm, { props: { onsubmit, error: 'Server error' } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1', error: 'Server error' } });
 
 		expect(screen.getByText('Server error')).toBeInTheDocument();
 	});
 
 	it('highlights selected quick-pick button', async () => {
-		render(LabForm, { props: { onsubmit } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 		const altButton = screen.getByRole('button', { name: /^ALT$/i });
 		await fireEvent.click(altButton);
@@ -196,7 +205,7 @@ describe('LabForm', () => {
 			notes: 'slightly elevated'
 		};
 
-		render(LabForm, { props: { onsubmit, initialData } });
+		render(LabForm, { props: { onsubmit, babyId: 'baby-1', initialData } });
 
 		expect((screen.getByLabelText(/test name/i) as HTMLInputElement).value).toBe('total_bilirubin');
 		expect((screen.getByLabelText(/^value$/i) as HTMLInputElement).value).toBe('1.5');
@@ -208,7 +217,7 @@ describe('LabForm', () => {
 
 	describe('batch entry (Add More)', () => {
 		it('shows "Add More" button in create mode', () => {
-			render(LabForm, { props: { onsubmit } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 			expect(screen.getByRole('button', { name: /add more/i })).toBeInTheDocument();
 		});
@@ -219,13 +228,13 @@ describe('LabForm', () => {
 				test_name: 'total_bilirubin',
 				value: '1.5'
 			};
-			render(LabForm, { props: { onsubmit, initialData } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1', initialData } });
 
 			expect(screen.queryByRole('button', { name: /add more/i })).not.toBeInTheDocument();
 		});
 
 		it('validates current entry before adding', async () => {
-			render(LabForm, { props: { onsubmit } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 			// Click add more with empty form
 			await fireEvent.click(screen.getByRole('button', { name: /add more/i }));
@@ -234,7 +243,7 @@ describe('LabForm', () => {
 		});
 
 		it('adds entry to saved list and resets form fields', async () => {
-			render(LabForm, { props: { onsubmit } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 			// Fill in a lab entry
 			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
@@ -255,7 +264,7 @@ describe('LabForm', () => {
 		});
 
 		it('preserves timestamp after adding entry', async () => {
-			render(LabForm, { props: { onsubmit } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 			const timestampInput = screen.getByLabelText(/timestamp/i) as HTMLInputElement;
 			const originalTimestamp = timestampInput.value;
@@ -270,7 +279,7 @@ describe('LabForm', () => {
 		});
 
 		it('can remove a saved entry', async () => {
-			render(LabForm, { props: { onsubmit } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 			// Add an entry
 			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
@@ -290,7 +299,7 @@ describe('LabForm', () => {
 		});
 
 		it('submits all saved entries plus current form as array', async () => {
-			render(LabForm, { props: { onsubmit } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 			// Add first entry
 			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
@@ -319,7 +328,7 @@ describe('LabForm', () => {
 		});
 
 		it('submits only saved entries when current form is empty', async () => {
-			render(LabForm, { props: { onsubmit } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 			// Add an entry
 			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
@@ -339,7 +348,7 @@ describe('LabForm', () => {
 		});
 
 		it('shows entry count on submit button when entries are saved', async () => {
-			render(LabForm, { props: { onsubmit } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 			// Add an entry
 			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
@@ -353,7 +362,7 @@ describe('LabForm', () => {
 		});
 
 		it('shares the same timestamp across all batch entries', async () => {
-			render(LabForm, { props: { onsubmit } });
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
 
 			// Add first entry
 			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
@@ -371,6 +380,95 @@ describe('LabForm', () => {
 
 			const payload = onsubmit.mock.calls[0][0];
 			expect(payload[0].timestamp).toBe(payload[1].timestamp);
+		});
+	});
+
+	describe('test suggestions', () => {
+		it('renders a datalist for test name suggestions', () => {
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
+
+			const datalist = document.getElementById('lab-test-suggestions');
+			expect(datalist).toBeInTheDocument();
+			expect(datalist!.tagName).toBe('DATALIST');
+
+			const input = screen.getByLabelText(/test name/i) as HTMLInputElement;
+			expect(input.getAttribute('list')).toBe('lab-test-suggestions');
+		});
+
+		it('includes QUICK_PICKS in datalist when API returns empty', async () => {
+			vi.mocked(apiClient.get).mockResolvedValue([]);
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
+
+			await waitFor(() => {
+				const datalist = document.getElementById('lab-test-suggestions');
+				const options = datalist!.querySelectorAll('option');
+				expect(options.length).toBeGreaterThanOrEqual(8); // 8 QUICK_PICKS
+			});
+		});
+
+		it('auto-fills unit and normal_range when selecting a known test', async () => {
+			vi.mocked(apiClient.get).mockResolvedValue([
+				{ test_name: 'custom_test', unit: 'mmol/L', normal_range: '3.5-5.0' }
+			]);
+
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
+
+			await waitFor(() => {
+				const datalist = document.getElementById('lab-test-suggestions');
+				const options = Array.from(datalist!.querySelectorAll('option'));
+				expect(options.some(o => o.value === 'custom_test')).toBe(true);
+			});
+
+			const testNameInput = screen.getByLabelText(/test name/i) as HTMLInputElement;
+			await fireEvent.input(testNameInput, { target: { value: 'custom_test' } });
+
+			expect((screen.getByLabelText(/unit/i) as HTMLInputElement).value).toBe('mmol/L');
+			expect((screen.getByLabelText(/normal range/i) as HTMLInputElement).value).toBe('3.5-5.0');
+		});
+
+		it('DB suggestions override QUICK_PICKS unit/range on quick-pick click', async () => {
+			vi.mocked(apiClient.get).mockResolvedValue([
+				{ test_name: 'total_bilirubin', unit: 'µmol/L', normal_range: '1.7-20.5' }
+			]);
+
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
+
+			await waitFor(() => {
+				expect(vi.mocked(apiClient.get)).toHaveBeenCalled();
+			});
+
+			await fireEvent.click(screen.getByRole('button', { name: /total.?bilirubin/i }));
+
+			expect((screen.getByLabelText(/unit/i) as HTMLInputElement).value).toBe('µmol/L');
+			expect((screen.getByLabelText(/normal range/i) as HTMLInputElement).value).toBe('1.7-20.5');
+		});
+
+		it('handles API failure gracefully', async () => {
+			vi.mocked(apiClient.get).mockRejectedValue(new Error('Network error'));
+
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
+
+			// Form should still render and work
+			await fireEvent.click(screen.getByRole('button', { name: /^ALT$/i }));
+			expect((screen.getByLabelText(/test name/i) as HTMLInputElement).value).toBe('ALT');
+		});
+
+		it('does not auto-fill for freeform test names', async () => {
+			vi.mocked(apiClient.get).mockResolvedValue([]);
+			render(LabForm, { props: { onsubmit, babyId: 'baby-1' } });
+
+			await fireEvent.input(screen.getByLabelText(/test name/i), {
+				target: { value: 'some_new_test' }
+			});
+
+			expect((screen.getByLabelText(/unit/i) as HTMLInputElement).value).toBe('');
+			expect((screen.getByLabelText(/normal range/i) as HTMLInputElement).value).toBe('');
+		});
+
+		it('fetches suggestions for the given babyId', () => {
+			render(LabForm, { props: { onsubmit, babyId: 'baby-42' } });
+
+			expect(vi.mocked(apiClient.get)).toHaveBeenCalledWith('/babies/baby-42/labs/tests');
 		});
 	});
 });

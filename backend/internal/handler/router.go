@@ -121,6 +121,7 @@ func NewMux(opts ...Option) *http.ServeMux {
 			registerMetricCRUD(mux, "/api/babies/{id}/labs", rateMw, authMw, csrfMw,
 				CreateLabResultHandler(cfg.db), ListLabResultsHandler(cfg.db),
 				GetLabResultHandler(cfg.db), UpdateLabResultHandler(cfg.db), DeleteLabResultHandler(cfg.db))
+			mux.Handle("GET /api/babies/{id}/labs/tests", rateMw(authMw(http.HandlerFunc(ListLabTestSuggestionsHandler(cfg.db)))))
 			registerMetricCRUD(mux, "/api/babies/{id}/notes", rateMw, authMw, csrfMw,
 				CreateGeneralNoteHandler(cfg.db, cfg.objStore), ListGeneralNotesHandler(cfg.db, cfg.objStore),
 				GetGeneralNoteHandler(cfg.db, cfg.objStore), UpdateGeneralNoteHandler(cfg.db, cfg.objStore), DeleteGeneralNoteHandler(cfg.db))

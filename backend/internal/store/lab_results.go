@@ -97,6 +97,50 @@ func UpdateLabResult(db *sql.DB, babyID, labID, updatedBy, timestamp, testName, 
 	return GetLabResultByID(db, babyID, labID)
 }
 
+// LabTestSuggestion represents a distinct test name with its most recently used unit and normal range.
+type LabTestSuggestion struct {
+	TestName    string  `json:"test_name"`
+	Unit        *string `json:"unit,omitempty"`
+	NormalRange *string `json:"normal_range,omitempty"`
+}
+
+// ListDistinctLabTests returns distinct test names for a baby with the most recently used unit and normal range.
+func ListDistinctLabTests(db *sql.DB, babyID string) ([]LabTestSuggestion, error) {
+	rows, err := db.Query(`
+		SELECT test_name, unit, normal_range
+		FROM lab_results
+		WHERE baby_id = ?
+		  AND id IN (
+		    SELECT id FROM (
+		      SELECT id, ROW_NUMBER() OVER (PARTITION BY test_name ORDER BY timestamp DESC) AS rn
+		      FROM lab_results
+		      WHERE baby_id = ?
+		    ) WHERE rn = 1
+		  )
+		ORDER BY test_name`, babyID, babyID)
+	if err != nil {
+		return nil, fmt.Errorf("list distinct lab tests: %w", err)
+	}
+	defer rows.Close()
+
+	var suggestions []LabTestSuggestion
+	for rows.Next() {
+		var s LabTestSuggestion
+		var unit, normalRange sql.NullString
+		if err := rows.Scan(&s.TestName, &unit, &normalRange); err != nil {
+			return nil, fmt.Errorf("scan lab test suggestion: %w", err)
+		}
+		s.Unit = nullStr(unit)
+		s.NormalRange = nullStr(normalRange)
+		suggestions = append(suggestions, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate lab test suggestions: %w", err)
+	}
+
+	return suggestions, nil
+}
+
 // DeleteLabResult hard-deletes a lab result.
 func DeleteLabResult(db *sql.DB, babyID, labID string) error {
 	return deleteByID(db, "lab_results", babyID, labID)

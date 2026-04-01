@@ -414,6 +414,84 @@ func TestDeleteLabResultHandler_Success(t *testing.T) {
 	}
 }
 
+// --- GET /api/babies/{id}/labs/tests ---
+
+func TestListLabTestSuggestionsHandler_Empty(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, "/api/babies/"+baby.ID+"/labs/tests")
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.ListLabTestSuggestionsHandler(db)))
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /api/babies/{id}/labs/tests", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if len(resp) != 0 {
+		t.Errorf("expected 0 suggestions, got %d", len(resp))
+	}
+}
+
+func TestListLabTestSuggestionsHandler_WithData(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	unit := "mg/dL"
+	normalRange := "0.1-1.2"
+	_, err := store.CreateLabResult(db, baby.ID, user.ID, "2025-07-01T10:30:00Z", "total_bilirubin", "2.5", &unit, &normalRange, nil)
+	if err != nil {
+		t.Fatalf("CreateLabResult failed: %v", err)
+	}
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, "/api/babies/"+baby.ID+"/labs/tests")
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.ListLabTestSuggestionsHandler(db)))
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /api/babies/{id}/labs/tests", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if len(resp) != 1 {
+		t.Fatalf("expected 1 suggestion, got %d", len(resp))
+	}
+	if resp[0]["test_name"] != "total_bilirubin" {
+		t.Errorf("expected test_name=total_bilirubin, got %v", resp[0]["test_name"])
+	}
+	if resp[0]["unit"] != "mg/dL" {
+		t.Errorf("expected unit=mg/dL, got %v", resp[0]["unit"])
+	}
+	if resp[0]["normal_range"] != "0.1-1.2" {
+		t.Errorf("expected normal_range=0.1-1.2, got %v", resp[0]["normal_range"])
+	}
+}
+
 func TestDeleteLabResultHandler_NotFound(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
