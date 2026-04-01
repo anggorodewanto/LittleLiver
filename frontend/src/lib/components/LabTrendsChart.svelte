@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ChartConfiguration } from 'chart.js';
 	import ChartWrapper from './ChartWrapper.svelte';
-	import { dateTickCallback } from '$lib/chart-utils';
+	import { dateTickCallback, legendFilter } from '$lib/chart-utils';
 
 	interface LabDataPoint {
 		timestamp: string;
@@ -99,6 +99,9 @@
 			data: { datasets },
 			options: {
 				responsive: true,
+				plugins: {
+					legend: { labels: { filter: legendFilter } }
+				},
 				scales: {
 					x: {
 						type: 'linear' as const,

@@ -35,5 +35,7 @@
 {#if isEmpty}
 	<p>No data available</p>
 {:else}
-	<canvas bind:this={canvas}></canvas>
+	<div style="position: relative; min-height: 250px;">
+		<canvas bind:this={canvas}></canvas>
+	</div>
 {/if}

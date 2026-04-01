@@ -2,6 +2,7 @@
 	import type { ChartConfiguration } from 'chart.js';
 	import ChartWrapper from './ChartWrapper.svelte';
 	import type { Percentiles } from '$lib/types/percentiles';
+	import { legendFilter, percentileSubtitle } from '$lib/chart-utils';
 
 	interface HeadCircumferenceDataPoint {
 		timestamp: string;
@@ -72,6 +73,10 @@
 		},
 		options: {
 			responsive: true,
+			plugins: {
+				legend: { labels: { filter: legendFilter } },
+				subtitle: percentileSubtitle
+			},
 			scales: {
 				x: {
 					type: 'linear',
