@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Use vi.hoisted to create the store before vi.mock hoisting
@@ -236,6 +236,35 @@ describe('Log Page', () => {
 		await screen.findByText(/edit medication/i);
 		const backLink = screen.getByRole('link', { name: /back/i });
 		expect(backLink.getAttribute('href')).toBe('/medications');
+	});
+
+	it('uploads photo with FormData field named "file"', async () => {
+		activeBaby.set(mockBaby);
+
+		const mockPostForm = apiClient.postForm as ReturnType<typeof vi.fn>;
+		mockPostForm.mockResolvedValue({ r2_key: 'photos/test.jpg' });
+
+		pageStore.set({
+			params: { metric: 'stool' },
+			url: new URL('http://localhost/log/stool')
+		});
+
+		render(LogPage);
+
+		const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+		const testFile = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+		await fireEvent.change(fileInput, { target: { files: [testFile] } });
+
+		await waitFor(() => {
+			expect(mockPostForm).toHaveBeenCalledWith(
+				`/babies/${mockBaby.id}/upload`,
+				expect.any(FormData)
+			);
+		});
+
+		const formData = mockPostForm.mock.calls[0][1] as FormData;
+		expect(formData.get('file')).toBeTruthy();
+		expect(formData.get('photo')).toBeNull();
 	});
 
 	it('shows back link to /logs when in edit mode', async () => {

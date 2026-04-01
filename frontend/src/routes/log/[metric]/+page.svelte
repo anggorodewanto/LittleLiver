@@ -102,7 +102,7 @@
 
 	async function uploadPhoto(babyId: string, file: File): Promise<string> {
 		const formData = new FormData();
-		formData.append('photo', file);
+		formData.append('file', file);
 		const data = await apiClient.postForm<{ r2_key: string }>(`/babies/${babyId}/upload`, formData);
 		return data.r2_key;
 	}
