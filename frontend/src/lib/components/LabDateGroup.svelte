@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { LabResult } from '$lib/types/lab';
 	import { labTestLabel } from '$lib/types/lab';
 
@@ -8,6 +9,10 @@
 	}
 
 	let { date, results }: Props = $props();
+
+	function handleEdit(id: string): void {
+		goto(`/log/lab?edit=${id}`);
+	}
 
 	let formattedDate = $derived(
 		new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
@@ -35,6 +40,7 @@
 				{#if hasNotes}
 					<th>Notes</th>
 				{/if}
+				<th></th>
 			</tr>
 		</thead>
 		<tbody>
@@ -49,6 +55,9 @@
 					{#if hasNotes}
 						<td class="notes">{result.notes ?? ''}</td>
 					{/if}
+					<td class="actions">
+						<button class="btn-edit" onclick={() => handleEdit(result.id)} aria-label="Edit">✏️</button>
+					</td>
 				</tr>
 			{/each}
 		</tbody>
@@ -106,5 +115,22 @@
 	.notes {
 		font-style: italic;
 		color: var(--color-text-muted);
+	}
+
+	.actions {
+		text-align: right;
+		width: 1%;
+		white-space: nowrap;
+	}
+
+	.btn-edit {
+		min-height: var(--touch-target);
+		padding: var(--space-1) var(--space-2);
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-xs);
+		cursor: pointer;
+		background: var(--color-surface);
+		color: var(--color-primary);
 	}
 </style>
