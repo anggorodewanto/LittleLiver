@@ -41,7 +41,12 @@ func WHOPercentilesHandler() http.HandlerFunc {
 			return
 		}
 
-		curves, err := who.PercentileCurves(sex, fromDays, toDays)
+		metric := q.Get("metric")
+		if metric == "" {
+			metric = "weight"
+		}
+
+		curves, err := who.PercentileCurvesForMetric(sex, metric, fromDays, toDays)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

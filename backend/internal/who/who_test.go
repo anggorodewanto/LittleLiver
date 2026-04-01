@@ -320,13 +320,13 @@ func TestWeightFromZScore_LZero(t *testing.T) {
 	t.Parallel()
 	// When L is 0, y = M * exp(S*z)
 	entry := lmsEntry{L: 0, M: 10.0, S: 0.1}
-	w := weightFromZScore(0, entry)
+	w := valueFromZScore(0, entry)
 	if math.Abs(w-10.0) > 0.001 {
-		t.Errorf("weightFromZScore(0, L=0) = %f, want 10.0", w)
+		t.Errorf("valueFromZScore(0, L=0) = %f, want 10.0", w)
 	}
-	w = weightFromZScore(1, entry)
+	w = valueFromZScore(1, entry)
 	if w <= 10.0 {
-		t.Errorf("weightFromZScore(1, L=0) = %f, want > 10.0", w)
+		t.Errorf("valueFromZScore(1, L=0) = %f, want > 10.0", w)
 	}
 }
 
@@ -405,11 +405,17 @@ func TestPercentileCurves_NegativeFrom(t *testing.T) {
 
 func TestDataLoaded(t *testing.T) {
 	t.Parallel()
-	// Verify that LMS data was loaded for both sexes
-	if len(maleLMS) != 731 {
-		t.Errorf("maleLMS has %d entries, want 731 (days 0-730)", len(maleLMS))
+	// Verify that LMS data was loaded for both sexes and metrics
+	if len(wfaMaleLMS) != 731 {
+		t.Errorf("wfaMaleLMS has %d entries, want 731 (days 0-730)", len(wfaMaleLMS))
 	}
-	if len(femaleLMS) != 731 {
-		t.Errorf("femaleLMS has %d entries, want 731 (days 0-730)", len(femaleLMS))
+	if len(wfaFemaleLMS) != 731 {
+		t.Errorf("wfaFemaleLMS has %d entries, want 731 (days 0-730)", len(wfaFemaleLMS))
+	}
+	if len(hcfaMaleLMS) != 731 {
+		t.Errorf("hcfaMaleLMS has %d entries, want 731 (days 0-730)", len(hcfaMaleLMS))
+	}
+	if len(hcfaFemaleLMS) != 731 {
+		t.Errorf("hcfaFemaleLMS has %d entries, want 731 (days 0-730)", len(hcfaFemaleLMS))
 	}
 }

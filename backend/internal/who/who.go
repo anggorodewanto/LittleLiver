@@ -1,25 +1,31 @@
 // Package who provides WHO Child Growth Standards percentile calculations.
 //
-// It embeds WHO weight-for-age LMS tables (0-24 months, male + female)
-// and provides functions to compute z-scores, percentiles, and
-// percentile curves for charting.
+// It embeds WHO LMS tables (0-24 months, male + female) for weight-for-age
+// and head-circumference-for-age, and provides functions to compute z-scores,
+// percentiles, and percentile curves for charting.
 package who
 
 import (
+	"bytes"
 	"embed"
 	"encoding/csv"
 	"errors"
 	"fmt"
 	"math"
 	"strconv"
-	"bytes"
 )
 
 //go:embed data/wfa_boys_lms.csv
-var boysCSV embed.FS
+var wfaBoysCSV embed.FS
 
 //go:embed data/wfa_girls_lms.csv
-var girlsCSV embed.FS
+var wfaGirlsCSV embed.FS
+
+//go:embed data/hcfa_boys_lms.csv
+var hcfaBoysCSV embed.FS
+
+//go:embed data/hcfa_girls_lms.csv
+var hcfaGirlsCSV embed.FS
 
 // lmsEntry holds the L, M, S parameters for a single age in days.
 type lmsEntry struct {
@@ -32,6 +38,7 @@ type lmsEntry struct {
 type CurvePoint struct {
 	AgeDays  int     `json:"age_days"`
 	WeightKg float64 `json:"weight_kg"`
+	Value    float64 `json:"value"`
 }
 
 // PercentileCurve represents one percentile line (e.g., 50th percentile).
@@ -43,21 +50,36 @@ type PercentileCurve struct {
 // StandardPercentiles are the WHO percentile lines used for growth charts.
 var StandardPercentiles = []float64{3, 15, 50, 85, 97}
 
+// ValidMetrics lists the supported metric types.
+var ValidMetrics = []string{"weight", "head_circumference"}
+
 // Package-level LMS tables, indexed by day (0-730).
 var (
-	maleLMS   []lmsEntry
-	femaleLMS []lmsEntry
+	// Weight-for-age
+	wfaMaleLMS   []lmsEntry
+	wfaFemaleLMS []lmsEntry
+	// Head-circumference-for-age
+	hcfaMaleLMS   []lmsEntry
+	hcfaFemaleLMS []lmsEntry
 )
 
 func init() {
 	var err error
-	maleLMS, err = loadLMS(boysCSV, "data/wfa_boys_lms.csv")
+	wfaMaleLMS, err = loadLMS(wfaBoysCSV, "data/wfa_boys_lms.csv")
 	if err != nil {
-		panic(fmt.Sprintf("who: failed to load boys LMS data: %v", err))
+		panic(fmt.Sprintf("who: failed to load boys weight LMS data: %v", err))
 	}
-	femaleLMS, err = loadLMS(girlsCSV, "data/wfa_girls_lms.csv")
+	wfaFemaleLMS, err = loadLMS(wfaGirlsCSV, "data/wfa_girls_lms.csv")
 	if err != nil {
-		panic(fmt.Sprintf("who: failed to load girls LMS data: %v", err))
+		panic(fmt.Sprintf("who: failed to load girls weight LMS data: %v", err))
+	}
+	hcfaMaleLMS, err = loadLMS(hcfaBoysCSV, "data/hcfa_boys_lms.csv")
+	if err != nil {
+		panic(fmt.Sprintf("who: failed to load boys head circumference LMS data: %v", err))
+	}
+	hcfaFemaleLMS, err = loadLMS(hcfaGirlsCSV, "data/hcfa_girls_lms.csv")
+	if err != nil {
+		panic(fmt.Sprintf("who: failed to load girls head circumference LMS data: %v", err))
 	}
 }
 
@@ -103,15 +125,35 @@ func loadLMS(fs embed.FS, path string) ([]lmsEntry, error) {
 	return entries, nil
 }
 
-// getLMS returns the LMS table for the given sex.
+// getLMS returns the weight-for-age LMS table for the given sex.
+// Kept for backward compatibility with ZScore and Percentile functions.
 func getLMS(sex string) ([]lmsEntry, error) {
-	switch sex {
-	case "male":
-		return maleLMS, nil
-	case "female":
-		return femaleLMS, nil
+	return getLMSForMetric(sex, "weight")
+}
+
+// getLMSForMetric returns the LMS table for the given sex and metric.
+func getLMSForMetric(sex, metric string) ([]lmsEntry, error) {
+	switch metric {
+	case "weight":
+		switch sex {
+		case "male":
+			return wfaMaleLMS, nil
+		case "female":
+			return wfaFemaleLMS, nil
+		default:
+			return nil, fmt.Errorf("invalid sex %q: must be \"male\" or \"female\"", sex)
+		}
+	case "head_circumference":
+		switch sex {
+		case "male":
+			return hcfaMaleLMS, nil
+		case "female":
+			return hcfaFemaleLMS, nil
+		default:
+			return nil, fmt.Errorf("invalid sex %q: must be \"male\" or \"female\"", sex)
+		}
 	default:
-		return nil, fmt.Errorf("invalid sex %q: must be \"male\" or \"female\"", sex)
+		return nil, fmt.Errorf("invalid metric %q: must be \"weight\" or \"head_circumference\"", metric)
 	}
 }
 
@@ -198,11 +240,11 @@ func normalCDF(x float64) float64 {
 	return 0.5 * (1.0 + sign*y)
 }
 
-// weightFromZScore computes the weight (kg) for a given z-score using the LMS method.
+// valueFromZScore computes the weight (kg) for a given z-score using the LMS method.
 //
 //	y = M * (1 + L*S*z)^(1/L)  when L != 0
 //	y = M * exp(S*z)            when L == 0
-func weightFromZScore(z float64, entry lmsEntry) float64 {
+func valueFromZScore(z float64, entry lmsEntry) float64 {
 	if math.Abs(entry.L) < 1e-10 {
 		return entry.M * math.Exp(entry.S*z)
 	}
@@ -274,11 +316,16 @@ func percentileToZ(pct float64) float64 {
 // PercentileCurves generates the 3rd, 15th, 50th, 85th, and 97th weight-for-age
 // percentile curves for a given sex and age range (inclusive).
 func PercentileCurves(sex string, fromDays, toDays int) ([]PercentileCurve, error) {
+	return PercentileCurvesForMetric(sex, "weight", fromDays, toDays)
+}
+
+// PercentileCurvesForMetric generates percentile curves for a given metric, sex, and age range.
+func PercentileCurvesForMetric(sex, metric string, fromDays, toDays int) ([]PercentileCurve, error) {
 	if fromDays < 0 {
 		return nil, errors.New("from_days must be non-negative")
 	}
 
-	table, err := getLMS(sex)
+	table, err := getLMSForMetric(sex, metric)
 	if err != nil {
 		return nil, err
 	}
@@ -303,10 +350,12 @@ func PercentileCurves(sex string, fromDays, toDays int) ([]PercentileCurve, erro
 		points := make([]CurvePoint, numPoints)
 		z := zScores[i]
 		for day := fromDays; day <= toDays; day++ {
-			w := weightFromZScore(z, table[day])
+			v := valueFromZScore(z, table[day])
+			rounded := math.Round(v*10000) / 10000
 			points[day-fromDays] = CurvePoint{
 				AgeDays:  day,
-				WeightKg: math.Round(w*10000) / 10000, // 4 decimal places
+				WeightKg: rounded,
+				Value:    rounded,
 			}
 		}
 		curves[i] = PercentileCurve{

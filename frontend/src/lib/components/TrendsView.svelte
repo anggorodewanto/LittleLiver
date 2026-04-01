@@ -69,6 +69,7 @@
 	let error = $state<string | null>(null);
 	let dashboard = $state<DashboardResponse | null>(null);
 	let percentiles = $state<Percentiles | null>(null);
+	let hcPercentiles = $state<Percentiles | null>(null);
 
 	function computeDateRange(range: string, customFrom?: string, customTo?: string): { from: string; to: string } {
 		const now = new Date();
@@ -104,14 +105,17 @@
 			const fromDays = Math.max(0, Math.floor((fromDate.getTime() - birthDate.getTime()) / (24 * 60 * 60 * 1000)));
 			const toDays = Math.max(0, Math.floor((toDate.getTime() - birthDate.getTime()) / (24 * 60 * 60 * 1000)));
 
-			const [dashboardData, percentileData] = await Promise.all([
+			const [dashboardData, percentileData, hcPercentileData] = await Promise.all([
 				apiClient.get<DashboardResponse>(`/babies/${babyId}/dashboard?from=${from}&to=${to}`),
 				apiClient.get<PercentileResponse>(`/who/percentiles?sex=${sex}&from_days=${fromDays}&to_days=${toDays}`)
+					.catch(() => null),
+				apiClient.get<PercentileResponse>(`/who/percentiles?sex=${sex}&metric=head_circumference&from_days=${fromDays}&to_days=${toDays}`)
 					.catch(() => null)
 			]);
 
 			dashboard = dashboardData;
 			percentiles = percentileData?.curves ? transformCurves(percentileData.curves) : null;
+			hcPercentiles = hcPercentileData?.curves ? transformCurves(hcPercentileData.curves) : null;
 		} catch {
 			error = 'Failed to load trends data';
 		} finally {
@@ -175,7 +179,11 @@
 
 			<section class="chart-section">
 				<h3>Head Circumference</h3>
-				<HeadCircumferenceChart data={dashboard.chart_data_series.head_circumference} />
+				<HeadCircumferenceChart
+					data={dashboard.chart_data_series.head_circumference}
+					percentiles={hcPercentiles}
+					{dateOfBirth}
+				/>
 			</section>
 
 			<section class="chart-section">
