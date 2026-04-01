@@ -288,8 +288,9 @@ func computeNextDoseAt(scheduleTimes []string, tz *string, lastGivenAt *time.Tim
 		if err != nil {
 			continue
 		}
-		// Skip this slot if a dose was already logged at or after this schedule time today.
-		if lastGivenAt != nil && !lastGivenAt.In(loc).Before(t) {
+		// Skip this slot if a dose was logged within 30 min before or at/after
+		// this schedule time (matches the frontend's 30-min "due now" window).
+		if lastGivenAt != nil && !lastGivenAt.In(loc).Before(t.Add(-30*time.Minute)) {
 			continue
 		}
 		if now.Sub(t) <= overdueGrace && (!found || t.Before(earliest)) {

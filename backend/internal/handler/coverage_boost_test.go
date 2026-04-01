@@ -1824,5 +1824,165 @@ func TestDashboardHandler_NextDoseAt_RecentlyPassedDoseStillReturned(t *testing.
 	}
 }
 
+func TestDashboardHandler_NextDoseAt_EarlyDoseCoversSlot(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	now := time.Now().UTC()
+
+	// Skip near midnight to avoid date-boundary flakiness.
+	if now.Hour() == 23 && now.Minute() >= 30 || now.Hour() == 0 && now.Minute() < 10 {
+		t.Skip("skipping near midnight to avoid flaky date boundary")
+	}
+
+	// Schedule 10 minutes from now; log a dose NOW (10 min early, within 30-min window).
+	schedTime := now.Add(10 * time.Minute).Format("15:04")
+	sched := `["` + schedTime + `"]`
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "EarlyDoseMed", "5mg", "once_daily", &sched, &tz, nil, nil)
+	if err != nil {
+		t.Fatalf("create medication: %v", err)
+	}
+
+	givenAt := now.Format("2006-01-02T15:04:05Z")
+	_, err = store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
+	if err != nil {
+		t.Fatalf("create med_log: %v", err)
+	}
+
+	_, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
+
+	if len(resp.UpcomingMeds) != 1 {
+		t.Fatalf("expected 1 upcoming med, got %d", len(resp.UpcomingMeds))
+	}
+
+	medResp := resp.UpcomingMeds[0]
+	if medResp.NextDoseAt == nil {
+		t.Fatal("expected non-nil next_dose_at")
+	}
+
+	nextDose, err := time.Parse(time.RFC3339, *medResp.NextDoseAt)
+	if err != nil {
+		t.Fatalf("failed to parse next_dose_at %q: %v", *medResp.NextDoseAt, err)
+	}
+
+	// Early dose should cover today's slot → next_dose_at should be tomorrow.
+	tomorrow := now.AddDate(0, 0, 1)
+	if nextDose.Day() == now.Day() && nextDose.Month() == now.Month() {
+		t.Errorf("expected next_dose_at to be tomorrow (%s), but got today (%s)",
+			tomorrow.Format("2006-01-02"), nextDose.Format("2006-01-02"))
+	}
+}
+
+func TestDashboardHandler_NextDoseAt_DoseTooEarlyDoesNotCoverSlot(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	now := time.Now().UTC()
+
+	if now.Hour() == 23 && now.Minute() >= 30 || now.Hour() == 0 && now.Minute() < 40 {
+		t.Skip("skipping near midnight to avoid flaky date boundary")
+	}
+
+	// Schedule 10 minutes from now; log a dose 35 min ago (45 min before schedule, outside window).
+	schedTime := now.Add(10 * time.Minute).Format("15:04")
+	sched := `["` + schedTime + `"]`
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "TooEarlyDoseMed", "5mg", "once_daily", &sched, &tz, nil, nil)
+	if err != nil {
+		t.Fatalf("create medication: %v", err)
+	}
+
+	givenAt := now.Add(-35 * time.Minute).Format("2006-01-02T15:04:05Z")
+	_, err = store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
+	if err != nil {
+		t.Fatalf("create med_log: %v", err)
+	}
+
+	_, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
+
+	if len(resp.UpcomingMeds) != 1 {
+		t.Fatalf("expected 1 upcoming med, got %d", len(resp.UpcomingMeds))
+	}
+
+	medResp := resp.UpcomingMeds[0]
+	if medResp.NextDoseAt == nil {
+		t.Fatal("expected non-nil next_dose_at")
+	}
+
+	nextDose, err := time.Parse(time.RFC3339, *medResp.NextDoseAt)
+	if err != nil {
+		t.Fatalf("failed to parse next_dose_at %q: %v", *medResp.NextDoseAt, err)
+	}
+
+	// Dose was too early (outside 30-min window) → today's slot should NOT be covered.
+	if nextDose.Day() != now.Day() || nextDose.Month() != now.Month() {
+		t.Errorf("expected next_dose_at to be today (%s), got %s",
+			now.Format("2006-01-02"), nextDose.Format("2006-01-02"))
+	}
+}
+
+func TestDashboardHandler_NextDoseAt_DoseExactlyAtScheduleTime(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	tz := "UTC"
+	now := time.Now().UTC()
+
+	if now.Hour() == 23 && now.Minute() >= 50 || now.Hour() == 0 && now.Minute() < 10 {
+		t.Skip("skipping near midnight to avoid flaky date boundary")
+	}
+
+	// Schedule 10 minutes ago (within overdue grace); log a dose at exactly the schedule time.
+	schedT := now.Add(-10 * time.Minute)
+	schedTime := schedT.Format("15:04")
+	sched := `["` + schedTime + `"]`
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "ExactTimeMed", "5mg", "once_daily", &sched, &tz, nil, nil)
+	if err != nil {
+		t.Fatalf("create medication: %v", err)
+	}
+
+	givenAt := schedT.Format("2006-01-02T15:04:05Z")
+	_, err = store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
+	if err != nil {
+		t.Fatalf("create med_log: %v", err)
+	}
+
+	_, resp := doDashboardRequest(t, db, user.ID, baby.ID, "")
+
+	if len(resp.UpcomingMeds) != 1 {
+		t.Fatalf("expected 1 upcoming med, got %d", len(resp.UpcomingMeds))
+	}
+
+	medResp := resp.UpcomingMeds[0]
+	if medResp.NextDoseAt == nil {
+		t.Fatal("expected non-nil next_dose_at")
+	}
+
+	nextDose, err := time.Parse(time.RFC3339, *medResp.NextDoseAt)
+	if err != nil {
+		t.Fatalf("failed to parse next_dose_at %q: %v", *medResp.NextDoseAt, err)
+	}
+
+	// Dose at exactly the schedule time → slot covered → next_dose_at is tomorrow.
+	tomorrow := now.AddDate(0, 0, 1)
+	if nextDose.Day() == now.Day() && nextDose.Month() == now.Month() {
+		t.Errorf("expected next_dose_at to be tomorrow (%s), but got today (%s)",
+			tomorrow.Format("2006-01-02"), nextDose.Format("2006-01-02"))
+	}
+}
+
 // Suppress unused import warnings
 var _ = storage.NewMemoryStore
