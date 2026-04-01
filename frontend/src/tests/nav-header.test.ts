@@ -98,8 +98,23 @@ describe('NavHeader', () => {
 		render(NavHeader);
 
 		expect(screen.getByRole('link', { name: /trends/i })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /labs/i })).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: /meds/i })).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: /logs/i })).toBeInTheDocument();
+	});
+
+	it('shows Labs tab linking to /labs', () => {
+		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
+		babies.set([
+			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null }
+		]);
+		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
+
+		render(NavHeader);
+
+		const labsLink = screen.getByRole('link', { name: /labs/i });
+		expect(labsLink).toBeInTheDocument();
+		expect(labsLink.getAttribute('href')).toBe('/labs');
 	});
 
 	it('shows Logs tab linking to /logs', () => {
