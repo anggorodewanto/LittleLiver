@@ -138,6 +138,34 @@ type Weight struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
+// HeadCircumference represents a single head circumference measurement for a baby.
+type HeadCircumference struct {
+	ID                string    `json:"id"`
+	BabyID            string    `json:"baby_id"`
+	LoggedBy          string    `json:"logged_by"`
+	UpdatedBy         *string   `json:"updated_by,omitempty"`
+	Timestamp         time.Time `json:"timestamp"`
+	CircumferenceCm   float64   `json:"circumference_cm"`
+	MeasurementSource *string   `json:"measurement_source,omitempty"`
+	Notes             *string   `json:"notes,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// UpperArmCircumference represents a single upper arm (MUAC) measurement for a baby.
+type UpperArmCircumference struct {
+	ID                string    `json:"id"`
+	BabyID            string    `json:"baby_id"`
+	LoggedBy          string    `json:"logged_by"`
+	UpdatedBy         *string   `json:"updated_by,omitempty"`
+	Timestamp         time.Time `json:"timestamp"`
+	CircumferenceCm   float64   `json:"circumference_cm"`
+	MeasurementSource *string   `json:"measurement_source,omitempty"`
+	Notes             *string   `json:"notes,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
 // Temperature represents a single temperature reading for a baby.
 type Temperature struct {
 	ID        string    `json:"id"`

@@ -100,6 +100,12 @@
 			if (entry.direction) parts.push(entry.direction === 'intake' ? 'Intake' : 'Output');
 			if (entry.method) parts.push(capitalize(entry.method));
 			if (entry.volume_ml) parts.push(`${entry.volume_ml} mL`);
+		} else if (logType.key === 'head-circumference') {
+			if (entry.circumference_cm) parts.push(`${entry.circumference_cm} cm`);
+			if (entry.measurement_source) parts.push(capitalize(entry.measurement_source));
+		} else if (logType.key === 'upper-arm-circumference') {
+			if (entry.circumference_cm) parts.push(`${entry.circumference_cm} cm`);
+			if (entry.measurement_source) parts.push(capitalize(entry.measurement_source));
 		}
 
 		return parts;

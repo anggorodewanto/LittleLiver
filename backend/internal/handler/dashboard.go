@@ -47,8 +47,10 @@ type chartDataSeriesResponse struct {
 	Temperature  []store.TemperatureSeriesEntry   `json:"temperature"`
 	Weight       []store.WeightSeriesEntry        `json:"weight"`
 	AbdomenGirth []store.AbdomenGirthEntry        `json:"abdomen_girth"`
-	StoolColor   []store.StoolColorSeriesEntry    `json:"stool_color"`
-	LabTrends    map[string][]store.LabTrendEntry `json:"lab_trends"`
+	StoolColor            []store.StoolColorSeriesEntry            `json:"stool_color"`
+	HeadCircumference     []store.HeadCircumferenceSeriesEntry     `json:"head_circumference"`
+	UpperArmCircumference []store.UpperArmCircumferenceSeriesEntry `json:"upper_arm_circumference"`
+	LabTrends             map[string][]store.LabTrendEntry         `json:"lab_trends"`
 }
 
 // dashboardResponseJSON is the full dashboard API response.
@@ -163,6 +165,20 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		headCircSeries, err := store.GetHeadCircumferenceSeries(db, baby.ID, from, to, loc)
+		if err != nil {
+			log.Printf("head circumference series: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		upperArmCircSeries, err := store.GetUpperArmCircumferenceSeries(db, baby.ID, from, to, loc)
+		if err != nil {
+			log.Printf("upper arm circumference series: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
 		// Fetch active alerts (global, ignores from/to)
 		storeAlerts, err := store.GetActiveAlerts(db, baby.ID)
 		if err != nil {
@@ -220,8 +236,10 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 				Temperature:  tempSeries,
 				Weight:       weightSeries,
 				AbdomenGirth: abdomenSeries,
-				StoolColor:   stoolColorSeries,
-				LabTrends:    labTrends,
+				StoolColor:            stoolColorSeries,
+				HeadCircumference:     headCircSeries,
+				UpperArmCircumference: upperArmCircSeries,
+				LabTrends:             labTrends,
 			},
 			ActiveAlerts: storeAlerts,
 		}

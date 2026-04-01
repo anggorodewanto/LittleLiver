@@ -46,6 +46,8 @@ const mockDashboardResponse = {
 			{ timestamp: '2026-03-13T08:00:00Z', color_score: 5 },
 			{ timestamp: '2026-03-14T09:00:00Z', color_score: 3 }
 		],
+		head_circumference: [],
+		upper_arm_circumference: [],
 		lab_trends: {}
 	}
 };
@@ -142,7 +144,7 @@ describe('TrendsView', () => {
 		);
 	});
 
-	it('shows chart section headings for all seven charts', async () => {
+	it('shows chart section headings for all nine charts', async () => {
 		render(TrendsView, {
 			props: { babyId: 'baby-1', sex: 'female', dateOfBirth: '2026-01-15' }
 		});
@@ -151,6 +153,8 @@ describe('TrendsView', () => {
 		expect(screen.getByText(/weight/i)).toBeInTheDocument();
 		expect(screen.getByText(/temperature/i)).toBeInTheDocument();
 		expect(screen.getByText(/abdomen girth/i)).toBeInTheDocument();
+		expect(screen.getByText(/head circumference/i)).toBeInTheDocument();
+		expect(screen.getByText(/upper arm circumference/i)).toBeInTheDocument();
 		expect(screen.getByText(/feeding/i)).toBeInTheDocument();
 		expect(screen.getByText(/diaper/i)).toBeInTheDocument();
 		expect(screen.getByText(/lab trends/i)).toBeInTheDocument();

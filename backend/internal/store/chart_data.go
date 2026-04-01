@@ -50,6 +50,18 @@ type AbdomenGirthEntry struct {
 	GirthCm   float64 `json:"girth_cm"`
 }
 
+// HeadCircumferenceSeriesEntry holds an individual head circumference reading.
+type HeadCircumferenceSeriesEntry struct {
+	Timestamp       string  `json:"timestamp"`
+	CircumferenceCm float64 `json:"circumference_cm"`
+}
+
+// UpperArmCircumferenceSeriesEntry holds an individual upper arm circumference reading.
+type UpperArmCircumferenceSeriesEntry struct {
+	Timestamp       string  `json:"timestamp"`
+	CircumferenceCm float64 `json:"circumference_cm"`
+}
+
 // StoolColorSeriesEntry holds an individual stool color reading.
 type StoolColorSeriesEntry struct {
 	Timestamp  string `json:"timestamp"`
@@ -333,4 +345,72 @@ func GetLabTrends(db *sql.DB, babyID, from, to string, loc *time.Location) (map[
 	}
 
 	return trends, nil
+}
+
+// GetHeadCircumferenceSeries returns individual head circumference readings within the given date range.
+func GetHeadCircumferenceSeries(db *sql.DB, babyID, from, to string, loc *time.Location) ([]HeadCircumferenceSeriesEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.Query(
+		`SELECT timestamp, circumference_cm
+		 FROM head_circumferences
+		 WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?
+		 ORDER BY timestamp ASC`,
+		babyID, fromTime, toTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query head circumference series: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []HeadCircumferenceSeriesEntry
+	for rows.Next() {
+		var e HeadCircumferenceSeriesEntry
+		if err := rows.Scan(&e.Timestamp, &e.CircumferenceCm); err != nil {
+			return nil, fmt.Errorf("scan head circumference series: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration: %w", err)
+	}
+
+	return emptySliceIfNil(entries), nil
+}
+
+// GetUpperArmCircumferenceSeries returns individual upper arm circumference readings within the given date range.
+func GetUpperArmCircumferenceSeries(db *sql.DB, babyID, from, to string, loc *time.Location) ([]UpperArmCircumferenceSeriesEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.Query(
+		`SELECT timestamp, circumference_cm
+		 FROM upper_arm_circumferences
+		 WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?
+		 ORDER BY timestamp ASC`,
+		babyID, fromTime, toTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query upper arm circumference series: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []UpperArmCircumferenceSeriesEntry
+	for rows.Next() {
+		var e UpperArmCircumferenceSeriesEntry
+		if err := rows.Scan(&e.Timestamp, &e.CircumferenceCm); err != nil {
+			return nil, fmt.Errorf("scan upper arm circumference series: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration: %w", err)
+	}
+
+	return emptySliceIfNil(entries), nil
 }

@@ -12,6 +12,8 @@
 	import FeedingChart from './FeedingChart.svelte';
 	import DiaperChart from './DiaperChart.svelte';
 	import LabTrendsChart from './LabTrendsChart.svelte';
+	import HeadCircumferenceChart from './HeadCircumferenceChart.svelte';
+	import UpperArmCircumferenceChart from './UpperArmCircumferenceChart.svelte';
 
 	interface Props {
 		babyId: string;
@@ -27,6 +29,8 @@
 			feeding_daily: { date: string; total_volume_ml: number; total_calories: number; feed_count: number; by_type: Record<string, number> }[];
 			diaper_daily: { date: string; wet_count: number; stool_count: number }[];
 			abdomen_girth: { timestamp: string; girth_cm: number }[];
+			head_circumference: { timestamp: string; circumference_cm: number }[];
+			upper_arm_circumference: { timestamp: string; circumference_cm: number }[];
 			lab_trends: Record<string, { timestamp: string; test_name: string; value: string; unit: string }[]>;
 		};
 		[key: string]: unknown;
@@ -167,6 +171,16 @@
 			<section class="chart-section">
 				<h3>Diaper Counts</h3>
 				<DiaperChart data={dashboard.chart_data_series.diaper_daily} />
+			</section>
+
+			<section class="chart-section">
+				<h3>Head Circumference</h3>
+				<HeadCircumferenceChart data={dashboard.chart_data_series.head_circumference} />
+			</section>
+
+			<section class="chart-section">
+				<h3>Upper Arm Circumference</h3>
+				<UpperArmCircumferenceChart data={dashboard.chart_data_series.upper_arm_circumference} />
 			</section>
 
 			<section class="chart-section">

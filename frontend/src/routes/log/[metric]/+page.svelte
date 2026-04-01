@@ -18,6 +18,8 @@
 	import MedicationForm from '$lib/components/MedicationForm.svelte';
 	import DoseLogForm from '$lib/components/DoseLogForm.svelte';
 	import FluidLogForm from '$lib/components/FluidLogForm.svelte';
+	import HeadCircumferenceForm from '$lib/components/HeadCircumferenceForm.svelte';
+	import UpperArmCircumferenceForm from '$lib/components/UpperArmCircumferenceForm.svelte';
 
 	const METRIC_CONFIG: Record<string, { label: string; endpoint: string; hasPhoto: boolean; multiPhoto?: boolean }> = {
 		feeding: { label: 'Feeding', endpoint: 'feedings', hasPhoto: false },
@@ -32,6 +34,8 @@
 		notes: { label: 'Note', endpoint: 'notes', hasPhoto: true, multiPhoto: true },
 		medication: { label: 'Medication', endpoint: 'medications', hasPhoto: false },
 		med: { label: 'Dose', endpoint: 'med-logs', hasPhoto: false },
+		head_circumference: { label: 'Head Circumference', endpoint: 'head-circumferences', hasPhoto: false },
+		upper_arm_circumference: { label: 'Upper Arm Circumference', endpoint: 'upper-arm-circumferences', hasPhoto: false },
 		other_intake: { label: 'Other Intake', endpoint: 'fluid-log', hasPhoto: false },
 		other_output: { label: 'Other Output', endpoint: 'fluid-log', hasPhoto: false }
 	};
@@ -180,6 +184,10 @@
 		<MedicationForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'med'}
 		<DoseLogForm onsubmit={handleSubmit} initialData={editData} babyId={baby.id} {medicationId} {scheduledTime} {submitting} {error} />
+	{:else if metric === 'head_circumference'}
+		<HeadCircumferenceForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
+	{:else if metric === 'upper_arm_circumference'}
+		<UpperArmCircumferenceForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'other_intake'}
 		<FluidLogForm direction="intake" onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'other_output'}

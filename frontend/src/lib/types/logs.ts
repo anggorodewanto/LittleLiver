@@ -17,5 +17,7 @@ export const LOG_TYPES: LogTypeConfig[] = [
 	{ key: 'lab', label: 'Labs', endpoint: 'labs', metricParam: 'lab' },
 	{ key: 'note', label: 'Notes', endpoint: 'notes', metricParam: 'notes' },
 	{ key: 'med-log', label: 'Med Logs', endpoint: 'med-logs', metricParam: 'med' },
-	{ key: 'fluid', label: 'Fluid I/O', endpoint: 'fluid-log', metricParam: 'other_intake' }
+	{ key: 'fluid', label: 'Fluid I/O', endpoint: 'fluid-log', metricParam: 'other_intake' },
+	{ key: 'head-circumference', label: 'Head Circ.', endpoint: 'head-circumferences', metricParam: 'head_circumference' },
+	{ key: 'upper-arm-circumference', label: 'Arm Circ.', endpoint: 'upper-arm-circumferences', metricParam: 'upper_arm_circumference' }
 ];

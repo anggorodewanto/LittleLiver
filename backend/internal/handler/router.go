@@ -127,6 +127,12 @@ func NewMux(opts ...Option) *http.ServeMux {
 			registerMetricCRUD(mux, "/api/babies/{id}/fluid-log", rateMw, authMw, csrfMw,
 				CreateFluidLogHandler(cfg.db), ListFluidLogHandler(cfg.db),
 				GetFluidLogHandler(cfg.db), UpdateFluidLogHandler(cfg.db), DeleteFluidLogHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/head-circumferences", rateMw, authMw, csrfMw,
+				CreateHeadCircumferenceHandler(cfg.db), ListHeadCircumferencesHandler(cfg.db),
+				GetHeadCircumferenceHandler(cfg.db), UpdateHeadCircumferenceHandler(cfg.db), DeleteHeadCircumferenceHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/upper-arm-circumferences", rateMw, authMw, csrfMw,
+				CreateUpperArmCircumferenceHandler(cfg.db), ListUpperArmCircumferencesHandler(cfg.db),
+				GetUpperArmCircumferenceHandler(cfg.db), UpdateUpperArmCircumferenceHandler(cfg.db), DeleteUpperArmCircumferenceHandler(cfg.db))
 
 			// Medication CRUD endpoints (no DELETE — only deactivation via PUT)
 			mux.Handle("POST /api/babies/{id}/medications", rateMw(authMw(csrfMw(http.HandlerFunc(CreateMedicationHandler(cfg.db))))))
