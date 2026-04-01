@@ -96,8 +96,7 @@
 	}
 
 	td {
-		padding: var(--space-2);
-		border-bottom: 1px solid var(--color-border-light, var(--color-border));
+		padding: var(--space-1) var(--space-2);
 	}
 
 	.test-name {
