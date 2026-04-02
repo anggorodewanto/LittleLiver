@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import TodayDashboard from '$lib/components/TodayDashboard.svelte';
+import type { Baby } from '$lib/stores/baby';
 
 // Mock the API client
 vi.mock('$lib/api', () => ({
@@ -16,6 +17,15 @@ vi.mock('$app/navigation', () => ({
 
 import { apiClient } from '$lib/api';
 import { goto } from '$app/navigation';
+
+const mockBaby: Baby = {
+	id: 'baby-1',
+	name: 'Lily',
+	sex: 'female',
+	date_of_birth: '2026-01-10',
+	diagnosis_date: '2026-01-15',
+	kasai_date: '2026-01-20'
+};
 
 const mockDashboardResponse = {
 	summary_cards: {
@@ -112,7 +122,7 @@ describe('TodayDashboard', () => {
 	// --- Summary Cards ---
 
 	it('displays total feeds from dashboard data', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		const feeds = await screen.findByText('6');
 		expect(feeds).toBeInTheDocument();
@@ -120,28 +130,28 @@ describe('TodayDashboard', () => {
 	});
 
 	it('displays total calories from dashboard data', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText('480')).toBeInTheDocument();
 		expect(screen.getByText(/calories/i)).toBeInTheDocument();
 	});
 
 	it('displays total wet diapers from dashboard data', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText('4')).toBeInTheDocument();
 		expect(screen.getByText(/wet diapers/i)).toBeInTheDocument();
 	});
 
 	it('displays total stools with worst color indicator', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText('2')).toBeInTheDocument();
 		expect(screen.getByText(/stools/i)).toBeInTheDocument();
 	});
 
 	it('shows a stool color indicator dot on the stools card using worst_stool_color', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('2');
 
@@ -160,7 +170,7 @@ describe('TodayDashboard', () => {
 			}
 		});
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('2');
 
@@ -169,14 +179,14 @@ describe('TodayDashboard', () => {
 	});
 
 	it('displays last temperature', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText(/37\.2/)).toBeInTheDocument();
 		expect(screen.getByText(/last temp/i)).toBeInTheDocument();
 	});
 
 	it('displays last weight', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText(/4\.5/)).toBeInTheDocument();
 		expect(screen.getByText(/weight/i)).toBeInTheDocument();
@@ -196,7 +206,7 @@ describe('TodayDashboard', () => {
 			}
 		});
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		const dashes = await screen.findAllByText('—');
 		expect(dashes.length).toBeGreaterThanOrEqual(2);
@@ -205,7 +215,7 @@ describe('TodayDashboard', () => {
 	// --- Stool Color Trend ---
 
 	it('renders stool color trend dots for each of the last 7 days', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		// Wait for loading to complete
 		await screen.findByText('6');
@@ -215,7 +225,7 @@ describe('TodayDashboard', () => {
 	});
 
 	it('colors stool trend dots according to color rating', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('6');
 
@@ -231,7 +241,7 @@ describe('TodayDashboard', () => {
 	// --- Upcoming Medications ---
 
 	it('shows upcoming medication names and doses', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		// Wait for dashboard to load
 		await screen.findByText('Upcoming Medications');
@@ -264,7 +274,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(medResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		// 2h15m from now
 		expect(await screen.findByText(/in 2 h 15 min/i)).toBeInTheDocument();
@@ -292,7 +302,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(pastMedResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText(/overdue/i)).toBeInTheDocument();
 
@@ -316,7 +326,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(noScheduleResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText(/vitamin d/i)).toBeInTheDocument();
 		expect(screen.getByText(/no schedule/i)).toBeInTheDocument();
@@ -325,7 +335,7 @@ describe('TodayDashboard', () => {
 	// --- Alert Banners ---
 
 	it('renders alert banners for each active alert type', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		// Use exact text matching on the alert-label elements to avoid matching both label and message
 		const labels = await screen.findAllByText(
@@ -345,7 +355,7 @@ describe('TodayDashboard', () => {
 	});
 
 	it('renders dismiss buttons on alert banners', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('Acholic Stool');
 
@@ -356,7 +366,7 @@ describe('TodayDashboard', () => {
 	// --- Alert Dismissal ---
 
 	it('dismissing an alert hides it and persists to localStorage', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('Acholic Stool');
 
@@ -372,7 +382,7 @@ describe('TodayDashboard', () => {
 	it('previously dismissed alerts are hidden on mount', async () => {
 		localStorage.setItem('dismissed_alerts', JSON.stringify(['alert-1', 'alert-3']));
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		// Wait for data to load
 		await screen.findByText('Fever');
@@ -405,7 +415,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(recoveredResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('Fever');
 
@@ -419,7 +429,7 @@ describe('TodayDashboard', () => {
 	// --- Missed medication alert tap-to-log ---
 
 	it('navigates to med log page with medicationId when tapping a missed_medication alert banner', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('Missed Medication');
 
@@ -432,7 +442,7 @@ describe('TodayDashboard', () => {
 	});
 
 	it('shows medication name in missed_medication alert message', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('Missed Medication');
 
@@ -442,7 +452,7 @@ describe('TodayDashboard', () => {
 	// --- API call ---
 
 	it('calls the dashboard API with the correct baby ID', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-42' } });
+		render(TodayDashboard, { props: { babyId: 'baby-42', baby: { ...mockBaby, id: 'baby-42' } } });
 
 		await screen.findByText('6');
 
@@ -453,7 +463,7 @@ describe('TodayDashboard', () => {
 
 	it('shows a loading indicator while fetching', () => {
 		mockGet.mockReturnValue(new Promise(() => {})); // never resolves
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(screen.getByText(/loading/i)).toBeInTheDocument();
 	});
@@ -463,7 +473,7 @@ describe('TodayDashboard', () => {
 	it('shows error message when API call fails', async () => {
 		mockGet.mockRejectedValue(new Error('Network error'));
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText(/failed to load/i)).toBeInTheDocument();
 	});
@@ -490,7 +500,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(dueNowResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		const banner = await screen.findByTestId('due-now-banner');
 		expect(banner).toBeInTheDocument();
@@ -521,7 +531,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(overdueResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText(/due now/i)).toBeInTheDocument();
 
@@ -548,7 +558,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(futureResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		// Wait for dashboard to render (use a stable element from the response)
 		await screen.findByText('Upcoming Medications');
@@ -577,7 +587,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(dueNowResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		const banner = await screen.findByTestId('due-now-banner');
 		await fireEvent.click(banner);
@@ -607,7 +617,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(longOverdueResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		// Wait for dashboard to render (use a stable element from the response)
 		await screen.findByText('Upcoming Medications');
@@ -639,7 +649,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(everyXDaysResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		const banner = await screen.findByTestId('due-now-banner');
 		expect(banner).toBeInTheDocument();
@@ -670,7 +680,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(futureResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText(/vitamin a/i);
 		expect(screen.getByText(/due in 3 days/i)).toBeInTheDocument();
@@ -701,7 +711,7 @@ describe('TodayDashboard', () => {
 		};
 		mockGet.mockResolvedValue(overdueResponse);
 
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		const banner = await screen.findByTestId('due-now-banner');
 		expect(banner).toBeInTheDocument();
@@ -713,7 +723,7 @@ describe('TodayDashboard', () => {
 	// --- Quick log buttons ---
 
 	it('renders quick log buttons section', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('6');
 
@@ -727,7 +737,7 @@ describe('TodayDashboard', () => {
 	// --- Auto-refresh on visibility change ---
 
 	it('re-fetches dashboard when page becomes visible again', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('Missed Medication');
 
@@ -748,7 +758,7 @@ describe('TodayDashboard', () => {
 	});
 
 	it('removes missed alert after re-fetch when dose has been logged', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('Missed Medication');
 
@@ -772,5 +782,70 @@ describe('TodayDashboard', () => {
 		await vi.waitFor(() => {
 			expect(screen.queryByText('Missed Medication')).not.toBeInTheDocument();
 		});
+	});
+
+	// --- Quick Glance ---
+
+	it('displays baby sex in the quick glance section', async () => {
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		await screen.findByText('6'); // wait for dashboard load
+		expect(screen.getByText('Female')).toBeInTheDocument();
+	});
+
+	it('displays baby birth date formatted', async () => {
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		await screen.findByText('6');
+		expect(screen.getByText('10 Jan 2026')).toBeInTheDocument();
+	});
+
+	it('displays baby age computed from date of birth', async () => {
+		vi.useFakeTimers({ now: new Date('2026-04-02T12:00:00Z') });
+
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		await screen.findByText('6');
+		// Born 2026-01-10, now 2026-04-02 = 2 months 23 days
+		expect(screen.getByText('2 mo 23 d')).toBeInTheDocument();
+
+		vi.useRealTimers();
+	});
+
+	it('displays days since Kasai when kasai_date is set', async () => {
+		vi.useFakeTimers({ now: new Date('2026-04-02T12:00:00Z') });
+
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		await screen.findByText('6');
+		// Kasai 2026-01-20, now 2026-04-02 = 72 days
+		expect(screen.getByText('72 days')).toBeInTheDocument();
+		expect(screen.getByText('Since Kasai')).toBeInTheDocument();
+
+		vi.useRealTimers();
+	});
+
+	it('hides days since Kasai when kasai_date is null', async () => {
+		const babyNoKasai = { ...mockBaby, kasai_date: null };
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: babyNoKasai } });
+
+		await screen.findByText('6');
+		expect(screen.queryByText('Since Kasai')).not.toBeInTheDocument();
+	});
+
+	it('displays diagnosis date when set', async () => {
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		await screen.findByText('6');
+		expect(screen.getByText('15 Jan 2026')).toBeInTheDocument();
+		expect(screen.getByText('Diagnosed')).toBeInTheDocument();
+	});
+
+	it('hides diagnosis date when null', async () => {
+		const babyNoDiagnosis = { ...mockBaby, diagnosis_date: null };
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: babyNoDiagnosis } });
+
+		await screen.findByText('6');
+		expect(screen.queryByText('Diagnosed')).not.toBeInTheDocument();
 	});
 });

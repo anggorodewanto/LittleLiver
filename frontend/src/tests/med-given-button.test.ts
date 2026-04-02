@@ -1,6 +1,16 @@
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import TodayDashboard from '$lib/components/TodayDashboard.svelte';
+import type { Baby } from '$lib/stores/baby';
+
+const mockBaby: Baby = {
+	id: 'baby-1',
+	name: 'Lily',
+	sex: 'female',
+	date_of_birth: '2026-01-10',
+	diagnosis_date: null,
+	kasai_date: null
+};
 
 vi.mock('$lib/api', () => ({
 	apiClient: {
@@ -45,14 +55,14 @@ describe('Medication Given quick-log button on TodayDashboard', () => {
 	});
 
 	it('renders a Medication Given quick-log button', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('6');
 		expect(screen.getByRole('button', { name: /medication given/i })).toBeInTheDocument();
 	});
 
 	it('Medication Given button navigates to dose logging form', async () => {
-		render(TodayDashboard, { props: { babyId: 'baby-1' } });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('6');
 		await fireEvent.click(screen.getByRole('button', { name: /medication given/i }));

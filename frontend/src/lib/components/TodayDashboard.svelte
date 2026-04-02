@@ -5,10 +5,12 @@
 	import { apiClient } from '$lib/api';
 	import { stoolStatusColor } from '$lib/stool-colors';
 	import type { MetricType } from './QuickLogButtons.svelte';
+	import type { Baby } from '$lib/stores/baby';
 	import QuickLogButtons from './QuickLogButtons.svelte';
 
 	interface Props {
 		babyId: string;
+		baby: Baby;
 	}
 
 	interface SummaryCards {
@@ -56,7 +58,7 @@
 		chart_data_series: unknown;
 	}
 
-	let { babyId }: Props = $props();
+	let { babyId, baby }: Props = $props();
 
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -200,6 +202,33 @@
 		})
 	);
 
+	function formatDate(dateStr: string): string {
+		const d = new Date(dateStr + 'T00:00:00');
+		return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+	}
+
+	function computeAge(dobStr: string, nowMs: number): string {
+		const dob = new Date(dobStr + 'T00:00:00');
+		const today = new Date(nowMs);
+		today.setHours(0, 0, 0, 0);
+
+		let months = (today.getFullYear() - dob.getFullYear()) * 12 + (today.getMonth() - dob.getMonth());
+		let days = today.getDate() - dob.getDate();
+		if (days < 0) {
+			months--;
+			const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+			days += prevMonth.getDate();
+		}
+		return `${months} mo ${days} d`;
+	}
+
+	function daysSince(dateStr: string, nowMs: number): number {
+		const d = new Date(dateStr + 'T00:00:00');
+		const today = new Date(nowMs);
+		today.setHours(0, 0, 0, 0);
+		return Math.floor((today.getTime() - d.getTime()) / (24 * 60 * 60 * 1000));
+	}
+
 	function handleQuickLog(type: MetricType): void {
 		if (type === 'med_given') {
 			void goto('/log/med');
@@ -264,6 +293,34 @@
 {:else if error}
 	<div class="error">{error}</div>
 {:else if dashboard}
+	<!-- Quick Glance -->
+	<div class="quick-glance">
+		<div class="glance-item">
+			<div class="glance-value">{baby.sex === 'male' ? 'Male' : 'Female'}</div>
+			<div class="glance-label">Sex</div>
+		</div>
+		<div class="glance-item">
+			<div class="glance-value">{formatDate(baby.date_of_birth)}</div>
+			<div class="glance-label">Born</div>
+		</div>
+		<div class="glance-item">
+			<div class="glance-value">{computeAge(baby.date_of_birth, now)}</div>
+			<div class="glance-label">Age</div>
+		</div>
+		{#if baby.kasai_date}
+			<div class="glance-item">
+				<div class="glance-value">{daysSince(baby.kasai_date, now)} days</div>
+				<div class="glance-label">Since Kasai</div>
+			</div>
+		{/if}
+		{#if baby.diagnosis_date}
+			<div class="glance-item">
+				<div class="glance-value">{formatDate(baby.diagnosis_date)}</div>
+				<div class="glance-label">Diagnosed</div>
+			</div>
+		{/if}
+	</div>
+
 	<!-- Alert Banners -->
 	{#if visibleAlerts.length > 0}
 		<div class="alert-banners">
@@ -424,6 +481,34 @@
 <style>
 	.dashboard {
 		padding-top: var(--space-2);
+	}
+
+	.quick-glance {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		margin-bottom: var(--space-4);
+		background: var(--color-surface);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--color-border);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.glance-item {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.glance-value {
+		font-size: var(--font-size-sm);
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.glance-label {
+		font-size: var(--font-size-xs);
+		color: var(--color-text-muted);
 	}
 
 	.alert-banners {

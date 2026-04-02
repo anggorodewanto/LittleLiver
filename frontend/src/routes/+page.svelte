@@ -58,7 +58,7 @@
 	/>
 {:else if $activeBaby}
 	<span data-testid="active-baby-name" class="sr-only">{$activeBaby.name}</span>
-	<TodayDashboard babyId={$activeBaby.id} />
+	<TodayDashboard babyId={$activeBaby.id} baby={$activeBaby} />
 {/if}
 
 <style>
