@@ -38,3 +38,11 @@ export function formatDateTime(dt: string): string {
 export function formatTime(dt: string): string {
 	return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+
+export function formatDateShort(dt: string): string {
+	return new Date(dt).toLocaleDateString([], {
+		weekday: 'short',
+		month: 'short',
+		day: 'numeric'
+	});
+}

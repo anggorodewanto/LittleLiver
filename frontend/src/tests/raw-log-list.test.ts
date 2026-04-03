@@ -506,6 +506,72 @@ describe('RawLogList', () => {
 		});
 	});
 
+	describe('date separators', () => {
+		it('does not show date separators for single-day range', async () => {
+			mockAllEndpoints({
+				feedings: {
+					data: [
+						{ id: 'f1', timestamp: '2026-03-31T10:00:00Z', feed_type: 'formula', volume_ml: 90 },
+						{ id: 'f2', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 }
+					],
+					next_cursor: null
+				}
+			});
+
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+			await screen.findAllByText(/mL/);
+
+			expect(screen.queryByRole('separator')).not.toBeInTheDocument();
+		});
+
+		it('shows date separators when range spans multiple days', async () => {
+			mockAllEndpoints({
+				feedings: {
+					data: [
+						{ id: 'f1', timestamp: '2026-03-28T10:00:00Z', feed_type: 'formula', volume_ml: 90 },
+						{ id: 'f2', timestamp: '2026-03-29T14:00:00Z', feed_type: 'formula', volume_ml: 120 }
+					],
+					next_cursor: null
+				}
+			});
+
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+
+			const pastWeekBtn = screen.getByRole('button', { name: 'Past 7 Days' });
+			await fireEvent.click(pastWeekBtn);
+
+			await waitFor(() => {
+				const separators = screen.getAllByRole('separator');
+				expect(separators.length).toBeGreaterThanOrEqual(1);
+			});
+		});
+
+		it('shows a separator at each day boundary within a type group', async () => {
+			mockAllEndpoints({
+				feedings: {
+					data: [
+						{ id: 'f1', timestamp: '2026-03-28T10:00:00Z', feed_type: 'formula', volume_ml: 60 },
+						{ id: 'f2', timestamp: '2026-03-29T08:00:00Z', feed_type: 'formula', volume_ml: 90 },
+						{ id: 'f3', timestamp: '2026-03-29T14:00:00Z', feed_type: 'formula', volume_ml: 120 },
+						{ id: 'f4', timestamp: '2026-03-30T09:00:00Z', feed_type: 'formula', volume_ml: 80 }
+					],
+					next_cursor: null
+				}
+			});
+
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+
+			const pastWeekBtn = screen.getByRole('button', { name: 'Past 7 Days' });
+			await fireEvent.click(pastWeekBtn);
+
+			await waitFor(() => {
+				// 3 different days = 3 separators
+				const separators = screen.getAllByRole('separator');
+				expect(separators).toHaveLength(3);
+			});
+		});
+	});
+
 	it('does not count fluid intake in output total', async () => {
 		mockAllEndpoints({
 			'fluid-log': {

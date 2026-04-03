@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toISO8601, fromISO8601, formatTime } from '$lib/datetime';
+import { toISO8601, fromISO8601, formatTime, formatDateShort } from '$lib/datetime';
 
 describe('toISO8601', () => {
 	it('converts local datetime-local value to correct UTC ISO 8601', () => {
@@ -54,5 +54,24 @@ describe('formatTime', () => {
 	it('handles timestamps with milliseconds', () => {
 		const result = formatTime('2026-06-15T08:45:30.123Z');
 		expect(result).toMatch(/\d{1,2}:\d{2}/);
+	});
+});
+
+describe('formatDateShort', () => {
+	it('returns short weekday, month, and day from ISO timestamp', () => {
+		const result = formatDateShort('2026-04-01T10:00:00Z');
+		// e.g. "Wed, Apr 1" in en-US
+		expect(result).toMatch(/\w{3}, \w{3} \d{1,2}/);
+	});
+
+	it('handles timestamps with milliseconds', () => {
+		const result = formatDateShort('2026-06-15T08:45:30.123Z');
+		expect(result).toMatch(/\w{3}, \w{3} \d{1,2}/);
+	});
+
+	it('does not include year or time', () => {
+		const result = formatDateShort('2026-04-01T14:30:00Z');
+		expect(result).not.toContain('2026');
+		expect(result).not.toMatch(/\d{1,2}:\d{2}/);
 	});
 });

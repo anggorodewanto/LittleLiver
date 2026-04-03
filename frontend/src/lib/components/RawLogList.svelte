@@ -2,7 +2,7 @@
 	import { apiClient } from '$lib/api';
 	import LogEntryRow from '$lib/components/LogEntryRow.svelte';
 	import { LOG_TYPES, type LogTypeConfig } from '$lib/types/logs';
-	import { formatDateISO } from '$lib/datetime';
+	import { formatDateISO, formatDateShort } from '$lib/datetime';
 
 	interface Props {
 		babyId: string;
@@ -191,6 +191,12 @@
 			.reduce((sum, e) => sum + (Number(e.entry.volume_ml) || 0), 0)
 	);
 
+	let isMultiDay: boolean = $derived(fromDate !== toDate);
+
+	function localDateOf(ts: string): string {
+		return formatDateISO(new Date(ts));
+	}
+
 	$effect(() => {
 		babyId;
 		fromDate;
@@ -239,7 +245,12 @@
 		{#each groupedEntries as group (group.logType.key)}
 			<h2 class="type-heading">{group.logType.label}</h2>
 			<div class="entry-list">
-				{#each group.items as { entry, logType } (entry.id)}
+				{#each group.items as { entry, logType }, i (entry.id)}
+					{#if isMultiDay && (i === 0 || localDateOf(entryTimestamp(entry)) !== localDateOf(entryTimestamp(group.items[i - 1].entry)))}
+						<div class="date-separator" role="separator">
+							<span class="date-separator-label">{formatDateShort(entryTimestamp(entry))}</span>
+						</div>
+					{/if}
 					<LogEntryRow {entry} {logType} ondelete={(id) => handleDelete(logType, id)} {medNames} />
 				{/each}
 			</div>
@@ -314,6 +325,18 @@
 
 	.entry-list {
 		border-top: 1px solid var(--color-border);
+	}
+
+	.date-separator {
+		padding: var(--space-1) var(--space-3);
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+	}
+
+	.date-separator-label {
+		font-size: var(--font-size-xs);
+		font-weight: 600;
+		color: var(--color-text-muted);
 	}
 
 	.totals {
