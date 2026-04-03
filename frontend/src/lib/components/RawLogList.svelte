@@ -20,9 +20,56 @@
 	let error: string | null = $state(null);
 	let medNames: Record<string, string> = $state({});
 
+	type DatePreset = 'today' | 'yesterday' | 'past7' | 'custom';
+
+	function datesForPreset(preset: DatePreset): { from: string; to: string } {
+		const today = new Date();
+		if (preset === 'yesterday') {
+			const y = new Date();
+			y.setDate(y.getDate() - 1);
+			const d = formatDateISO(y);
+			return { from: d, to: d };
+		}
+		if (preset === 'past7') {
+			const weekAgo = new Date();
+			weekAgo.setDate(weekAgo.getDate() - 6);
+			return { from: formatDateISO(weekAgo), to: formatDateISO(today) };
+		}
+		const d = formatDateISO(today);
+		return { from: d, to: d };
+	}
+
+	let activePreset: DatePreset = $state('today');
 	const now = new Date();
 	let fromDate = $state(formatDateISO(now));
 	let toDate = $state(formatDateISO(now));
+
+	let selectedTypes: Set<string> = $state(new Set());
+
+	function selectPreset(preset: DatePreset): void {
+		activePreset = preset;
+		const { from, to } = datesForPreset(preset);
+		fromDate = from;
+		toDate = to;
+	}
+
+	function onDateInputChange(): void {
+		activePreset = 'custom';
+	}
+
+	function toggleType(key: string): void {
+		const next = new Set(selectedTypes);
+		if (next.has(key)) {
+			next.delete(key);
+		} else {
+			next.add(key);
+		}
+		selectedTypes = next;
+	}
+
+	function selectAllTypes(): void {
+		selectedTypes = new Set();
+	}
 
 	interface ApiResponse {
 		data: Record<string, unknown>[];
@@ -115,9 +162,12 @@
 	}
 
 	let groupedEntries: TypeGroup[] = $derived.by(() => {
+		const filtered = selectedTypes.size === 0
+			? entries
+			: entries.filter((te) => selectedTypes.has(te.logType.key));
 		const groups: TypeGroup[] = [];
 		const seen = new Map<string, TypeGroup>();
-		for (const te of entries) {
+		for (const te of filtered) {
 			let group = seen.get(te.logType.key);
 			if (!group) {
 				group = { logType: te.logType, items: [] };
@@ -151,9 +201,22 @@
 </script>
 
 <div class="log-list">
-	<div class="date-filters">
-		<input type="date" bind:value={fromDate} aria-label="From date" />
-		<input type="date" bind:value={toDate} aria-label="To date" />
+	<div class="filter-bar">
+		<div class="date-presets">
+			<button type="button" class={activePreset === 'today' ? 'active' : ''} onclick={() => selectPreset('today')}>Today</button>
+			<button type="button" class={activePreset === 'yesterday' ? 'active' : ''} onclick={() => selectPreset('yesterday')}>Yesterday</button>
+			<button type="button" class={activePreset === 'past7' ? 'active' : ''} onclick={() => selectPreset('past7')}>Past 7 Days</button>
+		</div>
+		<div class="date-filters">
+			<input type="date" bind:value={fromDate} aria-label="From date" oninput={onDateInputChange} />
+			<input type="date" bind:value={toDate} aria-label="To date" oninput={onDateInputChange} />
+		</div>
+		<div class="type-filter">
+			<button type="button" class={selectedTypes.size === 0 ? 'active' : ''} onclick={selectAllTypes}>All</button>
+			{#each LOG_TYPES as lt (lt.key)}
+				<button type="button" class={selectedTypes.has(lt.key) ? 'active' : ''} onclick={() => toggleType(lt.key)}>{lt.label}</button>
+			{/each}
+		</div>
 	</div>
 
 	{#if loading && entries.length === 0}
@@ -194,10 +257,47 @@
 		flex-direction: column;
 	}
 
+	.filter-bar {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		margin-bottom: var(--space-4);
+	}
+
+	.date-presets,
+	.type-filter {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+
+	.date-presets button,
+	.type-filter button {
+		min-height: 36px;
+		padding: var(--space-1) var(--space-3);
+		border-radius: var(--radius-full);
+		font-size: var(--font-size-sm);
+		background: var(--color-surface);
+		border: 1.5px solid var(--color-border);
+		color: var(--color-text);
+	}
+
+	.date-presets button:hover,
+	.type-filter button:hover {
+		border-color: var(--color-primary);
+		background: var(--color-primary-light);
+	}
+
+	.date-presets button.active,
+	.type-filter button.active {
+		background: var(--color-primary);
+		color: var(--color-text-inverse);
+		border-color: var(--color-primary);
+	}
+
 	.date-filters {
 		display: flex;
 		gap: var(--space-2);
-		margin-bottom: var(--space-4);
 	}
 
 	.date-filters input {

@@ -74,8 +74,8 @@ describe('RawLogList', () => {
 		render(RawLogList, { props: { babyId: 'baby-1' } });
 
 		// Should show type headings
-		expect(await screen.findByText('Feedings')).toBeInTheDocument();
-		expect(screen.getByText('Stools')).toBeInTheDocument();
+		expect(await screen.findByRole('heading', { name: 'Feedings' })).toBeInTheDocument();
+		expect(screen.getByRole('heading', { name: 'Stools' })).toBeInTheDocument();
 
 		// Should show entry data
 		const matches = screen.getAllByText(/120\s*mL/);
@@ -316,6 +316,194 @@ describe('RawLogList', () => {
 
 		// Feeding total should update (no more feeding entries)
 		expect(screen.queryByText(/Feeding:/)).not.toBeInTheDocument();
+	});
+
+	describe('quick date range presets', () => {
+		it('renders Today, Yesterday, and Past 7 Days buttons', () => {
+			mockAllEndpoints();
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+
+			expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
+			expect(screen.getByRole('button', { name: 'Yesterday' })).toBeInTheDocument();
+			expect(screen.getByRole('button', { name: 'Past 7 Days' })).toBeInTheDocument();
+		});
+
+		it('Today is active by default', () => {
+			mockAllEndpoints();
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+
+			const todayBtn = screen.getByRole('button', { name: 'Today' });
+			expect(todayBtn.className).toContain('active');
+		});
+
+		it('clicking Yesterday sets dates to yesterday', async () => {
+			mockAllEndpoints();
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+
+			const yesterdayBtn = screen.getByRole('button', { name: 'Yesterday' });
+			await fireEvent.click(yesterdayBtn);
+
+			const yesterday = new Date();
+			yesterday.setDate(yesterday.getDate() - 1);
+			const expectedDate = formatDateISO(yesterday);
+
+			const fromInput = screen.getByLabelText('From date') as HTMLInputElement;
+			const toInput = screen.getByLabelText('To date') as HTMLInputElement;
+			expect(fromInput.value).toBe(expectedDate);
+			expect(toInput.value).toBe(expectedDate);
+		});
+
+		it('clicking Past 7 Days sets from to 7 days ago and to to today', async () => {
+			mockAllEndpoints();
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+
+			const pastWeekBtn = screen.getByRole('button', { name: 'Past 7 Days' });
+			await fireEvent.click(pastWeekBtn);
+
+			const today = new Date();
+			const weekAgo = new Date();
+			weekAgo.setDate(weekAgo.getDate() - 6);
+
+			const fromInput = screen.getByLabelText('From date') as HTMLInputElement;
+			const toInput = screen.getByLabelText('To date') as HTMLInputElement;
+			expect(fromInput.value).toBe(formatDateISO(weekAgo));
+			expect(toInput.value).toBe(formatDateISO(today));
+		});
+	});
+
+	describe('log type filter', () => {
+		it('renders All button and type filter chips', () => {
+			mockAllEndpoints();
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+
+			expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
+			expect(screen.getByRole('button', { name: 'Feedings' })).toBeInTheDocument();
+			expect(screen.getByRole('button', { name: 'Stools' })).toBeInTheDocument();
+		});
+
+		it('All is active by default and shows all types', async () => {
+			mockAllEndpoints({
+				feedings: {
+					data: [
+						{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 }
+					],
+					next_cursor: null
+				},
+				stools: {
+					data: [
+						{ id: 's1', timestamp: '2026-03-31T10:00:00Z', color_rating: 4, consistency: 'soft' }
+					],
+					next_cursor: null
+				}
+			});
+
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+
+			const allBtn = screen.getByRole('button', { name: 'All' });
+			expect(allBtn.className).toContain('active');
+
+			expect(await screen.findByRole('heading', { name: 'Feedings' })).toBeInTheDocument();
+			expect(screen.getByRole('heading', { name: 'Stools' })).toBeInTheDocument();
+		});
+
+		it('clicking a type chip filters to only that type', async () => {
+			mockAllEndpoints({
+				feedings: {
+					data: [
+						{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 }
+					],
+					next_cursor: null
+				},
+				stools: {
+					data: [
+						{ id: 's1', timestamp: '2026-03-31T10:00:00Z', color_rating: 4, consistency: 'soft' }
+					],
+					next_cursor: null
+				}
+			});
+
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+			await screen.findByRole('heading', { name: 'Feedings' });
+
+			// Click Feedings chip
+			const feedingsChip = screen.getByRole('button', { name: 'Feedings' });
+			await fireEvent.click(feedingsChip);
+
+			// Feedings heading should remain, Stools heading should be hidden
+			await waitFor(() => {
+				expect(screen.getByRole('heading', { name: 'Feedings' })).toBeInTheDocument();
+				expect(screen.queryByRole('heading', { name: 'Stools' })).not.toBeInTheDocument();
+			});
+		});
+
+		it('clicking multiple type chips shows multiple types', async () => {
+			mockAllEndpoints({
+				feedings: {
+					data: [
+						{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 }
+					],
+					next_cursor: null
+				},
+				stools: {
+					data: [
+						{ id: 's1', timestamp: '2026-03-31T10:00:00Z', color_rating: 4, consistency: 'soft' }
+					],
+					next_cursor: null
+				},
+				urine: {
+					data: [
+						{ id: 'u1', timestamp: '2026-03-31T12:00:00Z', color: 'pale_yellow', volume_ml: 30 }
+					],
+					next_cursor: null
+				}
+			});
+
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+			await screen.findByRole('heading', { name: 'Feedings' });
+
+			// Select Feedings and Stools
+			await fireEvent.click(screen.getByRole('button', { name: 'Feedings' }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Stools' }));
+
+			await waitFor(() => {
+				expect(screen.getByRole('heading', { name: 'Feedings' })).toBeInTheDocument();
+				expect(screen.getByRole('heading', { name: 'Stools' })).toBeInTheDocument();
+				expect(screen.queryByRole('heading', { name: 'Urine' })).not.toBeInTheDocument();
+			});
+		});
+
+		it('clicking All resets the filter', async () => {
+			mockAllEndpoints({
+				feedings: {
+					data: [
+						{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 }
+					],
+					next_cursor: null
+				},
+				stools: {
+					data: [
+						{ id: 's1', timestamp: '2026-03-31T10:00:00Z', color_rating: 4, consistency: 'soft' }
+					],
+					next_cursor: null
+				}
+			});
+
+			render(RawLogList, { props: { babyId: 'baby-1' } });
+			await screen.findByRole('heading', { name: 'Feedings' });
+
+			// Select only Feedings
+			await fireEvent.click(screen.getByRole('button', { name: 'Feedings' }));
+			await waitFor(() => {
+				expect(screen.queryByRole('heading', { name: 'Stools' })).not.toBeInTheDocument();
+			});
+
+			// Click All to reset
+			await fireEvent.click(screen.getByRole('button', { name: 'All' }));
+			await waitFor(() => {
+				expect(screen.getByRole('heading', { name: 'Feedings' })).toBeInTheDocument();
+				expect(screen.getByRole('heading', { name: 'Stools' })).toBeInTheDocument();
+			});
+		});
 	});
 
 	it('does not count fluid intake in output total', async () => {
