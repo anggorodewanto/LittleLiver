@@ -18,13 +18,11 @@ describe('PhotoUpload', () => {
 		expect(input.accept).toContain('image/');
 	});
 
-	it('accepts jpeg, png, and heic files', () => {
+	it('accepts all image files', () => {
 		render(PhotoUpload, { props: { onupload } });
 
 		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		expect(input.accept).toContain('image/jpeg');
-		expect(input.accept).toContain('image/png');
-		expect(input.accept).toContain('image/heic');
+		expect(input.accept).toBe('image/*');
 	});
 
 	it('calls onupload with selected file', async () => {

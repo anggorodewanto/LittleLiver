@@ -50,7 +50,7 @@
 	<input
 		id={id}
 		type="file"
-		accept="image/jpeg,image/png,image/heic"
+		accept="image/*"
 		{multiple}
 		disabled={isDisabled}
 		onchange={handleChange}
