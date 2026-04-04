@@ -23,7 +23,7 @@ A personal-use web application for parents to track daily health metrics of an i
 - Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. On code collision (uniqueness violation), retry with a new random code up to **5 times**. A cron job periodically deletes ALL invite codes older than 24 hours (both used and unused) across all babies, keeping active code count low and collision risk negligible. The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic "invalid or expired code" error for all failure cases.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
 - **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted. The endpoint always returns **204 No Content** regardless of whether the baby was also deleted. The frontend detects baby deletion by attempting to fetch baby data and receiving 404, then navigates to the baby list/creation screen.
-- **Account deletion:** `DELETE /api/users/me` deletes the requesting user's account. Deletion order: (1) identify babies where the user is the last remaining parent; (2) delete those babies (triggering `ON DELETE CASCADE` for all associated data); (3) delete all invites created by the user (`invites.created_by`); (4) anonymize `logged_by`/`updated_by` to `'deleted_user'` across all metric tables, anonymize `medications.logged_by`/`medications.updated_by` to `'deleted_user'`, and anonymize `invites.used_by` to `'deleted_user'` where it references the deleted user (anonymization, not CASCADE); (5) delete the user record (`ON DELETE CASCADE` cleans up remaining `baby_parents`, `sessions`, and `push_subscriptions`). Returns **204 No Content**.
+- **Account deletion:** `DELETE /api/users/me` deletes the requesting user's account. Deletion order: (1) identify babies where the user is the last remaining parent; (2) delete those babies (triggering `ON DELETE CASCADE` for all associated data); (3) delete all invites created by the user (`invites.created_by`); (4) anonymize `logged_by`/`updated_by` to `'deleted_user'` across all metric tables (including `head_circumferences`, `upper_arm_circumferences`), anonymize `medications.logged_by`/`medications.updated_by` to `'deleted_user'`, and anonymize `invites.used_by` to `'deleted_user'` where it references the deleted user (anonymization, not CASCADE); (5) delete the user record (`ON DELETE CASCADE` cleans up remaining `baby_parents`, `sessions`, and `push_subscriptions`). Returns **204 No Content**.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
 
 ### 2.3 Multi-Baby Support
@@ -145,10 +145,12 @@ New or worsening bruising can indicate vitamin K deficiency / coagulopathy.
 |-------|------|-------|
 | Medication name | text | Pre-populated suggestions: `UDCA (ursodiol)`, `Sulfamethoxazole-Trimethoprim (Bactrim)`, `Vitamin A`, `Vitamin D`, `Vitamin E (TPGS)`, `Vitamin K`, `Iron`, `Other` |
 | Dose | text | e.g., "50mg", "0.5mL" |
-| Frequency | enum | `once_daily`, `twice_daily`, `three_times_daily`, `as_needed`, `custom` |
+| Frequency | enum | `once_daily`, `twice_daily`, `three_times_daily`, `every_x_days`, `as_needed`, `custom` |
 | Scheduled times | time[] | e.g., [08:00, 20:00] for twice daily. Stored as **local time strings** (not UTC). Interpreted per the medication's stored timezone (see §6.2). `custom` = arbitrary user-defined list of daily times (functionally the same as other frequencies but with user-chosen times). `as_needed` = null/empty schedule array, no push notifications sent. |
+| Interval days | integer | For `every_x_days` frequency only. The number of days between doses (e.g., 3 = every 3 days). Nullable — only set when frequency is `every_x_days`. |
+| Starts from | date | For `every_x_days` frequency only. The anchor date from which the interval is calculated. Nullable — only set when frequency is `every_x_days`. |
 | Timezone | text | IANA timezone (e.g., `America/New_York`), set at creation time from the creator's `X-Timezone` header. All notification scheduling uses this timezone, not the individual user's timezone. This prevents dose drift and double-dosing across timezone boundaries. |
-| Given at | datetime | Set to `NOW()` when parent taps "given" (not `scheduled_time`). Null when skipped. |
+| Given at | datetime | Set to `NOW()` by default when parent taps "given" (not `scheduled_time`). The client may optionally provide a `given_at` value to backdate a dose logged after the fact; if omitted, the server defaults to `NOW()`. Null when skipped. |
 | Skipped | boolean | Mutually exclusive with `given_at`: `skipped=true` → `given_at` is null; `skipped=false` → `given_at` is non-null. |
 | Skip reason | text | Optional even when `skipped=true`. |
 | Notes | text | e.g., "spit up half the dose" |
@@ -206,6 +208,28 @@ Unified intake/output ledger for fluid balance tracking. Some entries are auto-c
 **Auto-linking:** When a feeding is logged, a fluid_log entry is auto-created (direction=intake, method=feed_type). When urine or stool is logged with a volume, a fluid_log entry is auto-created (direction=output). These linked entries are updated/deleted when their source entry is modified. Linked entries cannot be edited directly via the fluid-log endpoint — they are managed through their source metric's endpoint.
 
 **Standalone entries:** Users can log "Other Intake" or "Other Output" directly via two dedicated buttons. These create fluid_log entries with no source link and can be freely edited/deleted.
+
+### 3.13 Head Circumference (per clinic visit or as needed)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| Timestamp | datetime | Auto-filled, editable |
+| Circumference (cm) | number | Required. To 1 decimal place |
+| Measurement source | enum | `home_scale`, `clinic` |
+| Notes | text | |
+
+Head circumference is plotted against **WHO Child Growth Standards** (head-circumference-for-age percentiles, sex-specific, 0–24 months). Percentile is computed on-the-fly from WHO data based on the baby's age at the time of measurement.
+
+### 3.14 Upper Arm Circumference / MUAC (per clinic visit or as needed)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| Timestamp | datetime | Auto-filled, editable |
+| Circumference (cm) | number | Required. To 1 decimal place |
+| Measurement source | enum | `home_scale`, `clinic` |
+| Notes | text | |
+
+Mid-upper arm circumference (MUAC) is a quick indicator of nutritional status. Useful for tracking malnutrition risk in post-Kasai infants.
 
 ---
 
@@ -292,7 +316,9 @@ PUT    /api/babies/:id/feedings/:entryId     → Edit entry
 DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 ```
 
-Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/labs`, `/notes`, `/fluid-log`
+Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/labs`, `/notes`, `/fluid-log`, `/head-circumferences`, `/upper-arm-circumferences`
+
+**Lab test suggestions:** `GET /api/babies/:id/labs/tests` returns a list of suggested lab test names for autocomplete in the UI. This is a read-only convenience endpoint requiring baby access authorization.
 
 **Non-standard metric endpoints** (deviate from the generic CRUD pattern above): `/medications` (no DELETE — deactivation only, see §5.5), `/med-logs` (date filtering uses `given_at`/`created_at` instead of `timestamp`, see §5.5), `/fluid-log` (PUT and DELETE reject linked entries where `source_type` is non-null with 400 — those are managed via their source metric endpoint)
 
@@ -335,7 +361,7 @@ POST   /api/babies/:id/medications           → Create medication (name, dose, 
 GET    /api/babies/:id/medications            → List medications (active and inactive). Returns all medications without pagination (no cursor) — medication counts are small enough per baby.
 GET    /api/babies/:id/medications/:medId     → Get single medication by ID
 PUT    /api/babies/:id/medications/:medId     → Update medication (including set active=false to deactivate). The `timezone` field is mutable via PUT — it is set from the request's `X-Timezone` header (e.g., if the family moves timezones). No delete endpoint — medications can only be deactivated, never deleted, to preserve adherence history.
-POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). `given_at` and `skipped` are mutually exclusive: when logging as "given", the server always sets `given_at` to `NOW()` (current time, not `scheduled_time`) — the client does not provide `given_at`; when logging as "skipped", `given_at` is null. `skip_reason` is optional even when `skipped=true`. Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
+POST   /api/babies/:id/med-logs              → Log a dose (given or skipped). `given_at` and `skipped` are mutually exclusive: when logging as "given", the server defaults `given_at` to `NOW()` (current time, not `scheduled_time`) — the client may optionally provide a `given_at` value to backdate a dose logged after the fact; when logging as "skipped", `given_at` is null. `skip_reason` is optional even when `skipped=true`. Client passes `scheduled_time` (a full UTC datetime computed by the server — see §6.4) from the notification payload or the medication's schedule; nullable for ad-hoc doses not tied to a schedule.
 GET    /api/babies/:id/med-logs?medication_id=&from=&to=&cursor=  → List med-logs, filterable by medication and date range. Date filtering uses `given_at` for given doses and `created_at` for skipped doses (since med-logs don't have a user-editable `timestamp` field).
 GET    /api/babies/:id/med-logs/:entryId      → Get single med-log entry
 PUT    /api/babies/:id/med-logs/:entryId     → Edit a med-log entry
@@ -346,7 +372,7 @@ DELETE /api/push/subscribe                    → Unregister
 
 ### 5.6 WHO Growth Data
 ```
-GET    /api/who/percentiles?sex=<male|female>&from_days=<int>&to_days=<int>  → Returns the 3rd, 15th, 50th, 85th, and 97th weight-for-age percentile curves as arrays of { age_days, weight_kg } points. Used by the frontend to overlay WHO growth bands on the weight chart.
+GET    /api/who/percentiles?sex=<male|female>&from_days=<int>&to_days=<int>&metric=<weight|head_circumference>  → Returns the 3rd, 15th, 50th, 85th, and 97th percentile curves as arrays of data points. The `metric` parameter defaults to `weight` if omitted. For `weight`: returns `[{ age_days, weight_kg }]` points (weight-for-age). For `head_circumference`: returns `[{ age_days, head_circumference_cm }]` points (head-circumference-for-age). Used by the frontend to overlay WHO growth bands on weight and head circumference charts.
 ```
 
 ### 5.7 Reports
@@ -375,6 +401,8 @@ GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON
     "weight": [],                  // [{ timestamp, weight_kg, measurement_source }] — individual readings
     "abdomen_girth": [],           // [{ timestamp, girth_cm }] — individual readings
     "stool_color": [],             // [{ timestamp, color_score }] — individual readings for requested date range; frontend uses this (not stool_color_trend) for the Trends View
+    "head_circumference": [],      // [{ timestamp, circumference_cm, measurement_source }] — individual readings
+    "upper_arm_circumference": [], // [{ timestamp, circumference_cm, measurement_source }] — individual readings (MUAC)
     "lab_trends": {}               // { [test_name]: [{ timestamp, test_name, value, unit }] } — individual results, grouped by test_name on frontend
   }
 }
@@ -439,6 +467,8 @@ Uses the same `GET /api/babies/:id/dashboard?from=&to=` endpoint with the desire
 - **Abdomen girth** — line chart
 - **Feeding volume / caloric intake** — daily aggregated bar chart (kcal computed per §3.1 formula; breast-direct feeds use configurable default estimate)
 - **Diaper counts** — daily wet + stool counts
+- **Head circumference** — line chart with WHO percentile bands (3rd, 15th, 50th, 85th, 97th) overlaid
+- **Upper arm circumference (MUAC)** — line chart for nutritional status tracking
 - **Lab trends** — multi-line chart (bilirubin, ALT, AST, GGT) with normal range shading
 
 ---
@@ -465,13 +495,15 @@ Uses the same `GET /api/babies/:id/dashboard?from=&to=` endpoint with the desire
 ## 9. WHO Growth Standards Integration
 
 ### 9.1 Data Source
-- WHO Child Growth Standards weight-for-age tables (0–24 months, sex-specific).
+- WHO Child Growth Standards tables (0–24 months, sex-specific):
+  - **Weight-for-age** — source: [WHO Anthro](https://www.who.int/tools/child-growth-standards/standards/weight-for-age)
+  - **Head-circumference-for-age** — source: [WHO Anthro](https://www.who.int/tools/child-growth-standards/standards/head-circumference-for-age)
 - Stored as embedded Go data (LMS values for percentile calculation).
-- Source: [WHO Anthro](https://www.who.int/tools/child-growth-standards/standards/weight-for-age)
 
 ### 9.2 Calculation
-- Given baby's sex, exact age in days, and weight → compute z-score and percentile.
+- Given baby's sex, exact age in days, and measurement (weight or head circumference) → compute z-score and percentile.
 - Plot on chart with standard percentile curves (3rd, 15th, 50th, 85th, 97th).
+- The `metric` parameter on the WHO endpoint selects which dataset to use (`weight` or `head_circumference`).
 
 ---
 
@@ -701,6 +733,36 @@ CREATE TABLE general_notes (
 -- photo_uploads.baby_id uses ON DELETE SET NULL (not CASCADE). A single cleanup
 -- cron job handles both orphan and cascade cleanup — see §5.4.
 
+-- Head circumference measurements
+CREATE TABLE head_circumferences (
+    id                  TEXT PRIMARY KEY,
+    baby_id             TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by           TEXT REFERENCES users(id) NOT NULL,
+    updated_by          TEXT REFERENCES users(id),
+    timestamp           DATETIME NOT NULL,
+    circumference_cm    REAL NOT NULL,
+    measurement_source  TEXT,        -- home_scale, clinic
+    notes               TEXT,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_head_circumferences_baby_timestamp ON head_circumferences (baby_id, timestamp);
+
+-- Upper arm circumference (MUAC) measurements
+CREATE TABLE upper_arm_circumferences (
+    id                  TEXT PRIMARY KEY,
+    baby_id             TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by           TEXT REFERENCES users(id) NOT NULL,
+    updated_by          TEXT REFERENCES users(id),
+    timestamp           DATETIME NOT NULL,
+    circumference_cm    REAL NOT NULL,
+    measurement_source  TEXT,        -- home_scale, clinic
+    notes               TEXT,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_upper_arm_circumferences_baby_timestamp ON upper_arm_circumferences (baby_id, timestamp);
+
 -- Medications (definitions / schedules)
 CREATE TABLE medications (
     id          TEXT PRIMARY KEY,
@@ -712,6 +774,8 @@ CREATE TABLE medications (
     frequency   TEXT NOT NULL,
     schedule    TEXT,              -- JSON array of times, e.g., ["08:00","20:00"]
     timezone    TEXT,              -- IANA timezone, set at creation from creator's X-Timezone header; mutable via PUT (e.g., if family moves); used for all notification scheduling
+    interval_days INTEGER,         -- for every_x_days frequency: number of days between doses; NULL otherwise
+    starts_from TEXT,              -- for every_x_days frequency: anchor date (YYYY-MM-DD) for interval calculation; NULL otherwise
     active      BOOLEAN DEFAULT TRUE,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -728,7 +792,7 @@ CREATE TABLE med_logs (
     logged_by       TEXT REFERENCES users(id) NOT NULL,
     updated_by      TEXT REFERENCES users(id),  -- set on edit, null initially
     scheduled_time  DATETIME,          -- full UTC datetime, computed by server from local schedule + user timezone; nullable for ad-hoc doses
-    given_at        DATETIME,          -- set to NOW() when logging as given; null when skipped=true
+    given_at        DATETIME,          -- defaults to NOW() when logging as given; client may provide a value to backdate; null when skipped=true
     skipped         BOOLEAN DEFAULT FALSE,  -- mutually exclusive with given_at: skipped=true → given_at is null; skipped=false → given_at is non-null
     skip_reason     TEXT,              -- optional even when skipped=true
     notes           TEXT,
@@ -856,7 +920,7 @@ primary_region = "iad"      # Choose closest region
 - **CSRF protection** — `GET /api/csrf-token` returns a per-session CSRF token **derived deterministically from the session's `token` column via HMAC-SHA256** with a server secret. The `token` column is a separate random secret used only for CSRF derivation — it is not the session cookie value. No extra storage column needed beyond what exists — the CSRF token is computed on the fly and is stable for the session lifetime. Client includes it as an `X-CSRF-Token` header on all state-changing requests. Server validates by re-deriving the expected CSRF token from the current session's `token` value and comparing.
 - **Photo access** — R2 objects are private. Backend generates **signed URLs** (time-limited) for photo access. No public bucket access.
 - **Input validation** — all inputs validated server-side. Parameterized SQL queries (no injection).
-- **Rate limiting** — basic rate limiting on API endpoints (personal use, but good hygiene).
+- **Rate limiting** — two tiers: (1) **per-session** rate limiting at 100 requests/min on all authenticated API endpoints; (2) **per-IP** rate limiting at 10 requests/min on unauthenticated OAuth endpoints (`/auth/google/login`, `/auth/google/callback`) to prevent abuse before authentication. Personal use, but good hygiene.
 - **Invite codes** — 6-digit numeric strings (e.g., `"483921"`). Single-use, fixed **24-hour expiration**. Only one active (unused, unexpired) code per baby at a time; generating a new code hard-deletes ALL prior codes for that baby (used, expired, or unused). On uniqueness violation (code collision), retry with a new random code up to **5 times** before returning an error. With cron cleanup keeping active code count low, collision risk is negligible. The `POST /api/babies/:id/invite` response includes both the `code` and the `expires_at` timestamp. A cron job periodically deletes ALL codes older than 24 hours (both used and unused). The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic `"invalid or expired code"` error for all failure cases (expired, used, invalidated, nonexistent, race condition).
 
 ---
