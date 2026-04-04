@@ -18,11 +18,15 @@ type HTTPClaudeClient struct {
 	baseURL    string
 }
 
+// DefaultModel is the Claude model used for lab extraction.
+// Uses the "latest" alias so the API always resolves to the newest Sonnet release.
+const DefaultModel = "claude-sonnet-4-6-latest"
+
 // NewHTTPClaudeClient creates a new Claude API client.
 func NewHTTPClaudeClient(apiKey string) *HTTPClaudeClient {
 	return &HTTPClaudeClient{
 		apiKey:     apiKey,
-		model:      "claude-sonnet-4-20250514",
+		model:      DefaultModel,
 		httpClient: http.DefaultClient,
 		baseURL:    "https://api.anthropic.com",
 	}
@@ -33,7 +37,7 @@ func NewHTTPClaudeClient(apiKey string) *HTTPClaudeClient {
 func NewHTTPClaudeClientWithBaseURL(apiKey, baseURL string) *HTTPClaudeClient {
 	return &HTTPClaudeClient{
 		apiKey:     apiKey,
-		model:      "claude-sonnet-4-20250514",
+		model:      DefaultModel,
 		httpClient: http.DefaultClient,
 		baseURL:    baseURL,
 	}

@@ -380,3 +380,169 @@ func makeExtractMuxFromHandler(t *testing.T, f *extractTestFixture, h http.Handl
 	mux.Handle("POST /api/babies/{id}/labs/extract", authMw(csrfMw(http.HandlerFunc(h))))
 	return mux
 }
+
+// TestBatchCreateLabResults tests the POST /api/babies/{id}/labs/batch endpoint.
+func TestBatchCreateLabResults(t *testing.T) {
+	t.Parallel()
+	f := setupExtractTest(t)
+	defer f.db.Close()
+
+	authMw := middleware.Auth(f.db, testCookieName)
+	csrfMw := middleware.CSRF(f.db, testCookieName, testSecret)
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/labs/batch", authMw(csrfMw(http.HandlerFunc(handler.BatchCreateLabResultHandler(f.db)))))
+
+	timestamp := time.Now().UTC().Format(model.DateTimeFormat)
+	body, _ := json.Marshal(map[string]any{
+		"items": []map[string]string{
+			{"timestamp": timestamp, "test_name": "ALT", "value": "45", "unit": "U/L", "normal_range": "7-56"},
+			{"timestamp": timestamp, "test_name": "AST", "value": "32", "unit": "U/L", "normal_range": "10-40"},
+			{"timestamp": timestamp, "test_name": "GGT", "value": "120", "unit": "U/L"},
+		},
+	})
+
+	req := testutil.AuthenticatedRequest(t, f.db, f.user.ID, testCookieName, testSecret,
+		http.MethodPost, "/api/babies/"+f.baby.ID+"/labs/batch")
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var results []struct {
+		ID       string `json:"id"`
+		TestName string `json:"test_name"`
+		Value    string `json:"value"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&results); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+
+	// Verify all saved via store
+	saved, err := store.ListLabResults(f.db, f.baby.ID, nil, nil, nil, 100)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(saved.Data) != 3 {
+		t.Fatalf("expected 3 saved, got %d", len(saved.Data))
+	}
+}
+
+// TestBatchCreateLabResults_EmptyItems returns 400 for empty items array.
+func TestBatchCreateLabResults_EmptyItems(t *testing.T) {
+	t.Parallel()
+	f := setupExtractTest(t)
+	defer f.db.Close()
+
+	authMw := middleware.Auth(f.db, testCookieName)
+	csrfMw := middleware.CSRF(f.db, testCookieName, testSecret)
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/labs/batch", authMw(csrfMw(http.HandlerFunc(handler.BatchCreateLabResultHandler(f.db)))))
+
+	body, _ := json.Marshal(map[string]any{"items": []map[string]string{}})
+	req := testutil.AuthenticatedRequest(t, f.db, f.user.ID, testCookieName, testSecret,
+		http.MethodPost, "/api/babies/"+f.baby.ID+"/labs/batch")
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestBatchCreateLabResults_ValidationError returns 400 when an item is invalid.
+func TestBatchCreateLabResults_ValidationError(t *testing.T) {
+	t.Parallel()
+	f := setupExtractTest(t)
+	defer f.db.Close()
+
+	authMw := middleware.Auth(f.db, testCookieName)
+	csrfMw := middleware.CSRF(f.db, testCookieName, testSecret)
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/labs/batch", authMw(csrfMw(http.HandlerFunc(handler.BatchCreateLabResultHandler(f.db)))))
+
+	timestamp := time.Now().UTC().Format(model.DateTimeFormat)
+	body, _ := json.Marshal(map[string]any{
+		"items": []map[string]string{
+			{"timestamp": timestamp, "test_name": "ALT", "value": "45"},
+			{"timestamp": timestamp, "test_name": "", "value": "32"}, // missing test_name
+		},
+	})
+
+	req := testutil.AuthenticatedRequest(t, f.db, f.user.ID, testCookieName, testSecret,
+		http.MethodPost, "/api/babies/"+f.baby.ID+"/labs/batch")
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// Verify nothing was saved (transaction should have rolled back)
+	saved, err := store.ListLabResults(f.db, f.baby.ID, nil, nil, nil, 100)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(saved.Data) != 0 {
+		t.Errorf("expected 0 saved after validation error, got %d", len(saved.Data))
+	}
+}
+
+// TestLabExtractHandler_ReportDateDuplicateDetection verifies that report_date is used
+// for duplicate detection instead of current time.
+func TestLabExtractHandler_ReportDateDuplicateDetection(t *testing.T) {
+	t.Parallel()
+	f := setupExtractTest(t)
+	defer f.db.Close()
+
+	// Seed existing lab result: ALT=45, timestamped at 2026-03-14 (1 day before report_date)
+	_, err := store.CreateLabResult(f.db, f.baby.ID, f.user.ID, "2026-03-14T10:00:00Z", "ALT", "45", strPtrExtract("U/L"), nil, nil)
+	if err != nil {
+		t.Fatalf("seed lab result: %v", err)
+	}
+
+	// Claude returns report_date of 2026-03-15 — within ±3 days of the seeded result
+	cannedResp := `{
+		"extracted": [{"test_name": "ALT", "value": "45", "unit": "U/L", "normal_range": "7-56", "confidence": "high"}],
+		"report_date": "2026-03-15",
+		"notes": ""
+	}`
+	client := &mockClaudeClient{response: cannedResp}
+	mux := makeExtractMux(t, f, client)
+
+	key := "photo-" + model.NewULID()
+	seedR2Photo(t, f.db, f.objStore, f.baby.ID, key)
+
+	req := makeExtractReq(t, f, []string{key})
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp extractResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if len(resp.Extracted) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Extracted))
+	}
+	if resp.Extracted[0].ExistingMatch == nil {
+		t.Fatal("expected existing_match to be set (report_date-based duplicate detection)")
+	}
+}

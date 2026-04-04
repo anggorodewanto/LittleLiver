@@ -114,7 +114,7 @@ describe('LabImportFlow', () => {
 		});
 	});
 
-	it('calls labs batch endpoint on confirm with reviewed data', async () => {
+	it('calls batch endpoint on confirm with reviewed data', async () => {
 		vi.mocked(apiClient.postForm).mockResolvedValue({ r2_key: 'photos/key1.jpg' });
 
 		// First post call = extract, second = batch save
@@ -125,7 +125,7 @@ describe('LabImportFlow', () => {
 				],
 				notes: ''
 			})
-			.mockResolvedValueOnce({}); // batch save
+			.mockResolvedValueOnce([]); // batch save response
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
@@ -141,9 +141,88 @@ describe('LabImportFlow', () => {
 
 		await waitFor(() => {
 			expect(apiClient.post).toHaveBeenCalledWith(
-				'/babies/baby-1/labs',
-				expect.objectContaining({ test_name: 'ALT', value: '45' })
+				'/babies/baby-1/labs/batch',
+				expect.objectContaining({
+					items: expect.arrayContaining([
+						expect.objectContaining({ test_name: 'ALT', value: '45' })
+					])
+				})
 			);
+		});
+	});
+
+	it('uses report_date as timestamp when available', async () => {
+		vi.mocked(apiClient.postForm).mockResolvedValue({ r2_key: 'photos/key1.jpg' });
+
+		vi.mocked(apiClient.post)
+			.mockResolvedValueOnce({
+				extracted: [
+					{ test_name: 'ALT', value: '45', unit: 'U/L', normal_range: '7-56', confidence: 'high' }
+				],
+				notes: '',
+				report_date: '2026-03-15'
+			})
+			.mockResolvedValueOnce([]);
+
+		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
+
+		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
+		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
+		await fireEvent.change(input, { target: { files: [file] } });
+
+		await waitFor(() => {
+			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
+		});
+
+		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+		await waitFor(() => {
+			const batchCall = vi.mocked(apiClient.post).mock.calls.find(
+				(call) => call[0] === '/babies/baby-1/labs/batch'
+			);
+			expect(batchCall).toBeDefined();
+			const payload = batchCall![1] as { items: { timestamp: string }[] };
+			// Timestamp should be based on report_date (2026-03-15), not current date
+			expect(payload.items[0].timestamp).toContain('2026-03-15');
+		});
+	});
+
+	it('filters out items with empty test_name on confirm', async () => {
+		vi.mocked(apiClient.postForm).mockResolvedValue({ r2_key: 'photos/key1.jpg' });
+
+		vi.mocked(apiClient.post)
+			.mockResolvedValueOnce({
+				extracted: [
+					{ test_name: 'ALT', value: '45', unit: 'U/L', normal_range: '7-56', confidence: 'high' }
+				],
+				notes: ''
+			})
+			.mockResolvedValueOnce([]);
+
+		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
+
+		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
+		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
+		await fireEvent.change(input, { target: { files: [file] } });
+
+		await waitFor(() => {
+			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
+		});
+
+		// Add a blank row (will have empty test_name)
+		await fireEvent.click(screen.getByRole('button', { name: /add row/i }));
+
+		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+		await waitFor(() => {
+			const batchCall = vi.mocked(apiClient.post).mock.calls.find(
+				(call) => call[0] === '/babies/baby-1/labs/batch'
+			);
+			expect(batchCall).toBeDefined();
+			const payload = batchCall![1] as { items: { test_name: string }[] };
+			// Should only have 1 item (the valid ALT), blank row filtered out
+			expect(payload.items).toHaveLength(1);
+			expect(payload.items[0].test_name).toBe('ALT');
 		});
 	});
 
@@ -209,7 +288,7 @@ describe('LabImportFlow', () => {
 				],
 				notes: ''
 			})
-			.mockResolvedValueOnce({}); // batch save
+			.mockResolvedValueOnce([]); // batch save
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
@@ -270,7 +349,7 @@ describe('LabImportFlow', () => {
 				notes: ''
 			})
 			.mockRejectedValueOnce(new Error('Save failed'))  // first save fails
-			.mockResolvedValueOnce({});  // retry succeeds
+			.mockResolvedValueOnce([]);  // retry succeeds
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 

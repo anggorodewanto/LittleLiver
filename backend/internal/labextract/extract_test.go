@@ -29,12 +29,15 @@ func TestParseExtractionResponse_ValidArrayJSON(t *testing.T) {
 		{"test_name": "AST", "value": "32", "unit": "U/L", "normal_range": "10-40", "confidence": "medium"}
 	]`
 
-	results, notes, err := ParseExtractionResponse(raw)
+	results, notes, reportDate, err := ParseExtractionResponse(raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if notes != "" {
 		t.Errorf("expected empty notes for array format, got %q", notes)
+	}
+	if reportDate != "" {
+		t.Errorf("expected empty report_date for array format, got %q", reportDate)
 	}
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
@@ -61,15 +64,19 @@ func TestParseExtractionResponse_ObjectFormat(t *testing.T) {
 
 	raw := `{
 		"extracted": [{"test_name": "ALT", "value": "45", "unit": "U/L", "normal_range": "7-56", "confidence": "high"}],
-		"notes": "Sample collected 2026-03-15"
+		"report_date": "2026-03-15",
+		"notes": "Regional Hospital"
 	}`
 
-	results, notes, err := ParseExtractionResponse(raw)
+	results, notes, reportDate, err := ParseExtractionResponse(raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if notes != "Sample collected 2026-03-15" {
+	if notes != "Regional Hospital" {
 		t.Errorf("expected notes, got %q", notes)
+	}
+	if reportDate != "2026-03-15" {
+		t.Errorf("expected report_date 2026-03-15, got %q", reportDate)
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
@@ -82,7 +89,7 @@ func TestParseExtractionResponse_ObjectFormat(t *testing.T) {
 func TestParseExtractionResponse_InvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := ParseExtractionResponse("not json")
+	_, _, _, err := ParseExtractionResponse("not json")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
 	}
@@ -148,18 +155,18 @@ func TestExtractService_Success(t *testing.T) {
 		{Data: []byte("fake-image-data"), ContentType: "image/jpeg"},
 	}
 
-	results, notes, err := svc.Extract(context.Background(), images)
+	result, err := svc.Extract(context.Background(), images)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result.Results))
 	}
-	if results[0].TestName != "ALT" {
-		t.Errorf("expected ALT, got %s", results[0].TestName)
+	if result.Results[0].TestName != "ALT" {
+		t.Errorf("expected ALT, got %s", result.Results[0].TestName)
 	}
-	if notes != "test note" {
-		t.Errorf("expected notes 'test note', got %q", notes)
+	if result.Notes != "test note" {
+		t.Errorf("expected notes 'test note', got %q", result.Notes)
 	}
 }
 
@@ -173,7 +180,7 @@ func TestExtractService_ClaudeAPIFailure(t *testing.T) {
 		{Data: []byte("fake-image-data"), ContentType: "image/jpeg"},
 	}
 
-	_, _, err := svc.Extract(context.Background(), images)
+	_, err := svc.Extract(context.Background(), images)
 	if err == nil {
 		t.Fatal("expected error on Claude API failure")
 	}
@@ -195,15 +202,15 @@ func TestExtractService_DeduplicatesAcrossPages(t *testing.T) {
 		{Data: []byte("page2"), ContentType: "image/jpeg"},
 	}
 
-	results, _, err := svc.Extract(context.Background(), images)
+	result, err := svc.Extract(context.Background(), images)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(results) != 2 {
-		t.Fatalf("expected 2 deduplicated results, got %d", len(results))
+	if len(result.Results) != 2 {
+		t.Fatalf("expected 2 deduplicated results, got %d", len(result.Results))
 	}
 
-	for _, r := range results {
+	for _, r := range result.Results {
 		if r.TestName == "ALT" && r.Value != "48" {
 			t.Errorf("expected ALT=48, got ALT=%s", r.Value)
 		}
@@ -252,13 +259,16 @@ func TestExtractionPrompt(t *testing.T) {
 	if !strings.Contains(prompt, "JSON") {
 		t.Error("prompt should mention JSON format")
 	}
+	if !strings.Contains(prompt, "report_date") {
+		t.Error("prompt should mention report_date field")
+	}
 }
 
 func TestParseExtractionResponse_WithMarkdownFences(t *testing.T) {
 	t.Parallel()
 
 	raw := "```json\n[{\"test_name\": \"ALT\", \"value\": \"45\", \"unit\": \"U/L\", \"normal_range\": \"\", \"confidence\": \"high\"}]\n```"
-	results, _, err := ParseExtractionResponse(raw)
+	results, _, _, err := ParseExtractionResponse(raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -267,6 +277,40 @@ func TestParseExtractionResponse_WithMarkdownFences(t *testing.T) {
 	}
 	if results[0].TestName != "ALT" {
 		t.Errorf("expected ALT, got %s", results[0].TestName)
+	}
+}
+
+func TestParseExtractionResponse_ReportDate(t *testing.T) {
+	t.Parallel()
+
+	raw := `{
+		"extracted": [{"test_name": "ALT", "value": "45", "unit": "U/L", "normal_range": "7-56", "confidence": "high"}],
+		"report_date": "2026-04-01",
+		"notes": ""
+	}`
+
+	_, _, reportDate, err := ParseExtractionResponse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if reportDate != "2026-04-01" {
+		t.Errorf("expected report_date 2026-04-01, got %q", reportDate)
+	}
+}
+
+func TestExtractService_ReturnsReportDate(t *testing.T) {
+	t.Parallel()
+
+	cannedResp := `{"extracted": [{"test_name": "ALT", "value": "45", "unit": "U/L", "normal_range": "7-56", "confidence": "high"}], "report_date": "2026-03-20", "notes": ""}`
+	client := &mockClaudeClient{response: cannedResp}
+	svc := NewService(client)
+
+	result, err := svc.Extract(context.Background(), []ImageData{{Data: []byte("img"), ContentType: "image/jpeg"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.ReportDate != "2026-03-20" {
+		t.Errorf("expected report_date 2026-03-20, got %q", result.ReportDate)
 	}
 }
 

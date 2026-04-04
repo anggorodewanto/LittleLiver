@@ -73,7 +73,7 @@ func TestHTTPClaudeClient_SuccessfulExtraction(t *testing.T) {
 
 	client := &HTTPClaudeClient{
 		apiKey:     "test-key",
-		model:      "claude-sonnet-4-20250514",
+		model:      DefaultModel,
 		httpClient: server.Client(),
 		baseURL:    server.URL,
 	}
@@ -101,7 +101,7 @@ func TestHTTPClaudeClient_NonOKStatus(t *testing.T) {
 
 	client := &HTTPClaudeClient{
 		apiKey:     "test-key",
-		model:      "claude-sonnet-4-20250514",
+		model:      DefaultModel,
 		httpClient: server.Client(),
 		baseURL:    server.URL,
 	}
@@ -134,7 +134,7 @@ func TestHTTPClaudeClient_APIError(t *testing.T) {
 
 	client := &HTTPClaudeClient{
 		apiKey:     "test-key",
-		model:      "claude-sonnet-4-20250514",
+		model:      DefaultModel,
 		httpClient: server.Client(),
 		baseURL:    server.URL,
 	}
@@ -157,8 +157,8 @@ func TestNewHTTPClaudeClient(t *testing.T) {
 	if client.apiKey != "my-api-key" {
 		t.Errorf("expected api key my-api-key, got %s", client.apiKey)
 	}
-	if client.model != "claude-sonnet-4-20250514" {
-		t.Errorf("expected default model, got %s", client.model)
+	if client.model != DefaultModel {
+		t.Errorf("expected default model %s, got %s", DefaultModel, client.model)
 	}
 }
 
@@ -185,7 +185,7 @@ func TestHTTPClaudeClient_ReadBodyError(t *testing.T) {
 
 	client := &HTTPClaudeClient{
 		apiKey:     "test-key",
-		model:      "claude-sonnet-4-20250514",
+		model:      DefaultModel,
 		httpClient: server.Client(),
 		baseURL:    server.URL,
 	}
@@ -215,7 +215,7 @@ func TestHTTPClaudeClient_NoTextContent(t *testing.T) {
 
 	client := &HTTPClaudeClient{
 		apiKey:     "test-key",
-		model:      "claude-sonnet-4-20250514",
+		model:      DefaultModel,
 		httpClient: server.Client(),
 		baseURL:    server.URL,
 	}

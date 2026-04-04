@@ -91,8 +91,9 @@ func makeExtractReq(t *testing.T, f *extractTestFixture, photoKeys []string) *ht
 }
 
 type extractResponse struct {
-	Extracted []extractedResultResp `json:"extracted"`
-	Notes     string                `json:"notes"`
+	Extracted  []extractedResultResp `json:"extracted"`
+	Notes      string                `json:"notes"`
+	ReportDate string                `json:"report_date,omitempty"`
 }
 
 type extractedResultResp struct {
@@ -221,7 +222,8 @@ func TestLabExtractHandler_SuccessfulExtraction(t *testing.T) {
 			{"test_name": "ALT", "value": "45", "unit": "U/L", "normal_range": "7-56", "confidence": "high"},
 			{"test_name": "AST", "value": "32", "unit": "U/L", "normal_range": "10-40", "confidence": "medium"}
 		],
-		"notes": "Sample collected 2026-03-15"
+		"report_date": "2026-03-15",
+		"notes": "Regional Hospital"
 	}`
 	client := &mockClaudeClient{response: cannedResp}
 	mux := makeExtractMux(t, f, client)
@@ -250,7 +252,10 @@ func TestLabExtractHandler_SuccessfulExtraction(t *testing.T) {
 	if resp.Extracted[0].Confidence != "high" {
 		t.Errorf("expected high confidence, got %s", resp.Extracted[0].Confidence)
 	}
-	if resp.Notes != "Sample collected 2026-03-15" {
+	if resp.ReportDate != "2026-03-15" {
+		t.Errorf("expected report_date 2026-03-15, got %q", resp.ReportDate)
+	}
+	if resp.Notes != "Regional Hospital" {
 		t.Errorf("expected notes, got %q", resp.Notes)
 	}
 }

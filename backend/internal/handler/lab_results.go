@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -220,6 +221,67 @@ func ListLabTestSuggestionsHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusOK, suggestions)
+	}
+}
+
+// batchLabResultRequest is the JSON request body for batch-creating lab results.
+type batchLabResultRequest struct {
+	Items []labResultRequest `json:"items"`
+}
+
+// BatchCreateLabResultHandler handles POST /api/babies/{id}/labs/batch.
+func BatchCreateLabResultHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+
+		baby, ok := requireBabyAccess(w, r, db, user.ID)
+		if !ok {
+			return
+		}
+
+		var req batchLabResultRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if len(req.Items) == 0 {
+			http.Error(w, "items array must not be empty", http.StatusBadRequest)
+			return
+		}
+
+		inputs := make([]store.BatchLabInput, 0, len(req.Items))
+		for i, item := range req.Items {
+			if msg, ok := item.validate(); !ok {
+				http.Error(w, fmt.Sprintf("item %d: %s", i, msg), http.StatusBadRequest)
+				return
+			}
+			inputs = append(inputs, store.BatchLabInput{
+				Timestamp:   item.Timestamp,
+				TestName:    item.TestName,
+				Value:       item.Value,
+				Unit:        item.Unit,
+				NormalRange: item.NormalRange,
+				Notes:       item.Notes,
+			})
+		}
+
+		labs, err := store.BatchCreateLabResults(db, baby.ID, user.ID, inputs)
+		if err != nil {
+			log.Printf("batch create lab results: %v", err)
+			http.Error(w, "failed to create lab results", http.StatusInternalServerError)
+			return
+		}
+
+		results := make([]labResultResponse, len(labs))
+		for i := range labs {
+			results[i] = toLabResultResponse(&labs[i])
+		}
+
+		writeJSON(w, http.StatusCreated, results)
 	}
 }
 

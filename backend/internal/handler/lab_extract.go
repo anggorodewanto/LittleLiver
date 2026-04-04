@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -21,8 +22,9 @@ type labExtractRequest struct {
 
 // labExtractResponse is the JSON response for lab extraction.
 type labExtractResponse struct {
-	Extracted []labextract.ExtractedResult `json:"extracted"`
-	Notes     string                       `json:"notes"`
+	Extracted  []labextract.ExtractedResult `json:"extracted"`
+	Notes      string                       `json:"notes"`
+	ReportDate string                       `json:"report_date,omitempty"`
 }
 
 // ExtractRateLimiter tracks per-user extraction request counts (10/hour).
@@ -43,7 +45,8 @@ func NewExtractRateLimiter() *ExtractRateLimiter {
 	}
 }
 
-func (rl *ExtractRateLimiter) allow(userID string) bool {
+// allow checks whether the user is within the rate limit and returns (allowed, remaining).
+func (rl *ExtractRateLimiter) allow(userID string) (bool, int) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
@@ -51,21 +54,21 @@ func (rl *ExtractRateLimiter) allow(userID string) bool {
 	b, ok := rl.buckets[userID]
 	if !ok {
 		rl.buckets[userID] = &extractBucket{count: 1, windowStart: now}
-		return true
+		return true, 9
 	}
 
 	if now.Sub(b.windowStart) >= time.Hour {
 		b.count = 1
 		b.windowStart = now
-		return true
+		return true, 9
 	}
 
 	if b.count >= 10 {
-		return false
+		return false, 0
 	}
 
 	b.count++
-	return true
+	return true, 10 - b.count
 }
 
 // LabExtractHandler handles POST /api/babies/{id}/labs/extract without rate limiting.
@@ -91,9 +94,13 @@ func labExtractCore(db *sql.DB, objStore storage.ObjectStore, svc *labextract.Se
 		}
 
 		// Rate limit check
-		if rl != nil && !rl.allow(user.ID) {
-			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-			return
+		if rl != nil {
+			allowed, remaining := rl.allow(user.ID)
+			w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+			if !allowed {
+				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+				return
+			}
 		}
 
 		var req labExtractRequest
@@ -132,17 +139,24 @@ func labExtractCore(db *sql.DB, objStore storage.ObjectStore, svc *labextract.Se
 		}
 
 		// Call extraction service
-		results, notes, err := svc.Extract(r.Context(), images)
+		extraction, err := svc.Extract(r.Context(), images)
 		if err != nil {
 			log.Printf("lab extraction: %v", err)
 			http.Error(w, "extraction failed", http.StatusBadGateway)
 			return
 		}
 
-		// Check for duplicate lab results
+		// Use report_date for duplicate detection if available, otherwise fall back to now
 		referenceDate := time.Now().UTC()
-		for i := range results {
-			match, err := store.FindDuplicateLabResult(db, baby.ID, results[i].TestName, results[i].Value, referenceDate)
+		if extraction.ReportDate != "" {
+			if parsed, err := time.Parse("2006-01-02", extraction.ReportDate); err == nil {
+				referenceDate = parsed
+			}
+		}
+
+		// Check for duplicate lab results
+		for i := range extraction.Results {
+			match, err := store.FindDuplicateLabResult(db, baby.ID, extraction.Results[i].TestName, extraction.Results[i].Value, referenceDate)
 			if err != nil {
 				log.Printf("duplicate check: %v", err)
 				continue
@@ -152,7 +166,7 @@ func labExtractCore(db *sql.DB, objStore storage.ObjectStore, svc *labextract.Se
 				if match.Unit != nil {
 					unit = *match.Unit
 				}
-				results[i].ExistingMatch = &labextract.ExistingMatch{
+				extraction.Results[i].ExistingMatch = &labextract.ExistingMatch{
 					ID:        match.ID,
 					Timestamp: match.Timestamp.Format(model.DateTimeFormat),
 					Value:     match.Value,
@@ -161,6 +175,10 @@ func labExtractCore(db *sql.DB, objStore storage.ObjectStore, svc *labextract.Se
 			}
 		}
 
-		writeJSON(w, http.StatusOK, labExtractResponse{Extracted: results, Notes: notes})
+		writeJSON(w, http.StatusOK, labExtractResponse{
+			Extracted:  extraction.Results,
+			Notes:      extraction.Notes,
+			ReportDate: extraction.ReportDate,
+		})
 	}
 }

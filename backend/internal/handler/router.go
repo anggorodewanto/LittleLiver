@@ -123,6 +123,7 @@ func NewMux(opts ...Option) *http.ServeMux {
 				CreateLabResultHandler(cfg.db), ListLabResultsHandler(cfg.db),
 				GetLabResultHandler(cfg.db), UpdateLabResultHandler(cfg.db), DeleteLabResultHandler(cfg.db))
 			mux.Handle("GET /api/babies/{id}/labs/tests", rateMw(authMw(http.HandlerFunc(ListLabTestSuggestionsHandler(cfg.db)))))
+			mux.Handle("POST /api/babies/{id}/labs/batch", rateMw(authMw(csrfMw(http.HandlerFunc(BatchCreateLabResultHandler(cfg.db))))))
 
 			// Lab extraction endpoint (Claude Vision API) — separate rate limit: 10 req/hour/user
 			if cfg.extractSvc != nil {

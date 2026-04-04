@@ -7,6 +7,7 @@
 	interface ExtractionResponse {
 		extracted: ExtractedItem[];
 		notes: string;
+		report_date?: string;
 	}
 
 	interface Props {
@@ -23,6 +24,7 @@
 	let error = $state('');
 	let extractedItems = $state<ExtractedItem[]>([]);
 	let extractionNotes = $state('');
+	let reportDate = $state('');
 
 	async function uploadFile(file: File): Promise<string> {
 		const formData = new FormData();
@@ -58,6 +60,7 @@
 			);
 			extractedItems = response.extracted;
 			extractionNotes = response.notes;
+			reportDate = response.report_date ?? '';
 			state = 'review';
 		} catch {
 			state = 'error';
@@ -65,8 +68,18 @@
 		}
 	}
 
+	function buildTimestamp(): string {
+		if (reportDate) {
+			// Use report_date at noon local time as the timestamp
+			return toISO8601(`${reportDate}T12:00`);
+		}
+		return toISO8601(defaultTimestamp());
+	}
+
 	async function handleConfirm(items: ReviewedLabPayload[]) {
-		if (items.length === 0) {
+		// Filter out items with empty test_name (validation)
+		const validItems = items.filter((item) => item.test_name.trim() !== '');
+		if (validItems.length === 0) {
 			oncancel();
 			return;
 		}
@@ -74,15 +87,15 @@
 		state = 'saving';
 		error = '';
 
-		const timestamp = toISO8601(defaultTimestamp());
+		const timestamp = buildTimestamp();
 
 		try {
-			for (const item of items) {
-				await apiClient.post(`/babies/${babyId}/labs`, {
+			await apiClient.post(`/babies/${babyId}/labs/batch`, {
+				items: validItems.map((item) => ({
 					timestamp,
 					...item
-				});
-			}
+				}))
+			});
 			onsaved();
 		} catch {
 			state = 'save-error';

@@ -37,8 +37,9 @@ type ExistingMatch struct {
 
 // ExtractionResponse is the full response from the extraction endpoint.
 type ExtractionResponse struct {
-	Extracted []ExtractedResult `json:"extracted"`
-	Notes     string            `json:"notes"`
+	Extracted  []ExtractedResult `json:"extracted"`
+	Notes      string            `json:"notes"`
+	ReportDate string            `json:"report_date,omitempty"`
 }
 
 // ClaudeClient is the interface for communicating with the Claude Vision API.
@@ -56,32 +57,44 @@ func NewService(client ClaudeClient) *Service {
 	return &Service{client: client}
 }
 
+// ExtractResult holds the full extraction output including report_date.
+type ExtractResult struct {
+	Results    []ExtractedResult
+	Notes      string
+	ReportDate string
+}
+
 // Extract sends images to the Claude API and returns deduplicated extracted results.
-func (s *Service) Extract(ctx context.Context, images []ImageData) ([]ExtractedResult, string, error) {
+func (s *Service) Extract(ctx context.Context, images []ImageData) (*ExtractResult, error) {
 	raw, err := s.client.ExtractLabResults(ctx, images, ExtractionPrompt())
 	if err != nil {
-		return nil, "", fmt.Errorf("claude API: %w", err)
+		return nil, fmt.Errorf("claude API: %w", err)
 	}
 
-	results, notes, err := ParseExtractionResponse(raw)
+	results, notes, reportDate, err := ParseExtractionResponse(raw)
 	if err != nil {
-		return nil, "", fmt.Errorf("parse response: %w", err)
+		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
-	return DeduplicateResults(results), notes, nil
+	return &ExtractResult{
+		Results:    DeduplicateResults(results),
+		Notes:      notes,
+		ReportDate: reportDate,
+	}, nil
 }
 
 // rawExtractionResponse is used for parsing the Claude API response which may be
-// an object with "extracted" and "notes" fields.
+// an object with "extracted", "notes", and "report_date" fields.
 type rawExtractionResponse struct {
-	Extracted []ExtractedResult `json:"extracted"`
-	Notes     string            `json:"notes"`
+	Extracted  []ExtractedResult `json:"extracted"`
+	Notes      string            `json:"notes"`
+	ReportDate string            `json:"report_date"`
 }
 
-// ParseExtractionResponse parses the raw JSON response from Claude into ExtractedResults
-// and optional notes. Supports both object format {"extracted": [...], "notes": "..."} and
-// plain array format [...] for robustness.
-func ParseExtractionResponse(raw string) ([]ExtractedResult, string, error) {
+// ParseExtractionResponse parses the raw JSON response from Claude into ExtractedResults,
+// optional notes, and optional report_date. Supports both object format
+// {"extracted": [...], "notes": "...", "report_date": "..."} and plain array format [...].
+func ParseExtractionResponse(raw string) ([]ExtractedResult, string, string, error) {
 	// Strip markdown code fences if present
 	trimmed := strings.TrimSpace(raw)
 	if strings.HasPrefix(trimmed, "```") {
@@ -95,21 +108,21 @@ func ParseExtractionResponse(raw string) ([]ExtractedResult, string, error) {
 		trimmed = strings.TrimSpace(trimmed)
 	}
 
-	// Try object format first ({"extracted": [...], "notes": "..."})
+	// Try object format first ({"extracted": [...], "notes": "...", "report_date": "..."})
 	if strings.HasPrefix(trimmed, "{") {
 		var resp rawExtractionResponse
 		if err := json.Unmarshal([]byte(trimmed), &resp); err != nil {
-			return nil, "", fmt.Errorf("invalid JSON: %w", err)
+			return nil, "", "", fmt.Errorf("invalid JSON: %w", err)
 		}
-		return resp.Extracted, resp.Notes, nil
+		return resp.Extracted, resp.Notes, resp.ReportDate, nil
 	}
 
 	// Fall back to plain array format
 	var results []ExtractedResult
 	if err := json.Unmarshal([]byte(trimmed), &results); err != nil {
-		return nil, "", fmt.Errorf("invalid JSON: %w", err)
+		return nil, "", "", fmt.Errorf("invalid JSON: %w", err)
 	}
-	return results, "", nil
+	return results, "", "", nil
 }
 
 // DeduplicateResults removes duplicate test names (case-insensitive), keeping the last occurrence.
@@ -151,7 +164,8 @@ Return ONLY a JSON object (no markdown, no explanation) with these fields:
   - "unit": The unit of measurement (e.g., "mg/dL", "U/L").
   - "normal_range": The reference/normal range if shown (e.g., "7-56"), or empty string if not available.
   - "confidence": Your confidence level in the extraction accuracy: "high", "medium", or "low".
-- "notes": Optional free-text context from the report (e.g., sample collection date, lab name). Empty string if nothing notable.
+- "report_date": The sample collection or report date in YYYY-MM-DD format if found on the document. Empty string if not found.
+- "notes": Optional free-text context from the report (e.g., lab name, doctor notes). Empty string if nothing notable.
 
 If multiple pages show the same test, include all occurrences (deduplication happens downstream).
 
@@ -161,6 +175,7 @@ Example output:
     {"test_name": "ALT", "value": "45", "unit": "U/L", "normal_range": "7-56", "confidence": "high"},
     {"test_name": "total_bilirubin", "value": "1.2", "unit": "mg/dL", "normal_range": "0.1-1.2", "confidence": "high"}
   ],
-  "notes": "Sample collected 2026-03-15"
+  "report_date": "2026-03-15",
+  "notes": ""
 }`
 }

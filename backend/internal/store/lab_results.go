@@ -141,6 +141,54 @@ func ListDistinctLabTests(db *sql.DB, babyID string) ([]LabTestSuggestion, error
 	return suggestions, nil
 }
 
+// BatchLabInput holds the fields for a single lab result in a batch create.
+type BatchLabInput struct {
+	Timestamp   string
+	TestName    string
+	Value       string
+	Unit        *string
+	NormalRange *string
+	Notes       *string
+}
+
+// BatchCreateLabResults inserts multiple lab results atomically in a single transaction.
+// Returns all created lab results.
+func BatchCreateLabResults(db *sql.DB, babyID, loggedBy string, items []BatchLabInput) ([]model.LabResult, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	ids := make([]string, len(items))
+	for i, item := range items {
+		id := model.NewULID()
+		ids[i] = id
+		_, err := tx.Exec(
+			`INSERT INTO lab_results (id, baby_id, logged_by, timestamp, test_name, value, unit, normal_range, notes)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, babyID, loggedBy, item.Timestamp, item.TestName, item.Value, item.Unit, item.NormalRange, item.Notes,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("insert lab result %d: %w", i, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit transaction: %w", err)
+	}
+
+	results := make([]model.LabResult, 0, len(ids))
+	for _, id := range ids {
+		lab, err := GetLabResultByID(db, babyID, id)
+		if err != nil {
+			return nil, fmt.Errorf("fetch created lab result %s: %w", id, err)
+		}
+		results = append(results, *lab)
+	}
+	return results, nil
+}
+
 // DeleteLabResult hard-deletes a lab result.
 func DeleteLabResult(db *sql.DB, babyID, labID string) error {
 	return deleteByID(db, "lab_results", babyID, labID)
