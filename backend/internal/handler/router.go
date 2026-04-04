@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/auth"
+	"github.com/ablankz/LittleLiver/backend/internal/labextract"
 	"github.com/ablankz/LittleLiver/backend/internal/middleware"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
 )
@@ -122,6 +123,13 @@ func NewMux(opts ...Option) *http.ServeMux {
 				CreateLabResultHandler(cfg.db), ListLabResultsHandler(cfg.db),
 				GetLabResultHandler(cfg.db), UpdateLabResultHandler(cfg.db), DeleteLabResultHandler(cfg.db))
 			mux.Handle("GET /api/babies/{id}/labs/tests", rateMw(authMw(http.HandlerFunc(ListLabTestSuggestionsHandler(cfg.db)))))
+
+			// Lab extraction endpoint (Claude Vision API) — separate rate limit: 10 req/hour/user
+			if cfg.extractSvc != nil {
+				extractRL := NewExtractRateLimiter()
+				mux.Handle("POST /api/babies/{id}/labs/extract", rateMw(authMw(csrfMw(http.HandlerFunc(
+					LabExtractHandlerWithRateLimit(cfg.db, cfg.objStore, cfg.extractSvc, extractRL))))))
+			}
 			registerMetricCRUD(mux, "/api/babies/{id}/notes", rateMw, authMw, csrfMw,
 				CreateGeneralNoteHandler(cfg.db, cfg.objStore), ListGeneralNotesHandler(cfg.db, cfg.objStore),
 				GetGeneralNoteHandler(cfg.db, cfg.objStore), UpdateGeneralNoteHandler(cfg.db, cfg.objStore), DeleteGeneralNoteHandler(cfg.db))
@@ -217,6 +225,7 @@ type options struct {
 	authConfig     *auth.Config
 	objStore       storage.ObjectStore
 	vapidPublicKey string
+	extractSvc     *labextract.Service
 }
 
 // WithDB provides a database connection for routes that need it.
@@ -244,6 +253,13 @@ func WithObjectStore(s storage.ObjectStore) Option {
 func WithVAPIDPublicKey(key string) Option {
 	return func(o *options) {
 		o.vapidPublicKey = key
+	}
+}
+
+// WithExtractService provides the lab extraction service.
+func WithExtractService(svc *labextract.Service) Option {
+	return func(o *options) {
+		o.extractSvc = svc
 	}
 }
 

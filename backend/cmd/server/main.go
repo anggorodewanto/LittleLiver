@@ -14,6 +14,7 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/backup"
 	"github.com/ablankz/LittleLiver/backend/internal/cron"
 	"github.com/ablankz/LittleLiver/backend/internal/handler"
+	"github.com/ablankz/LittleLiver/backend/internal/labextract"
 	"github.com/ablankz/LittleLiver/backend/internal/notify"
 	"github.com/ablankz/LittleLiver/backend/internal/storage"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
@@ -110,6 +111,17 @@ func main() {
 		log.Printf("medication reminder scheduler started")
 	} else {
 		log.Printf("WARNING: VAPID keys not configured — push notifications disabled")
+	}
+
+	// Initialize lab extraction service if Anthropic API key is configured
+	anthropicKey := os.Getenv("ANTHROPIC_API_KEY")
+	if anthropicKey != "" {
+		claudeClient := labextract.NewHTTPClaudeClient(anthropicKey)
+		extractSvc := labextract.NewService(claudeClient)
+		opts = append(opts, handler.WithExtractService(extractSvc))
+		log.Printf("lab extraction service configured")
+	} else {
+		log.Printf("WARNING: ANTHROPIC_API_KEY not set — lab extraction disabled")
 	}
 
 	// Start cron jobs (invite/session/photo cleanup)
