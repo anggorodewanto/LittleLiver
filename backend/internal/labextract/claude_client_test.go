@@ -9,6 +9,17 @@ import (
 	"testing"
 )
 
+func TestNewHTTPClaudeClientWithBaseURL(t *testing.T) {
+	t.Parallel()
+	client := NewHTTPClaudeClientWithBaseURL("test-key", "http://mock-server:9999")
+	if client.baseURL != "http://mock-server:9999" {
+		t.Errorf("expected base URL http://mock-server:9999, got %s", client.baseURL)
+	}
+	if client.apiKey != "test-key" {
+		t.Errorf("expected api key test-key, got %s", client.apiKey)
+	}
+}
+
 func TestHTTPClaudeClient_SuccessfulExtraction(t *testing.T) {
 	t.Parallel()
 
@@ -134,6 +145,57 @@ func TestHTTPClaudeClient_APIError(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("expected error for API error response")
+	}
+}
+
+func TestNewHTTPClaudeClient(t *testing.T) {
+	t.Parallel()
+	client := NewHTTPClaudeClient("my-api-key")
+	if client.baseURL != "https://api.anthropic.com" {
+		t.Errorf("expected default base URL https://api.anthropic.com, got %s", client.baseURL)
+	}
+	if client.apiKey != "my-api-key" {
+		t.Errorf("expected api key my-api-key, got %s", client.apiKey)
+	}
+	if client.model != "claude-sonnet-4-20250514" {
+		t.Errorf("expected default model, got %s", client.model)
+	}
+}
+
+func TestHTTPClaudeClient_ReadBodyError(t *testing.T) {
+	t.Parallel()
+
+	// Create a server that closes the connection after sending headers but before body
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set Content-Length to a large value but don't send the body,
+		// then hijack the connection to force a read error
+		w.Header().Set("Content-Length", "99999")
+		w.WriteHeader(http.StatusOK)
+		// Flush headers then close connection to cause io.ReadAll error
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		// Hijack the connection and close it immediately
+		if hj, ok := w.(http.Hijacker); ok {
+			conn, _, _ := hj.Hijack()
+			conn.Close()
+		}
+	}))
+	defer server.Close()
+
+	client := &HTTPClaudeClient{
+		apiKey:     "test-key",
+		model:      "claude-sonnet-4-20250514",
+		httpClient: server.Client(),
+		baseURL:    server.URL,
+	}
+
+	_, err := client.ExtractLabResults(context.Background(), []ImageData{
+		{Data: []byte("fake-image"), ContentType: "image/jpeg"},
+	}, "test prompt")
+
+	if err == nil {
+		t.Fatal("expected error when response body read fails")
 	}
 }
 

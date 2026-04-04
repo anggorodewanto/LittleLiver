@@ -8,7 +8,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const E2E_PORT = '3847';
+const MOCK_CLAUDE_PORT = '3848';
 let backendProcess: ChildProcess | null = null;
+let mockClaudeProcess: ChildProcess | null = null;
 let tmpDir: string | null = null;
 
 const BACKEND_DIR = join(__dirname, '..', '..', 'backend');
@@ -31,9 +33,10 @@ async function waitForServer(url: string, timeoutMs = 15000): Promise<void> {
 }
 
 async function globalSetup(): Promise<() => Promise<void>> {
-	// Kill any existing process on the E2E port
+	// Kill any existing process on the E2E port and mock Claude port
 	try {
 		execSync(`lsof -ti :${E2E_PORT} | xargs kill -9 2>/dev/null || true`, { stdio: 'pipe' });
+		execSync(`lsof -ti :${MOCK_CLAUDE_PORT} | xargs kill -9 2>/dev/null || true`, { stdio: 'pipe' });
 		// Brief wait for port to be released
 		await new Promise((r) => setTimeout(r, 500));
 	} catch {
@@ -56,6 +59,20 @@ async function globalSetup(): Promise<() => Promise<void>> {
 	const dbPath = join(tmpDir, 'test.db');
 	const staticDir = join(FRONTEND_DIR, 'build');
 
+	// Start mock Claude API server
+	console.log('Starting mock Claude API server...');
+	mockClaudeProcess = spawn('npx', ['tsx', join(FRONTEND_DIR, 'e2e', 'mock-claude-server.ts')], {
+		stdio: ['pipe', 'pipe', 'pipe']
+	});
+
+	mockClaudeProcess.stderr?.on('data', (data: Buffer) => {
+		console.error('[mock-claude]', data.toString().trim());
+	});
+
+	// Wait for mock Claude server
+	await waitForServer(`http://localhost:${MOCK_CLAUDE_PORT}/mock/call-count`);
+	console.log('Mock Claude API server is ready.');
+
 	console.log(`Starting backend server (DB: ${dbPath})...`);
 
 	backendProcess = spawn('/tmp/littleliver-e2e-server', [], {
@@ -69,7 +86,9 @@ async function globalSetup(): Promise<() => Promise<void>> {
 			GOOGLE_CLIENT_ID: 'test-client-id',
 			GOOGLE_CLIENT_SECRET: 'test-client-secret',
 			SESSION_SECRET: 'test-session-secret-for-e2e',
-			BASE_URL: `http://localhost:${E2E_PORT}`
+			BASE_URL: `http://localhost:${E2E_PORT}`,
+			ANTHROPIC_API_KEY: 'test-e2e-key',
+			CLAUDE_API_BASE_URL: `http://localhost:${MOCK_CLAUDE_PORT}`
 		},
 		stdio: ['pipe', 'pipe', 'pipe']
 	});
@@ -90,6 +109,10 @@ async function globalSetup(): Promise<() => Promise<void>> {
 		if (backendProcess) {
 			backendProcess.kill('SIGTERM');
 			backendProcess = null;
+		}
+		if (mockClaudeProcess) {
+			mockClaudeProcess.kill('SIGTERM');
+			mockClaudeProcess = null;
 		}
 		if (tmpDir && existsSync(tmpDir)) {
 			rmSync(tmpDir, { recursive: true, force: true });

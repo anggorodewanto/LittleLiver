@@ -28,6 +28,17 @@ func NewHTTPClaudeClient(apiKey string) *HTTPClaudeClient {
 	}
 }
 
+// NewHTTPClaudeClientWithBaseURL creates a Claude API client with a custom base URL.
+// Useful for testing with a mock API server.
+func NewHTTPClaudeClientWithBaseURL(apiKey, baseURL string) *HTTPClaudeClient {
+	return &HTTPClaudeClient{
+		apiKey:     apiKey,
+		model:      "claude-sonnet-4-20250514",
+		httpClient: http.DefaultClient,
+		baseURL:    baseURL,
+	}
+}
+
 // claudeRequest is the request body for the Anthropic Messages API.
 type claudeRequest struct {
 	Model     string          `json:"model"`

@@ -67,6 +67,11 @@ func main() {
 		objStore = r2Client
 		opts = append(opts, handler.WithObjectStore(objStore))
 		log.Printf("R2 object store configured (bucket: %s)", r2Bucket)
+	} else if os.Getenv("TEST_MODE") == "1" {
+		// In test mode, use in-memory object store for photo uploads
+		objStore = storage.NewMemoryStore()
+		opts = append(opts, handler.WithObjectStore(objStore))
+		log.Println("WARNING: TEST_MODE=1 -- photo data is ephemeral (in-memory store)")
 	} else {
 		log.Printf("WARNING: R2 not configured — photo uploads disabled")
 	}
@@ -116,10 +121,16 @@ func main() {
 	// Initialize lab extraction service if Anthropic API key is configured
 	anthropicKey := os.Getenv("ANTHROPIC_API_KEY")
 	if anthropicKey != "" {
-		claudeClient := labextract.NewHTTPClaudeClient(anthropicKey)
+		var claudeClient labextract.ClaudeClient
+		if baseURL := os.Getenv("CLAUDE_API_BASE_URL"); baseURL != "" {
+			claudeClient = labextract.NewHTTPClaudeClientWithBaseURL(anthropicKey, baseURL)
+			log.Printf("lab extraction service configured (custom base URL: %s)", baseURL)
+		} else {
+			claudeClient = labextract.NewHTTPClaudeClient(anthropicKey)
+			log.Printf("lab extraction service configured")
+		}
 		extractSvc := labextract.NewService(claudeClient)
 		opts = append(opts, handler.WithExtractService(extractSvc))
-		log.Printf("lab extraction service configured")
 	} else {
 		log.Printf("WARNING: ANTHROPIC_API_KEY not set — lab extraction disabled")
 	}
