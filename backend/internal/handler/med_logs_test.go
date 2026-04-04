@@ -231,6 +231,103 @@ func TestCreateMedLog_AdHocDose(t *testing.T) {
 	}
 }
 
+// --- POST: client-provided given_at is preserved ---
+
+func TestCreateMedLog_PreservesClientGivenAt(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateMedication failed: %v", err)
+	}
+
+	// Send a specific past time — the handler must NOT override it with NOW()
+	clientTime := "2026-03-17T14:00:00Z"
+	body := `{"medication_id":"` + med.ID + `","given_at":"` + clientTime + `","skipped":false}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/med-logs")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateMedLogHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/med-logs", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if resp["given_at"] != clientTime {
+		t.Errorf("expected given_at=%s (client-provided), got %v", clientTime, resp["given_at"])
+	}
+}
+
+// --- POST: given_at defaults to NOW() when omitted ---
+
+func TestCreateMedLog_DefaultsGivenAtToNow(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	med, err := store.CreateMedication(db, baby.ID, user.ID, "Ursodiol", "50mg", "twice_daily", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateMedication failed: %v", err)
+	}
+
+	before := time.Now().UTC()
+	// Omit given_at — handler should default to NOW()
+	body := `{"medication_id":"` + med.ID + `","skipped":false}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/med-logs")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateMedLogHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/med-logs", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	after := time.Now().UTC()
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	givenAtStr, ok := resp["given_at"].(string)
+	if !ok || givenAtStr == "" {
+		t.Fatal("expected non-empty given_at when omitted from request")
+	}
+	givenAtTime, err := time.Parse("2006-01-02T15:04:05Z", givenAtStr)
+	if err != nil {
+		t.Fatalf("parse given_at: %v", err)
+	}
+	if givenAtTime.Before(before.Truncate(time.Second)) || givenAtTime.After(after.Add(time.Second)) {
+		t.Errorf("expected given_at near NOW(), got %s", givenAtStr)
+	}
+}
+
 // --- PUT: edit sets updated_by and updated_at ---
 
 func TestUpdateMedLog_SetsUpdatedByAndUpdatedAt(t *testing.T) {
