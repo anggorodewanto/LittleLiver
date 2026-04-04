@@ -20,6 +20,7 @@
 	import FluidLogForm from '$lib/components/FluidLogForm.svelte';
 	import HeadCircumferenceForm from '$lib/components/HeadCircumferenceForm.svelte';
 	import UpperArmCircumferenceForm from '$lib/components/UpperArmCircumferenceForm.svelte';
+	import LabImportFlow from '$lib/components/LabImportFlow.svelte';
 
 	const METRIC_CONFIG: Record<string, { label: string; endpoint: string; hasPhoto: boolean; multiPhoto?: boolean }> = {
 		feeding: { label: 'Feeding', endpoint: 'feedings', hasPhoto: false },
@@ -55,6 +56,7 @@
 	let uploading = $state(false);
 	let photoKeys = $state<string[]>([]);
 	let existingPhotos = $state<PhotoInfo[]>([]);
+	let showLabImport = $state(false);
 
 	$effect(() => {
 		void metric;  // track the metric reactive dependency
@@ -197,7 +199,16 @@
 	{:else if metric === 'bruising'}
 		<BruisingForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} onphotoremove={handlePhotoRemove} {submitting} {error} {uploading} {photoKeys} {existingPhotos} />
 	{:else if metric === 'lab'}
-		<LabForm onsubmit={handleSubmit} initialData={editData} babyId={baby.id} {submitting} {error} />
+		{#if showLabImport}
+			<LabImportFlow babyId={baby.id} oncancel={() => { showLabImport = false; }} onsaved={() => { goto('/'); }} />
+		{:else}
+			{#if !editId}
+				<button type="button" class="import-photo-btn" onclick={() => { showLabImport = true; }}>
+					Import from photo
+				</button>
+			{/if}
+			<LabForm onsubmit={handleSubmit} initialData={editData} babyId={baby.id} {submitting} {error} />
+		{/if}
 	{:else if metric === 'notes'}
 		<NotesForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} onphotoremove={handlePhotoRemove} {submitting} {error} {uploading} {photoKeys} {existingPhotos} />
 	{:else if metric === 'medication'}
@@ -229,5 +240,16 @@
 
 	.back-link:hover {
 		color: var(--color-primary);
+	}
+
+	.import-photo-btn {
+		width: 100%;
+		margin-bottom: var(--space-3, 1rem);
+		background: var(--color-surface, #f8f9fa);
+		border: 2px dashed var(--color-border, #e0e0e0);
+		border-radius: var(--radius, 8px);
+		padding: var(--space-2, 0.5rem) var(--space-3, 1rem);
+		cursor: pointer;
+		font-weight: 500;
 	}
 </style>
