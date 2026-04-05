@@ -370,12 +370,84 @@ POST   /api/push/subscribe                    → Register push subscription (pe
 DELETE /api/push/subscribe                    → Unregister
 ```
 
-### 5.6 WHO Growth Data
+### 5.6 Lab Result Extraction (AI Vision)
+
+```
+POST   /api/babies/:id/labs/extract  → Extract lab results from uploaded images/PDF
+```
+
+**Purpose:** Parents can photograph or upload a PDF of hospital lab results instead of manually entering each test value. The server uses the Claude Vision API to extract structured lab data from the images.
+
+**Input:** The request body contains an array of R2 keys pointing to already-uploaded images or PDF pages:
+```json
+{
+  "photo_keys": ["photos/abc123.jpg", "photos/def456.jpg"]
+}
+```
+
+Multiple images/keys support two use cases: (1) a multi-page lab report split across multiple photos, and (2) multiple pages of a single PDF uploaded as separate images. The client uploads each image via the existing `POST /api/babies/:id/upload` endpoint first, then passes all R2 keys in a single extraction request. The server treats all images as parts of **one lab report** and deduplicates results across pages (same test_name from different pages → keep the one with higher confidence or the last occurrence).
+
+**Photo limit:** Maximum **10 images** per extraction request (to bound API cost and latency). The server rejects requests exceeding this limit with a 400 error.
+
+**Processing flow:**
+1. Server validates all R2 keys exist in `photo_uploads` for the baby.
+2. Server fetches the image bytes from R2 for each key.
+3. Server sends all images in a single Claude API request with a structured extraction prompt.
+4. Claude returns a JSON array of extracted lab results.
+5. Server returns the extracted results to the client for review — **nothing is saved yet**.
+
+**Extraction prompt strategy:** The system prompt instructs Claude to extract lab test results and return structured JSON. It includes the list of known test names (`total_bilirubin`, `direct_bilirubin`, `ALT`, `AST`, `GGT`, `albumin`, `INR`, `platelets`) as preferred mappings, but also accepts any test name found in the document. The prompt explicitly handles multi-page context: "These images are pages of a single lab report. Extract all unique test results across all pages."
+
+**Response schema:**
+```json
+{
+  "extracted": [
+    {
+      "test_name": "total_bilirubin",
+      "value": "1.8",
+      "unit": "mg/dL",
+      "normal_range": "0.1-1.2",
+      "confidence": "high"
+    }
+  ],
+  "notes": "Optional free-text context from the report (e.g., 'Sample collected 2026-03-15')"
+}
+```
+
+The `confidence` field is `"high"`, `"medium"`, or `"low"` — the frontend uses this to highlight uncertain values for user attention.
+
+**Duplicate detection:** The extraction endpoint also checks for existing lab results that match the extracted data. For each extracted result, the server queries `lab_results` for the same baby where `test_name` matches (case-insensitive) and `value` matches, within a **±3 day window** of the report date (extracted from the document, or today if not found). Matches are returned in a `duplicates` field on each extracted item:
+
+```json
+{
+  "test_name": "ALT",
+  "value": "45",
+  "unit": "U/L",
+  "normal_range": "7-56",
+  "confidence": "high",
+  "existing_match": {
+    "id": "01ABC...",
+    "timestamp": "2026-03-15T10:00:00Z",
+    "value": "45",
+    "unit": "U/L"
+  }
+}
+```
+
+When `existing_match` is non-null, the frontend marks that row as a **probable duplicate** (visual indicator + "Already logged" label). The row is **unchecked by default** in the review screen so the user doesn't accidentally double-enter results. The user can still override and include it if they want (e.g., genuinely repeated test on a different date).
+
+**Client-side flow:** After receiving the extraction response, the frontend shows a review/edit screen where the user can correct values, remove false positives, or add missing results. Rows with `existing_match` are shown with a duplicate warning and unchecked by default. On confirmation, the client submits only the checked/reviewed results via the existing `POST /api/babies/:id/labs` batch endpoint. The extraction endpoint is purely a **read-only suggestion** — it never writes to the database.
+
+**Error handling:** If Claude cannot extract any results (e.g., image is not a lab report, too blurry), the server returns `200` with an empty `extracted` array and a `notes` field explaining the issue. Network/API errors return `502`.
+
+**Cost & rate limiting:** Each extraction costs ~$0.01–0.05 depending on image count/size. The endpoint is rate-limited to **10 requests per hour per user** to prevent abuse. The Anthropic API key is stored as a fly.io secret (`ANTHROPIC_API_KEY`).
+
+### 5.7 WHO Growth Data
 ```
 GET    /api/who/percentiles?sex=<male|female>&from_days=<int>&to_days=<int>&metric=<weight|head_circumference>  → Returns the 3rd, 15th, 50th, 85th, and 97th percentile curves as arrays of data points. The `metric` parameter defaults to `weight` if omitted. For `weight`: returns `[{ age_days, weight_kg }]` points (weight-for-age). For `head_circumference`: returns `[{ age_days, head_circumference_cm }]` points (head-circumference-for-age). Used by the frontend to overlay WHO growth bands on weight and head circumference charts.
 ```
 
-### 5.7 Reports
+### 5.8 Reports
 ```
 GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON for charts). When `from`/`to` are omitted, defaults to today. Trends view uses the same endpoint with different date ranges (e.g., `?from=2026-03-09&to=2026-03-16` for 7-day view). All aggregation is server-side. The response always returns the same structure regardless of date range — the frontend picks what to display based on context (today view vs trends view).
 
@@ -983,7 +1055,7 @@ The stool logging screen shows these colors as large tappable swatches with colo
 - **Export** — CSV/JSON full data export for records
 - **Multi-language** — if sharing with family/caregivers who speak another language
 - **Doctor view** — read-only link for hepatologist to see live dashboard (no login required, token-based)
-- **Integration** — direct upload of lab results from hospital portals (very stretch)
+- **Integration** — direct import from hospital portals (stretch — extraction from photos/PDFs is now in §5.6)
 - **Stool color reference photos** — clinical Infant Stool Color Card photographs alongside color swatches for improved accuracy
 
 ---
