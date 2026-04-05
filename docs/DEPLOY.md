@@ -32,18 +32,32 @@ done by Claude Code. Steps marked **TOGETHER** need coordination.
   - Authorized redirect URI: `https://<your-app>.fly.dev/auth/google/callback`
   - Note down: **Client ID** and **Client Secret**
 
-### 1.3 — Cloudflare R2 Bucket
+### 1.3 — Anthropic API Key (for Lab Extraction)
+
+- [ ] Go to [Anthropic Console](https://console.anthropic.com/)
+- [ ] Create an account or log in
+- [ ] Go to API Keys → Create Key
+- [ ] Note down: **API Key** (starts with `sk-ant-...`)
+- [ ] Add credit to your account (lab extraction costs ~$0.01–0.05 per extraction)
+
+> This enables the AI-powered lab result extraction feature, which uses Claude's
+> vision capabilities to read lab report photos and extract structured results.
+> The feature is optional — if `ANTHROPIC_API_KEY` is not set, the extraction
+> endpoint will return an error but all other features work normally.
+
+### 1.4 — Cloudflare R2 Bucket
 
 - [ ] Log into [Cloudflare Dashboard](https://dash.cloudflare.com/) → R2
 - [ ] Create bucket named `littleliver-photos`
 - [ ] Create R2 API token (Object Read & Write permissions for the bucket)
 - [ ] Note down: **Account ID**, **Access Key ID**, **Secret Access Key**
 
-### 1.4 — Generate Secrets (TOGETHER)
+### 1.5 — Generate Secrets (TOGETHER)
 
 Tell Claude you're ready, and provide:
 - Google Client ID
 - Google Client Secret
+- Anthropic API Key
 - R2 Account ID, Access Key ID, Secret Access Key
 
 Claude will generate the remaining secrets (SESSION_SECRET, VAPID keys) and
@@ -62,6 +76,7 @@ fly secrets set \
   GOOGLE_CLIENT_ID="..." \
   GOOGLE_CLIENT_SECRET="..." \
   SESSION_SECRET="..." \
+  ANTHROPIC_API_KEY="..." \
   R2_ACCOUNT_ID="..." \
   R2_ACCESS_KEY_ID="..." \
   R2_SECRET_ACCESS_KEY="..." \
@@ -116,6 +131,8 @@ Claude will tell you what to check:
 - [ ] Log a stool (color rating 2) → verify acholic alert appears
 - [ ] Log a temperature (38.5°C rectal) → verify fever alert appears
 - [ ] Log a weight → check trends view for WHO percentile overlay
+- [ ] Import lab results: tap "Import from Photo", take/select a lab report photo
+  → verify extraction returns results → review and save
 - [ ] Create a medication with schedule → verify it appears in "Upcoming"
 - [ ] Generate a PDF report → verify it downloads with data
 - [ ] Install as PWA (Add to Home Screen) → verify standalone mode
@@ -161,6 +178,7 @@ Once testing is complete:
 | Health check fails after deploy | `fly logs` — check for migration or DB errors |
 | OAuth redirect mismatch | Verify redirect URI in Google Console matches `BASE_URL + /auth/google/callback` |
 | Photos don't upload | Check R2 credentials; `fly logs` for "R2 not configured" warning |
+| Lab extraction fails | Check `ANTHROPIC_API_KEY` is set: `fly secrets list`. Check `fly logs` for Anthropic API errors |
 | No push notifications | Check VAPID keys are set; browser must grant notification permission |
 | DB lost after deploy | Verify volume is mounted: `fly volumes list` — should show `littleliver_data` |
 | 502 after deploy | App may be starting — wait 10s. Check `fly logs` for startup errors |

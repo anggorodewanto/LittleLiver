@@ -40,6 +40,7 @@ set_secrets() {
         "GOOGLE_CLIENT_ID"
         "GOOGLE_CLIENT_SECRET"
         "SESSION_SECRET"
+        "ANTHROPIC_API_KEY"
         "R2_ACCOUNT_ID"
         "R2_ACCESS_KEY_ID"
         "R2_SECRET_ACCESS_KEY"
