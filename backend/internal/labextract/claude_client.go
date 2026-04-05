@@ -19,8 +19,7 @@ type HTTPClaudeClient struct {
 }
 
 // DefaultModel is the Claude model used for lab extraction.
-// Uses the "latest" alias so the API always resolves to the newest Sonnet release.
-const DefaultModel = "claude-sonnet-4-6-latest"
+const DefaultModel = "claude-sonnet-4-5-20241022"
 
 // NewHTTPClaudeClient creates a new Claude API client.
 func NewHTTPClaudeClient(apiKey string) *HTTPClaudeClient {
