@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -123,8 +124,9 @@ func (s *Scheduler) processMedication(med activeMed, now time.Time) {
 		loc = parsed
 	}
 
-	for _, st := range scheduleTimes {
-		s.checkScheduleTime(med, st, now, loc)
+	sort.Strings(scheduleTimes)
+	for i, st := range scheduleTimes {
+		s.checkScheduleTime(med, scheduleTimes, i, st, now, loc)
 	}
 }
 
@@ -132,7 +134,7 @@ func (s *Scheduler) processMedication(med activeMed, now time.Time) {
 // +30 min offsets) and sends a notification if not suppressed.
 // It checks both today and yesterday in the medication's local timezone to
 // handle cross-midnight follow-ups (e.g., dose at 23:45, tick at 00:15).
-func (s *Scheduler) checkScheduleTime(med activeMed, schedTime string, nowUTC time.Time, loc *time.Location) {
+func (s *Scheduler) checkScheduleTime(med activeMed, sortedTimes []string, slotIdx int, schedTime string, nowUTC time.Time, loc *time.Location) {
 	nowLocal := nowUTC.In(loc)
 	parts := strings.SplitN(schedTime, ":", 2)
 	if len(parts) != 2 {
@@ -167,8 +169,10 @@ func (s *Scheduler) checkScheduleTime(med activeMed, schedTime string, nowUTC ti
 			if nowUTC.Hour() == triggerTime.Hour() && nowUTC.Minute() == triggerTime.Minute() &&
 				nowUTC.Year() == triggerTime.Year() && nowUTC.Month() == triggerTime.Month() &&
 				nowUTC.Day() == triggerTime.Day() {
-				// Check suppression using shared IsDoseCovered
-				covered, err := store.IsDoseCovered(s.db, med.ID, scheduledUTC)
+				// Check suppression using shared IsDoseCovered with midpoint coverage window
+				dayStr := day.Format("2006-01-02")
+				coverStart := store.SlotCoverageStart(sortedTimes, slotIdx, dayStr, loc).UTC()
+				covered, err := store.IsDoseCovered(s.db, med.ID, scheduledUTC, coverStart)
 				if err != nil {
 					log.Printf("scheduler: check suppression for med %s: %v", med.ID, err)
 					covered = true

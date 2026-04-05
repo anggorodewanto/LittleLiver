@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -283,14 +284,16 @@ func computeNextDoseAt(scheduleTimes []string, tz *string, lastGivenAt *time.Tim
 	// Check today's schedule times that are either upcoming or recently
 	// passed (within the overdue grace window so the frontend can still
 	// show them as "due now"). Skip times already covered by a logged dose.
-	for _, st := range scheduleTimes {
+	sort.Strings(scheduleTimes)
+	for i, st := range scheduleTimes {
 		t, err := time.ParseInLocation(model.DateFormat+" 15:04", todayStr+" "+st, loc)
 		if err != nil {
 			continue
 		}
-		// Skip this slot if a dose was logged within 30 min before or at/after
-		// this schedule time (matches the frontend's 30-min "due now" window).
-		if lastGivenAt != nil && !lastGivenAt.In(loc).Before(t.Add(-30*time.Minute)) {
+		// Skip this slot if a dose was logged after the midpoint between
+		// this slot and the previous one (covers early dosing).
+		coverStart := store.SlotCoverageStart(scheduleTimes, i, todayStr, loc)
+		if lastGivenAt != nil && !lastGivenAt.In(loc).Before(coverStart) {
 			continue
 		}
 		if now.Sub(t) <= overdueGrace && (!found || t.Before(earliest)) {

@@ -238,6 +238,26 @@ func GetUpcomingMeds(db *sql.DB, babyID string) ([]UpcomingMed, error) {
 	return meds, nil
 }
 
+// SlotCoverageStart computes the earliest time at which a logged dose covers
+// the schedule slot at index i. It uses the midpoint between the current slot
+// and the previous slot (wrapping around midnight for the first slot of the day).
+// sortedTimes must be sorted ascending HH:MM strings; date is "YYYY-MM-DD".
+func SlotCoverageStart(sortedTimes []string, i int, date string, loc *time.Location) time.Time {
+	t, _ := time.ParseInLocation("2006-01-02 15:04", date+" "+sortedTimes[i], loc)
+
+	var prev time.Time
+	if i == 0 {
+		// Wrap: previous slot is yesterday's last schedule time
+		yesterday := t.AddDate(0, 0, -1).Format("2006-01-02")
+		prev, _ = time.ParseInLocation("2006-01-02 15:04", yesterday+" "+sortedTimes[len(sortedTimes)-1], loc)
+	} else {
+		prev, _ = time.ParseInLocation("2006-01-02 15:04", date+" "+sortedTimes[i-1], loc)
+	}
+
+	halfGap := t.Sub(prev) / 2
+	return t.Add(-halfGap)
+}
+
 // nextDoseTime computes the next scheduled dose time for a medication.
 // If no schedule/timezone is set, returns a far-future sentinel so it sorts last.
 func nextDoseTime(m UpcomingMed) time.Time {
@@ -261,6 +281,7 @@ func nextDoseTime(m UpcomingMed) time.Time {
 	if err := json.Unmarshal([]byte(*m.Schedule), &times); err != nil {
 		return farFuture
 	}
+	sort.Strings(times)
 
 	now := time.Now().In(loc)
 	today := now.Format("2006-01-02")
@@ -268,15 +289,16 @@ func nextDoseTime(m UpcomingMed) time.Time {
 	overdueGrace := 60 * time.Minute
 
 	var earliest time.Time
-	for _, st := range times {
+	for i, st := range times {
 		// Check today first — include times within the overdue grace window
 		t, err := time.ParseInLocation("2006-01-02 15:04", today+" "+st, loc)
 		if err != nil {
 			continue
 		}
-		// Skip this slot if a dose was logged within 30 min before or at/after
-		// this schedule time (matches the frontend's 30-min "due now" window).
-		if m.LastGivenAt != nil && !m.LastGivenAt.In(loc).Before(t.Add(-30*time.Minute)) {
+		// Skip this slot if a dose was logged after the midpoint between
+		// this slot and the previous one (covers early dosing).
+		coverStart := SlotCoverageStart(times, i, today, loc)
+		if m.LastGivenAt != nil && !m.LastGivenAt.In(loc).Before(coverStart) {
 			continue
 		}
 		if now.Sub(t) <= overdueGrace {

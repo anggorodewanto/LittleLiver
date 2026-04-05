@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/ablankz/LittleLiver/backend/internal/model"
@@ -48,10 +49,17 @@ func FeverThreshold(method string) float64 {
 // IsDoseCovered checks whether a scheduled dose (as a UTC time) has a corresponding
 // med_log entry. A dose is covered if:
 //  1. A med_log has a scheduled_time matching the dose slot (minute precision), OR
-//  2. A given dose (no scheduled_time) has given_at within -30 min to +6h of scheduled time, OR
-//  3. A skipped dose (no scheduled_time) was created within -30 min to +6h.
-func IsDoseCovered(db *sql.DB, medicationID string, scheduledUTC time.Time) (bool, error) {
-	windowStart := scheduledUTC.Add(-30 * time.Minute).Format(model.DateTimeFormat)
+//  2. A given dose (no scheduled_time) has given_at within [windowStart, scheduled+6h], OR
+//  3. A skipped dose (no scheduled_time) was created within [windowStart, scheduled+6h].
+//
+// windowStartUTC defines how far back to look for matching doses. Pass zero time
+// to use a default of 30 minutes before the scheduled time.
+func IsDoseCovered(db *sql.DB, medicationID string, scheduledUTC time.Time, windowStartUTC ...time.Time) (bool, error) {
+	ws := scheduledUTC.Add(-30 * time.Minute)
+	if len(windowStartUTC) > 0 && !windowStartUTC[0].IsZero() {
+		ws = windowStartUTC[0]
+	}
+	windowStart := ws.Format(model.DateTimeFormat)
 	windowEnd := scheduledUTC.Add(6 * time.Hour).Format(model.DateTimeFormat)
 	scheduledStr := scheduledUTC.Format(model.DateTimeFormat)
 
@@ -304,6 +312,7 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 			log.Printf("invalid schedule JSON for medication %s: %v", m.ID, err)
 			continue
 		}
+		sort.Strings(scheduleTimes)
 
 		// Expand schedule into concrete UTC datetimes for the last 24 hours.
 		// Check today and yesterday in the medication's timezone.
@@ -312,7 +321,7 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 		yesterdayLocal := nowLocal.AddDate(0, 0, -1).Format(model.DateFormat)
 
 		for _, day := range []string{yesterdayLocal, todayLocal} {
-			for _, st := range scheduleTimes {
+			for i, st := range scheduleTimes {
 				t, err := time.ParseInLocation(model.DateFormat+" 15:04", day+" "+st, loc)
 				if err != nil {
 					continue
@@ -334,7 +343,8 @@ func getMissedMedicationAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 					continue
 				}
 
-				covered, err := IsDoseCovered(db, m.ID, scheduledUTC)
+				coverStart := SlotCoverageStart(scheduleTimes, i, day, loc).UTC()
+				covered, err := IsDoseCovered(db, m.ID, scheduledUTC, coverStart)
 				if err != nil {
 					return nil, err
 				}

@@ -651,6 +651,69 @@ func TestGetUpcomingMeds_EveryXDays_StartsFrom_Future_NoDoses(t *testing.T) {
 	}
 }
 
+func TestSlotCoverageStart_TwiceDaily(t *testing.T) {
+	t.Parallel()
+	loc := time.UTC
+	times := []string{"08:00", "14:00"}
+	date := "2026-04-05"
+
+	// Slot 0 (08:00): midpoint with yesterday's 14:00 = 9h gap / 2 = 4.5h before = 03:30
+	cs0 := store.SlotCoverageStart(times, 0, date, loc)
+	expected0, _ := time.ParseInLocation("2006-01-02 15:04", "2026-04-04 23:00", loc)
+	if !cs0.Equal(expected0) {
+		t.Errorf("slot 0: expected coverage start %v, got %v", expected0, cs0)
+	}
+
+	// Slot 1 (14:00): midpoint with 08:00 = 6h gap / 2 = 3h before = 11:00
+	cs1 := store.SlotCoverageStart(times, 1, date, loc)
+	expected1, _ := time.ParseInLocation("2006-01-02 15:04", "2026-04-05 11:00", loc)
+	if !cs1.Equal(expected1) {
+		t.Errorf("slot 1: expected coverage start %v, got %v", expected1, cs1)
+	}
+}
+
+func TestSlotCoverageStart_ThreeTimesDaily(t *testing.T) {
+	t.Parallel()
+	loc := time.UTC
+	times := []string{"08:00", "14:00", "20:00"}
+	date := "2026-04-05"
+
+	// Slot 0 (08:00): midpoint with yesterday's 20:00 = 12h gap / 2 = 6h before = 02:00
+	cs0 := store.SlotCoverageStart(times, 0, date, loc)
+	expected0, _ := time.ParseInLocation("2006-01-02 15:04", "2026-04-05 02:00", loc)
+	if !cs0.Equal(expected0) {
+		t.Errorf("slot 0: expected %v, got %v", expected0, cs0)
+	}
+
+	// Slot 1 (14:00): midpoint with 08:00 = 11:00
+	cs1 := store.SlotCoverageStart(times, 1, date, loc)
+	expected1, _ := time.ParseInLocation("2006-01-02 15:04", "2026-04-05 11:00", loc)
+	if !cs1.Equal(expected1) {
+		t.Errorf("slot 1: expected %v, got %v", expected1, cs1)
+	}
+
+	// Slot 2 (20:00): midpoint with 14:00 = 17:00
+	cs2 := store.SlotCoverageStart(times, 2, date, loc)
+	expected2, _ := time.ParseInLocation("2006-01-02 15:04", "2026-04-05 17:00", loc)
+	if !cs2.Equal(expected2) {
+		t.Errorf("slot 2: expected %v, got %v", expected2, cs2)
+	}
+}
+
+func TestSlotCoverageStart_SingleDaily(t *testing.T) {
+	t.Parallel()
+	loc := time.UTC
+	times := []string{"09:00"}
+	date := "2026-04-05"
+
+	// Single slot: midpoint with yesterday's 09:00 = 24h gap / 2 = 12h before = 21:00 yesterday
+	cs := store.SlotCoverageStart(times, 0, date, loc)
+	expected, _ := time.ParseInLocation("2006-01-02 15:04", "2026-04-04 21:00", loc)
+	if !cs.Equal(expected) {
+		t.Errorf("expected %v, got %v", expected, cs)
+	}
+}
+
 func TestGetUpcomingMeds_EveryXDays_StartsFrom_Past_NoDoses_CycleForward(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
