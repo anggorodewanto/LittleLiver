@@ -192,8 +192,14 @@
 		<p role="alert">{error}</p>
 	{/if}
 
-	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : initialData ? 'Update Stool' : 'Log Stool'}
+	<button type="submit" disabled={submitting || uploading}>
+		{#if uploading}
+			Uploading photo...
+		{:else if submitting}
+			Logging...
+		{:else}
+			{initialData ? 'Update Stool' : 'Log Stool'}
+		{/if}
 	</button>
 </form>
 

@@ -125,7 +125,13 @@
 		<p role="alert">{error}</p>
 	{/if}
 
-	<button type="submit" disabled={submitting}>
-		{submitting ? 'Logging...' : initialData ? 'Update Note' : 'Log Note'}
+	<button type="submit" disabled={submitting || uploading}>
+		{#if uploading}
+			Uploading photo...
+		{:else if submitting}
+			Logging...
+		{:else}
+			{initialData ? 'Update Note' : 'Log Note'}
+		{/if}
 	</button>
 </form>
