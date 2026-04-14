@@ -64,9 +64,24 @@ type ExtractResult struct {
 	ReportDate string
 }
 
+// LabTestHint describes an existing test name (with optional unit/range)
+// previously logged for a baby. Hints are embedded into the extraction prompt
+// so the model returns canonical names that match prior entries
+// (e.g. "AST" → "SGOT/AST").
+type LabTestHint struct {
+	TestName    string
+	Unit        *string
+	NormalRange *string
+}
+
 // Extract sends images to the Claude API and returns deduplicated extracted results.
 func (s *Service) Extract(ctx context.Context, images []ImageData) (*ExtractResult, error) {
-	raw, err := s.client.ExtractLabResults(ctx, images, ExtractionPrompt())
+	return s.ExtractWithHints(ctx, images, nil)
+}
+
+// ExtractWithHints is like Extract but biases the prompt with the baby's known test names.
+func (s *Service) ExtractWithHints(ctx context.Context, images []ImageData, hints []LabTestHint) (*ExtractResult, error) {
+	raw, err := s.client.ExtractLabResults(ctx, images, ExtractionPromptWithHints(hints))
 	if err != nil {
 		return nil, fmt.Errorf("claude API: %w", err)
 	}
@@ -151,6 +166,39 @@ func ValidatePhotoKeys(keys []string) error {
 		return fmt.Errorf("maximum %d photo keys allowed, got %d", MaxPhotoKeys, len(keys))
 	}
 	return nil
+}
+
+// ExtractionPromptWithHints returns the extraction prompt augmented with the baby's
+// known test names. The model is instructed to prefer the listed canonical name
+// when an extracted test matches a known synonym (e.g. AST↔SGOT/AST).
+// With nil/empty hints it returns the base prompt.
+func ExtractionPromptWithHints(hints []LabTestHint) string {
+	base := ExtractionPrompt()
+	if len(hints) == 0 {
+		return base
+	}
+	var b strings.Builder
+	b.WriteString(base)
+	b.WriteString("\n\nKnown tests previously logged for this patient. If an extracted test matches one of these (including common synonyms like AST↔SGOT, ALT↔SGPT, GGT↔Gamma-GT), use the EXACT name and unit/range from this list:\n")
+	for _, h := range hints {
+		b.WriteString("- ")
+		b.WriteString(h.TestName)
+		if h.Unit != nil && *h.Unit != "" {
+			b.WriteString(" (")
+			b.WriteString(*h.Unit)
+			if h.NormalRange != nil && *h.NormalRange != "" {
+				b.WriteString(", ")
+				b.WriteString(*h.NormalRange)
+			}
+			b.WriteString(")")
+		} else if h.NormalRange != nil && *h.NormalRange != "" {
+			b.WriteString(" (")
+			b.WriteString(*h.NormalRange)
+			b.WriteString(")")
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 // ExtractionPrompt returns the system prompt used for Claude Vision extraction.

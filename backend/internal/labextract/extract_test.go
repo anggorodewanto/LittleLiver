@@ -264,6 +264,91 @@ func TestExtractionPrompt(t *testing.T) {
 	}
 }
 
+func TestExtractionPromptWithHints_NoHints(t *testing.T) {
+	t.Parallel()
+
+	if ExtractionPromptWithHints(nil) != ExtractionPrompt() {
+		t.Error("nil hints should yield base prompt")
+	}
+	if ExtractionPromptWithHints([]LabTestHint{}) != ExtractionPrompt() {
+		t.Error("empty hints should yield base prompt")
+	}
+}
+
+func TestExtractionPromptWithHints_IncludesHints(t *testing.T) {
+	t.Parallel()
+
+	unit := "U/L"
+	rng := "0-40"
+	hints := []LabTestHint{
+		{TestName: "SGOT/AST", Unit: &unit, NormalRange: &rng},
+		{TestName: "total_bilirubin"},
+	}
+	prompt := ExtractionPromptWithHints(hints)
+	if !strings.Contains(prompt, "SGOT/AST") {
+		t.Error("prompt should contain canonical test name SGOT/AST")
+	}
+	if !strings.Contains(prompt, "total_bilirubin") {
+		t.Error("prompt should contain test name total_bilirubin")
+	}
+	if !strings.Contains(prompt, "U/L") {
+		t.Error("prompt should contain hint unit")
+	}
+	if !strings.Contains(prompt, "0-40") {
+		t.Error("prompt should contain hint normal_range")
+	}
+	// Should still mention JSON / report_date
+	if !strings.Contains(prompt, "report_date") {
+		t.Error("prompt should still include base instructions")
+	}
+}
+
+// captureClient records the prompt that was passed to ExtractLabResults.
+type captureClient struct {
+	response   string
+	lastPrompt string
+}
+
+func (c *captureClient) ExtractLabResults(ctx context.Context, images []ImageData, prompt string) (string, error) {
+	c.lastPrompt = prompt
+	return c.response, nil
+}
+
+func TestExtractWithHints_PassesHintsIntoPrompt(t *testing.T) {
+	t.Parallel()
+
+	cannedResp := `{"extracted": [], "report_date": "", "notes": ""}`
+	client := &captureClient{response: cannedResp}
+	svc := NewService(client)
+
+	unit := "U/L"
+	hints := []LabTestHint{{TestName: "SGOT/AST", Unit: &unit}}
+
+	_, err := svc.ExtractWithHints(context.Background(), []ImageData{{Data: []byte("img"), ContentType: "image/jpeg"}}, hints)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(client.lastPrompt, "SGOT/AST") {
+		t.Errorf("expected hint name in prompt, got: %s", client.lastPrompt)
+	}
+}
+
+func TestExtract_NoHintsKeepsBasePrompt(t *testing.T) {
+	t.Parallel()
+
+	cannedResp := `{"extracted": [], "report_date": "", "notes": ""}`
+	client := &captureClient{response: cannedResp}
+	svc := NewService(client)
+
+	_, err := svc.Extract(context.Background(), []ImageData{{Data: []byte("img"), ContentType: "image/jpeg"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if client.lastPrompt != ExtractionPrompt() {
+		t.Error("Extract should use base prompt without hints")
+	}
+}
+
 func TestParseExtractionResponse_WithMarkdownFences(t *testing.T) {
 	t.Parallel()
 

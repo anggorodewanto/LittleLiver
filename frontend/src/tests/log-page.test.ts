@@ -267,6 +267,71 @@ describe('Log Page', () => {
 		expect(formData.get('photo')).toBeNull();
 	});
 
+	it('shows back link to /labs when editing a lab', async () => {
+		activeBaby.set(mockBaby);
+
+		const mockGet = apiClient.get as ReturnType<typeof vi.fn>;
+		mockGet.mockImplementation((url: string) => {
+			if (url.includes('/labs/lab-1')) {
+				return Promise.resolve({
+					id: 'lab-1',
+					timestamp: '2026-03-19T14:00:00Z',
+					test_name: 'ALT',
+					value: '45'
+				});
+			}
+			return Promise.resolve([]);
+		});
+
+		pageStore.set({
+			params: { metric: 'lab' },
+			url: new URL('http://localhost/log/lab?edit=lab-1')
+		});
+
+		render(LogPage);
+
+		await screen.findByText(/edit lab/i);
+		const backLink = screen.getByRole('link', { name: /back/i });
+		expect(backLink.getAttribute('href')).toBe('/labs');
+	});
+
+	it('navigates to /labs after editing a lab result', async () => {
+		const { goto } = await import('$app/navigation');
+		activeBaby.set(mockBaby);
+
+		const mockGet = apiClient.get as ReturnType<typeof vi.fn>;
+		const mockPut = apiClient.put as ReturnType<typeof vi.fn>;
+		mockGet.mockImplementation((url: string) => {
+			if (url.includes('/labs/lab-1')) {
+				return Promise.resolve({
+					id: 'lab-1',
+					timestamp: '2026-03-19T14:00:00Z',
+					test_name: 'ALT',
+					value: '45'
+				});
+			}
+			return Promise.resolve([]);
+		});
+		mockPut.mockResolvedValue({});
+
+		pageStore.set({
+			params: { metric: 'lab' },
+			url: new URL('http://localhost/log/lab?edit=lab-1')
+		});
+
+		render(LogPage);
+
+		await screen.findByText(/edit lab/i);
+		await fireEvent.click(screen.getByRole('button', { name: /update lab/i }));
+
+		await waitFor(() => {
+			expect(mockPut).toHaveBeenCalledWith(`/babies/${mockBaby.id}/labs/lab-1`, expect.any(Object));
+		});
+		await waitFor(() => {
+			expect(goto).toHaveBeenCalledWith('/labs');
+		});
+	});
+
 	it('shows back link to /logs when in edit mode', async () => {
 		activeBaby.set(mockBaby);
 

@@ -1,5 +1,13 @@
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('$lib/api', () => ({
+	apiClient: {
+		get: vi.fn().mockResolvedValue([])
+	}
+}));
+
+import { apiClient } from '$lib/api';
 import LabExtractionReview from '$lib/components/LabExtractionReview.svelte';
 
 describe('LabExtractionReview', () => {
@@ -33,6 +41,8 @@ describe('LabExtractionReview', () => {
 	beforeEach(() => {
 		onconfirm = vi.fn();
 		oncancel = vi.fn();
+		vi.mocked(apiClient.get).mockReset();
+		vi.mocked(apiClient.get).mockResolvedValue([]);
 	});
 
 	it('renders all extracted results with editable fields', () => {
@@ -336,6 +346,134 @@ describe('LabExtractionReview', () => {
 		expect(payload).toHaveLength(2);
 		expect(payload[1].test_name).toBe('');
 		expect(payload[1].value).toBe('');
+	});
+
+	describe('test name suggestions', () => {
+		it('renders datalist for test name when babyId provided', async () => {
+			vi.mocked(apiClient.get).mockResolvedValue([]);
+			render(LabExtractionReview, {
+				props: { extracted: mockExtracted, notes: '', onconfirm, oncancel, babyId: 'baby-1' }
+			});
+
+			await waitFor(() => {
+				const datalist = document.getElementById('lab-test-suggestions');
+				expect(datalist).toBeInTheDocument();
+				expect(datalist!.tagName).toBe('DATALIST');
+			});
+
+			const inputs = screen.getAllByLabelText(/^test$/i);
+			for (const input of inputs) {
+				expect(input.getAttribute('list')).toBe('lab-test-suggestions');
+			}
+		});
+
+		it('fetches suggestions for the given babyId', () => {
+			render(LabExtractionReview, {
+				props: { extracted: mockExtracted, notes: '', onconfirm, oncancel, babyId: 'baby-42' }
+			});
+
+			expect(vi.mocked(apiClient.get)).toHaveBeenCalledWith('/babies/baby-42/labs/tests');
+		});
+
+		it('does not fetch when babyId is missing', () => {
+			render(LabExtractionReview, {
+				props: { extracted: mockExtracted, notes: '', onconfirm, oncancel }
+			});
+
+			expect(vi.mocked(apiClient.get)).not.toHaveBeenCalled();
+		});
+
+		it('auto-fills blank unit/range from suggestion match on initial load', async () => {
+			vi.mocked(apiClient.get).mockResolvedValue([
+				{ test_name: 'AST', unit: 'µkat/L', normal_range: '0-0.7' }
+			]);
+
+			const extracted = [
+				{ test_name: 'AST', value: '38', unit: '', normal_range: '', confidence: 'high' }
+			];
+
+			render(LabExtractionReview, {
+				props: { extracted, notes: '', onconfirm, oncancel, babyId: 'baby-1' }
+			});
+
+			await waitFor(() => {
+				expect(screen.getByDisplayValue('µkat/L')).toBeInTheDocument();
+				expect(screen.getByDisplayValue('0-0.7')).toBeInTheDocument();
+			});
+		});
+
+		it('does NOT override AI-provided unit', async () => {
+			vi.mocked(apiClient.get).mockResolvedValue([
+				{ test_name: 'AST', unit: 'µkat/L', normal_range: '0-0.7' }
+			]);
+
+			const extracted = [
+				{ test_name: 'AST', value: '38', unit: 'U/L', normal_range: '', confidence: 'high' }
+			];
+
+			render(LabExtractionReview, {
+				props: { extracted, notes: '', onconfirm, oncancel, babyId: 'baby-1' }
+			});
+
+			await waitFor(() => {
+				expect(vi.mocked(apiClient.get)).toHaveBeenCalled();
+			});
+
+			expect(screen.getByDisplayValue('U/L')).toBeInTheDocument();
+			expect(screen.queryByDisplayValue('µkat/L')).not.toBeInTheDocument();
+		});
+
+		it('fuzzy matches AST → SGOT/AST and rewrites canonical name', async () => {
+			vi.mocked(apiClient.get).mockResolvedValue([
+				{ test_name: 'SGOT/AST', unit: 'U/L', normal_range: '0-40' }
+			]);
+
+			const extracted = [
+				{ test_name: 'AST', value: '38', unit: '', normal_range: '', confidence: 'high' }
+			];
+
+			render(LabExtractionReview, {
+				props: { extracted, notes: '', onconfirm, oncancel, babyId: 'baby-1' }
+			});
+
+			await waitFor(() => {
+				expect(screen.getByDisplayValue('SGOT/AST')).toBeInTheDocument();
+			});
+
+			expect(screen.getByDisplayValue('U/L')).toBeInTheDocument();
+			expect(screen.getByDisplayValue('0-40')).toBeInTheDocument();
+
+			await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+			const payload = onconfirm.mock.calls[0][0];
+			expect(payload[0].test_name).toBe('SGOT/AST');
+			expect(payload[0].unit).toBe('U/L');
+		});
+
+		it('typing a known test name into a row fills blank unit/range', async () => {
+			vi.mocked(apiClient.get).mockResolvedValue([
+				{ test_name: 'custom_marker', unit: 'mmol/L', normal_range: '3.5-5.0' }
+			]);
+
+			const extracted = [
+				{ test_name: '', value: '', unit: '', normal_range: '', confidence: 'manual' }
+			];
+
+			render(LabExtractionReview, {
+				props: { extracted, notes: '', onconfirm, oncancel, babyId: 'baby-1' }
+			});
+
+			await waitFor(() => {
+				expect(vi.mocked(apiClient.get)).toHaveBeenCalled();
+			});
+
+			const testInput = screen.getByLabelText(/^test$/i) as HTMLInputElement;
+			await fireEvent.input(testInput, { target: { value: 'custom_marker' } });
+
+			await waitFor(() => {
+				expect(screen.getByDisplayValue('mmol/L')).toBeInTheDocument();
+				expect(screen.getByDisplayValue('3.5-5.0')).toBeInTheDocument();
+			});
+		});
 	});
 
 	it('excludes deleted rows from confirm payload', async () => {
