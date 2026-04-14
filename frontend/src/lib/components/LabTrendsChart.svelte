@@ -45,7 +45,8 @@
 					x: new Date(p.timestamp).getTime(),
 					y: parseFloat(p.value)
 				}))
-				.filter((p) => !isNaN(p.y));
+				.filter((p) => !isNaN(p.y))
+				.sort((a, b) => a.x - b.x);
 
 			datasets.push({
 				label: unit ? `${testName} (${unit})` : testName,

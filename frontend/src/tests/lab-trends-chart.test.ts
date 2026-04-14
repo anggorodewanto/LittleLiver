@@ -177,4 +177,26 @@ describe('LabTrendsChart', () => {
 		expect(labels).toContain('GGT (U/L)');
 	});
 
+	it('sorts each series by timestamp ascending so lines connect left-to-right', () => {
+		const unordered: Record<string, { timestamp: string; test_name: string; value: string; unit: string }[]> = {
+			total_bilirubin: [
+				{ timestamp: '2026-03-15T10:00:00Z', test_name: 'total_bilirubin', value: '1.8', unit: 'mg/dL' },
+				{ timestamp: '2026-03-01T10:00:00Z', test_name: 'total_bilirubin', value: '3.2', unit: 'mg/dL' },
+				{ timestamp: '2026-03-08T10:00:00Z', test_name: 'total_bilirubin', value: '2.5', unit: 'mg/dL' }
+			]
+		};
+		render(LabTrendsChart, { props: { data: unordered } });
+
+		const config = chartConstructorCalls[0][1] as {
+			data: { datasets: { label: string; data: { x: number; y: number }[] }[] };
+		};
+		const ds = config.data.datasets.find(
+			(d) => d.label.includes('total_bilirubin') && !d.label.includes('Normal')
+		);
+		expect(ds).toBeDefined();
+		const xs = ds!.data.map((p) => p.x);
+		expect(xs).toEqual([...xs].sort((a, b) => a - b));
+		expect(ds!.data.map((p) => p.y)).toEqual([3.2, 2.5, 1.8]);
+	});
+
 });
