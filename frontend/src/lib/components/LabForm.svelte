@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
-	import { apiClient } from '$lib/api';
+	import {
+		QUICK_PICKS,
+		fetchLabSuggestions,
+		mergeWithQuickPicks,
+		getQuickPickLabel,
+		type LabTestSuggestion
+	} from '$lib/labSuggestions';
 
-	export interface LabTestSuggestion {
-		test_name: string;
-		unit?: string;
-		normal_range?: string;
-	}
+	export type { LabTestSuggestion };
 
 	export interface LabPayload {
 		timestamp: string;
@@ -43,17 +45,6 @@
 
 	let { onsubmit, babyId, initialData, submitting = false, error = '' }: Props = $props();
 
-	const QUICK_PICKS = [
-		{ label: 'Total Bilirubin', testName: 'total_bilirubin', unit: 'mg/dL' },
-		{ label: 'Direct Bilirubin', testName: 'direct_bilirubin', unit: 'mg/dL' },
-		{ label: 'ALT', testName: 'ALT', unit: 'U/L' },
-		{ label: 'AST', testName: 'AST', unit: 'U/L' },
-		{ label: 'GGT', testName: 'GGT', unit: 'U/L' },
-		{ label: 'Albumin', testName: 'albumin', unit: 'g/dL' },
-		{ label: 'INR', testName: 'INR', unit: '' },
-		{ label: 'Platelets', testName: 'platelets', unit: '\u00d710\u00b3/\u00b5L' }
-	] as const;
-
 	let timestamp = $state(defaultTimestamp());
 	let testName = $state('');
 	let value = $state('');
@@ -68,27 +59,13 @@
 	let isEditMode = $derived(!!initialData);
 	let hasSavedEntries = $derived(savedEntries.length > 0);
 
-	let allSuggestions = $derived.by(() => {
-		const map = new Map<string, LabTestSuggestion>();
-		for (const s of dbSuggestions) {
-			map.set(s.test_name, s);
-		}
-		for (const pick of QUICK_PICKS) {
-			if (!map.has(pick.testName)) {
-				map.set(pick.testName, {
-					test_name: pick.testName,
-					unit: pick.unit || undefined,
-				});
-			}
-		}
-		return Array.from(map.values());
-	});
+	let allSuggestions = $derived(mergeWithQuickPicks(dbSuggestions));
 
 	$effect(() => {
 		if (!babyId) return;
-		apiClient.get<LabTestSuggestion[]>(`/babies/${babyId}/labs/tests`)
-			.then(data => { dbSuggestions = data; })
-			.catch(() => {});
+		fetchLabSuggestions(babyId).then((data) => {
+			dbSuggestions = data;
+		});
 	});
 
 	$effect(() => {
@@ -209,8 +186,7 @@
 	}
 
 	function getTestLabel(testName: string): string {
-		const pick = QUICK_PICKS.find(p => p.testName === testName);
-		return pick ? pick.label : testName;
+		return getQuickPickLabel(testName);
 	}
 </script>
 

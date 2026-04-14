@@ -142,6 +142,7 @@
 		notes={extractionNotes}
 		onconfirm={handleConfirm}
 		{oncancel}
+		{babyId}
 	/>
 {:else if state === 'saving'}
 	<div class="loading-state">

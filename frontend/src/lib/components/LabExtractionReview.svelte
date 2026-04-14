@@ -1,4 +1,11 @@
 <script lang="ts">
+	import {
+		fetchLabSuggestions,
+		mergeWithQuickPicks,
+		findSuggestionMatch,
+		type LabTestSuggestion
+	} from '$lib/labSuggestions';
+
 	export interface ExtractedItem {
 		test_name: string;
 		value: string;
@@ -25,9 +32,25 @@
 		notes: string;
 		onconfirm: (items: ReviewedLabPayload[]) => void;
 		oncancel: () => void;
+		babyId?: string;
 	}
 
-	let { extracted, notes, onconfirm, oncancel }: Props = $props();
+	let { extracted, notes, onconfirm, oncancel, babyId }: Props = $props();
+
+	let dbSuggestions = $state<LabTestSuggestion[]>([]);
+	let suggestionsReady = $state(false);
+	let allSuggestions = $derived(mergeWithQuickPicks(dbSuggestions));
+
+	$effect(() => {
+		if (!babyId) {
+			suggestionsReady = true;
+			return;
+		}
+		fetchLabSuggestions(babyId).then((data) => {
+			dbSuggestions = data;
+			suggestionsReady = true;
+		});
+	});
 
 	interface EditableRow {
 		test_name: string;
@@ -37,6 +60,7 @@
 		confidence: string;
 		checked: boolean;
 		existing_match?: ExtractedItem['existing_match'];
+		enriched?: boolean;
 	}
 
 	// eslint-disable-next-line svelte/prefer-writable-derived -- rows are user-editable (checked, removed, field edits)
@@ -53,6 +77,33 @@
 			existing_match: item.existing_match
 		}));
 	});
+
+	function lookupMatch(name: string): LabTestSuggestion | undefined {
+		// Prefer DB (canonical names) over QUICK_PICKS so AST → SGOT/AST works.
+		return findSuggestionMatch(name, dbSuggestions) ?? findSuggestionMatch(name, allSuggestions);
+	}
+
+	$effect(() => {
+		if (!suggestionsReady) return;
+		for (const row of rows) {
+			if (row.enriched) continue;
+			row.enriched = true;
+			const match = lookupMatch(row.test_name);
+			if (!match) continue;
+			if (row.test_name !== match.test_name) row.test_name = match.test_name;
+			if (!row.unit && match.unit) row.unit = match.unit;
+			if (!row.normal_range && match.normal_range) row.normal_range = match.normal_range;
+		}
+	});
+
+	function handleTestNameInput(index: number) {
+		const row = rows[index];
+		if (!row) return;
+		const match = lookupMatch(row.test_name);
+		if (!match) return;
+		if (!row.unit && match.unit) row.unit = match.unit;
+		if (!row.normal_range && match.normal_range) row.normal_range = match.normal_range;
+	}
 
 	function removeRow(index: number) {
 		rows = rows.filter((_, i) => i !== index);
@@ -105,7 +156,13 @@
 				<div class="row-fields">
 					<div class="field-group">
 						<label for={`test-name-${i}`}>Test</label>
-						<input id={`test-name-${i}`} type="text" bind:value={row.test_name} />
+						<input
+							id={`test-name-${i}`}
+							type="text"
+							list="lab-test-suggestions"
+							bind:value={row.test_name}
+							oninput={() => handleTestNameInput(i)}
+						/>
 					</div>
 					<div class="field-group">
 						<label for={`value-${i}`}>Value</label>
@@ -143,6 +200,12 @@
 			</div>
 		{/each}
 	</div>
+
+	<datalist id="lab-test-suggestions">
+		{#each allSuggestions as suggestion (suggestion.test_name)}
+			<option value={suggestion.test_name}></option>
+		{/each}
+	</datalist>
 
 	<button type="button" class="add-row-btn" onclick={addRow}>Add row</button>
 

@@ -45,6 +45,12 @@
 	let baby = $derived($activeBaby);
 	let config = $derived(METRIC_CONFIG[metric]);
 
+	function backHref(metricKey: string): string {
+		if (metricKey === 'medication') return '/medications';
+		if (metricKey === 'lab') return '/labs';
+		return '/logs';
+	}
+
 	interface PhotoInfo {
 		key: string;
 		url: string;
@@ -149,11 +155,7 @@
 		try {
 			if (editId) {
 				await apiClient.put(`/babies/${baby.id}/${config.endpoint}/${editId}`, data);
-				if (metric === 'medication') {
-					goto('/medications');
-				} else {
-					goto('/logs');
-				}
+				goto(backHref(metric));
 			} else if (Array.isArray(data)) {
 				for (const entry of data) {
 					await apiClient.post(`/babies/${baby.id}/${config.endpoint}`, entry);
@@ -171,7 +173,7 @@
 	}
 </script>
 
-<a href={editId ? (metric === 'medication' ? '/medications' : '/logs') : '/'} class="back-link">&larr; Back</a>
+<a href={editId ? backHref(metric) : '/'} class="back-link">&larr; Back</a>
 
 {#if !baby}
 	<p>No baby selected</p>

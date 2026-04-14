@@ -71,6 +71,25 @@ func (rl *ExtractRateLimiter) allow(userID string) (bool, int) {
 	return true, 10 - b.count
 }
 
+// buildLabHints fetches the baby's distinct previously-logged tests and converts
+// them into prompt hints. Returns nil on error so extraction proceeds without bias.
+func buildLabHints(db *sql.DB, babyID string) []labextract.LabTestHint {
+	suggestions, err := store.ListDistinctLabTests(db, babyID)
+	if err != nil {
+		log.Printf("lab hints: %v", err)
+		return nil
+	}
+	hints := make([]labextract.LabTestHint, 0, len(suggestions))
+	for _, s := range suggestions {
+		hints = append(hints, labextract.LabTestHint{
+			TestName:    s.TestName,
+			Unit:        s.Unit,
+			NormalRange: s.NormalRange,
+		})
+	}
+	return hints
+}
+
 // LabExtractHandler handles POST /api/babies/{id}/labs/extract without rate limiting.
 func LabExtractHandler(db *sql.DB, objStore storage.ObjectStore, svc *labextract.Service) http.HandlerFunc {
 	return labExtractCore(db, objStore, svc, nil)
@@ -138,8 +157,12 @@ func labExtractCore(db *sql.DB, objStore storage.ObjectStore, svc *labextract.Se
 			})
 		}
 
+		// Bias the extraction prompt with this baby's known test names so the model
+		// returns canonical names (e.g. "AST" → "SGOT/AST" if previously logged that way).
+		hints := buildLabHints(db, baby.ID)
+
 		// Call extraction service
-		extraction, err := svc.Extract(r.Context(), images)
+		extraction, err := svc.ExtractWithHints(r.Context(), images, hints)
 		if err != nil {
 			log.Printf("lab extraction: %v", err)
 			http.Error(w, "extraction failed", http.StatusBadGateway)
