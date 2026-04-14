@@ -4,7 +4,7 @@ export interface Medication {
 	name: string;
 	dose: string;
 	frequency: string;
-	schedule: string | null;
+	schedule_times: string[];
 	timezone: string | null;
 	interval_days: number | null;
 	starts_from: string | null;
