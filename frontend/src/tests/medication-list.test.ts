@@ -17,8 +17,10 @@ const activeMed = {
 	name: 'UDCA (ursodiol)',
 	dose: '50mg',
 	frequency: 'twice_daily',
-	schedule: '["08:00","20:00"]',
+	schedule_times: ['08:00', '20:00'],
 	timezone: 'America/New_York',
+	interval_days: null,
+	starts_from: null,
 	active: true,
 	created_at: '2026-03-01T00:00:00Z',
 	updated_at: '2026-03-01T00:00:00Z'
@@ -30,8 +32,10 @@ const inactiveMed = {
 	name: 'Vitamin D',
 	dose: '400IU',
 	frequency: 'once_daily',
-	schedule: '["09:00"]',
+	schedule_times: ['09:00'],
 	timezone: 'America/New_York',
+	interval_days: null,
+	starts_from: null,
 	active: false,
 	created_at: '2026-03-01T00:00:00Z',
 	updated_at: '2026-03-15T00:00:00Z'
@@ -110,7 +114,7 @@ describe('MedicationList', () => {
 			name: 'UDCA (ursodiol)',
 			dose: '50mg',
 			frequency: 'twice_daily',
-			schedule_times: [],
+			schedule_times: ['08:00', '20:00'],
 			active: false
 		});
 	});
@@ -183,6 +187,40 @@ describe('MedicationList', () => {
 		expect(screen.getByRole('button', { name: /reactivate/i })).toBeInTheDocument();
 	});
 
+	it('deactivation of every_x_days med includes interval_days and starts_from', async () => {
+		const intervalMed = {
+			id: 'med-3',
+			baby_id: 'baby-1',
+			name: 'Vitamin K',
+			dose: '1mg',
+			frequency: 'every_x_days',
+			schedule_times: [],
+			timezone: 'America/New_York',
+			interval_days: 7,
+			starts_from: '2026-04-01',
+			active: true,
+			created_at: '2026-03-01T00:00:00Z',
+			updated_at: '2026-03-01T00:00:00Z'
+		};
+		mockGet.mockResolvedValue({ medications: [intervalMed] });
+		mockPut.mockResolvedValue({ ...intervalMed, active: false });
+
+		render(MedicationList, { props: { babyId: 'baby-1' } });
+
+		await screen.findByText('Vitamin K');
+		await fireEvent.click(screen.getByRole('button', { name: /deactivate/i }));
+
+		expect(mockPut).toHaveBeenCalledWith('/babies/baby-1/medications/med-3', {
+			name: 'Vitamin K',
+			dose: '1mg',
+			frequency: 'every_x_days',
+			schedule_times: [],
+			interval_days: 7,
+			starts_from: '2026-04-01',
+			active: false
+		});
+	});
+
 	it('reactivation toggle calls PUT with active=true for inactive medication', async () => {
 		mockPut.mockResolvedValue({ ...inactiveMed, active: true });
 		mockGet
@@ -201,7 +239,7 @@ describe('MedicationList', () => {
 			name: 'Vitamin D',
 			dose: '400IU',
 			frequency: 'once_daily',
-			schedule_times: [],
+			schedule_times: ['09:00'],
 			active: true
 		});
 	});

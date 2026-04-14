@@ -32,13 +32,18 @@
 
 	async function toggleActive(med: Medication): Promise<void> {
 		try {
-			await apiClient.put(`/babies/${babyId}/medications/${med.id}`, {
+			const body: Record<string, unknown> = {
 				name: med.name,
 				dose: med.dose,
 				frequency: med.frequency,
 				schedule_times: med.schedule_times ?? [],
 				active: !med.active
-			});
+			};
+			if (med.frequency === 'every_x_days') {
+				if (med.interval_days != null) body.interval_days = med.interval_days;
+				if (med.starts_from != null) body.starts_from = med.starts_from;
+			}
+			await apiClient.put(`/babies/${babyId}/medications/${med.id}`, body);
 			await fetchMedications();
 		} catch {
 			error = 'Failed to update medication';
