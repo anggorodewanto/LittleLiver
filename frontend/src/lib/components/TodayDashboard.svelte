@@ -454,7 +454,9 @@
 		<div class="upcoming-meds">
 			<h3>Upcoming Medications</h3>
 			{#each dashboard.upcoming_meds as med (med.id)}
-				<div class="med-item">
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div class="med-item med-item-clickable" onclick={() => void goto(`/log/med?medicationId=${med.id}`)}>
 					<div class="med-info">
 						<span class="med-name">{med.name}</span>
 						<span class="med-dose">{med.dose}</span>
@@ -708,6 +710,14 @@
 
 	.med-item:last-child {
 		border-bottom: none;
+	}
+
+	.med-item-clickable {
+		cursor: pointer;
+	}
+
+	.med-item-clickable:hover {
+		background-color: var(--color-surface-hover, rgba(0, 0, 0, 0.03));
 	}
 
 	.med-info {
