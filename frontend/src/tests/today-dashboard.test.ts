@@ -438,7 +438,7 @@ describe('TodayDashboard', () => {
 		expect(missedMedBanner).not.toBeNull();
 		await fireEvent.click(missedMedBanner!);
 
-		expect(goto).toHaveBeenCalledWith('/log/med?medicationId=med-1&scheduled_time=08%3A00');
+		expect(goto).toHaveBeenCalledWith('/log/med?medicationId=med-1&scheduled_time=2026-03-19T08%3A00%3A00Z');
 	});
 
 	it('shows medication name in missed_medication alert message', async () => {
