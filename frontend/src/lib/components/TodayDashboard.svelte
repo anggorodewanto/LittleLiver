@@ -333,9 +333,9 @@
 					onclick={(e: MouseEvent) => {
 						if (alert.alert_type === 'missed_medication' && !(e.target as HTMLElement).closest('button')) {
 							let url = alert.medication_id ? `/log/med?medicationId=${alert.medication_id}` : '/log/med';
-							if (alert.value) {
+							if (alert.timestamp) {
 								const sep = url.includes('?') ? '&' : '?';
-								url += `${sep}scheduled_time=${encodeURIComponent(String(alert.value))}`;
+								url += `${sep}scheduled_time=${encodeURIComponent(alert.timestamp)}`;
 							}
 							void goto(url);
 						}
@@ -344,9 +344,9 @@
 						if (alert.alert_type === 'missed_medication' && (e.key === 'Enter' || e.key === ' ') && !(e.target as HTMLElement).closest('button')) {
 							e.preventDefault();
 							let url = alert.medication_id ? `/log/med?medicationId=${alert.medication_id}` : '/log/med';
-							if (alert.value) {
+							if (alert.timestamp) {
 								const sep = url.includes('?') ? '&' : '?';
-								url += `${sep}scheduled_time=${encodeURIComponent(String(alert.value))}`;
+								url += `${sep}scheduled_time=${encodeURIComponent(alert.timestamp)}`;
 							}
 							void goto(url);
 						}
