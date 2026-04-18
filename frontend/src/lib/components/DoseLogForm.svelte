@@ -99,14 +99,7 @@
 		}
 
 		if (scheduledTime) {
-			if (/^\d{2}:\d{2}$/.test(scheduledTime)) {
-				const [hours, minutes] = scheduledTime.split(':').map(Number);
-				const d = new Date();
-				d.setHours(hours, minutes, 0, 0);
-				payload.scheduled_time = d.toISOString().replace(/\.\d{3}Z$/, 'Z');
-			} else {
-				payload.scheduled_time = scheduledTime;
-			}
+			payload.scheduled_time = scheduledTime;
 		}
 
 		if (notes.trim()) {
