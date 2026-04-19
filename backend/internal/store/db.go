@@ -14,9 +14,9 @@ import (
 // OpenDB opens a SQLite database at the given path with WAL mode and foreign keys enabled.
 // Use ":memory:" for an in-memory database.
 func OpenDB(path string) (*sql.DB, error) {
-	dsn := "file::memory:?_pragma=foreign_keys(1)"
+	dsn := "file::memory:?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
 	if path != ":memory:" {
-		dsn = fmt.Sprintf("file:%s?_pragma=journal_mode(wal)&_pragma=foreign_keys(1)", path)
+		dsn = fmt.Sprintf("file:%s?_pragma=journal_mode(wal)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)", path)
 	}
 
 	db, err := sql.Open("sqlite", dsn)
