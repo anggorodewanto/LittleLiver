@@ -228,6 +228,47 @@ describe('LogEntryRow', () => {
 		expect(screen.queryByLabelText(/photo/i)).not.toBeInTheDocument();
 	});
 
+	it('clicking photo indicator opens the lightbox with the first photo', async () => {
+		const entry = {
+			id: 's4',
+			timestamp: '2026-03-20T10:00:00Z',
+			color_rating: 5,
+			photos: [
+				{ key: 'photos/a.jpg', url: 'https://example.com/a.jpg', thumbnail_url: 'https://example.com/thumb_a.jpg' }
+			]
+		};
+
+		const { container } = render(LogEntryRow, { props: { entry, logType: stoolType, ondelete } });
+
+		// Lightbox not yet mounted
+		expect(container.querySelector('.lightbox-backdrop')).not.toBeInTheDocument();
+
+		const indicator = screen.getByLabelText(/1 photo/i);
+		await fireEvent.click(indicator);
+
+		expect(container.querySelector('.lightbox-backdrop')).toBeInTheDocument();
+		expect(container.querySelector('.lightbox-img')).toHaveAttribute('src', 'https://example.com/a.jpg');
+	});
+
+	it('lightbox opened from a multi-photo row shows prev/next controls', async () => {
+		const entry = {
+			id: 's5',
+			timestamp: '2026-03-20T10:00:00Z',
+			color_rating: 5,
+			photos: [
+				{ key: 'photos/a.jpg', url: 'https://example.com/a.jpg', thumbnail_url: 'https://example.com/ta.jpg' },
+				{ key: 'photos/b.jpg', url: 'https://example.com/b.jpg', thumbnail_url: 'https://example.com/tb.jpg' }
+			]
+		};
+
+		render(LogEntryRow, { props: { entry, logType: stoolType, ondelete } });
+
+		await fireEvent.click(screen.getByLabelText(/2 photo/i));
+
+		expect(screen.getByLabelText(/previous photo/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/next photo/i)).toBeInTheDocument();
+	});
+
 	it('Cancel delete restores row', async () => {
 		const entry = {
 			id: 'f5',

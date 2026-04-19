@@ -5,6 +5,12 @@
 	import PhotoThumbnails from './PhotoThumbnails.svelte';
 	import PhotoLightbox from './PhotoLightbox.svelte';
 
+	interface Photo {
+		key: string;
+		url: string;
+		thumbnail_url: string;
+	}
+
 	interface Props {
 		entry: Record<string, unknown>;
 		logType: LogTypeConfig;
@@ -15,7 +21,7 @@
 	let { entry, logType, ondelete, medNames = {} }: Props = $props();
 
 	let confirmingDelete = $state(false);
-	let lightboxUrl = $state('');
+	let lightboxIndex = $state(-1);
 
 	function handleEdit(): void {
 		goto(`/log/${logType.metricParam}?edit=${entry.id}`);
@@ -114,16 +120,23 @@
 			<div class="notes">{truncate(entry.notes, 100)}</div>
 		{/if}
 
-		{#if Array.isArray(entry.photos) && (entry.photos as unknown[]).length > 0}
+		{#if Array.isArray(entry.photos) && (entry.photos as Photo[]).length > 0}
 			<PhotoThumbnails
-				photos={entry.photos as Array<{key: string, url: string, thumbnail_url: string}>}
-				onphotoclick={(url) => { lightboxUrl = url; }}
+				photos={entry.photos as Photo[]}
+				onphotoclick={(url) => {
+					const idx = (entry.photos as Photo[]).findIndex((p) => p.url === url);
+					lightboxIndex = idx >= 0 ? idx : 0;
+				}}
 			/>
 		{/if}
 	</div>
 
-	{#if lightboxUrl}
-		<PhotoLightbox url={lightboxUrl} onclose={() => { lightboxUrl = ''; }} />
+	{#if lightboxIndex >= 0 && Array.isArray(entry.photos) && (entry.photos as Photo[]).length > 0}
+		<PhotoLightbox
+			photos={entry.photos as Photo[]}
+			startIndex={lightboxIndex}
+			onclose={() => { lightboxIndex = -1; }}
+		/>
 	{/if}
 
 	<div class="card-footer">

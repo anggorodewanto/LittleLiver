@@ -2,6 +2,13 @@
 	import { goto } from '$app/navigation';
 	import { formatTime } from '$lib/datetime';
 	import type { LogTypeConfig } from '$lib/types/logs';
+	import PhotoLightbox from './PhotoLightbox.svelte';
+
+	interface Photo {
+		key: string;
+		url: string;
+		thumbnail_url: string;
+	}
 
 	interface Props {
 		entry: Record<string, unknown>;
@@ -13,6 +20,7 @@
 	let { entry, logType, ondelete, medNames = {} }: Props = $props();
 
 	let confirmingDelete = $state(false);
+	let lightboxOpen = $state(false);
 
 	function handleEdit(): void {
 		goto(`/log/${logType.metricParam}?edit=${entry.id}`);
@@ -125,13 +133,22 @@
 				{#if i > 0}<span class="sep"> · </span>{/if}{part}
 			{/each}
 		</span>
-		{#if Array.isArray(entry.photos) && (entry.photos as unknown[]).length > 0}
-			<span class="photo-indicator" aria-label="{(entry.photos as unknown[]).length} photo(s)">📷 {(entry.photos as unknown[]).length}</span>
+		{#if Array.isArray(entry.photos) && (entry.photos as Photo[]).length > 0}
+			<button
+				type="button"
+				class="photo-indicator"
+				aria-label="{(entry.photos as Photo[]).length} photo(s)"
+				onclick={() => { lightboxOpen = true; }}
+			>📷 {(entry.photos as Photo[]).length}</button>
 		{/if}
 		<div class="row-actions">
 			<button class="btn-sm btn-edit" onclick={handleEdit} aria-label="Edit">✏️</button>
 			<button class="btn-sm btn-delete" onclick={handleDeleteClick} aria-label="Delete">🗑️</button>
 		</div>
+	{/if}
+
+	{#if lightboxOpen && Array.isArray(entry.photos) && (entry.photos as Photo[]).length > 0}
+		<PhotoLightbox photos={entry.photos as Photo[]} onclose={() => { lightboxOpen = false; }} />
 	{/if}
 </div>
 
@@ -168,6 +185,15 @@
 		flex-shrink: 0;
 		font-size: var(--font-size-xs);
 		color: var(--color-text-muted);
+		background: none;
+		border: none;
+		padding: var(--space-1) var(--space-2);
+		cursor: pointer;
+		min-height: var(--touch-target);
+	}
+
+	.photo-indicator:hover {
+		color: var(--color-text);
 	}
 
 	.row-confirm {
