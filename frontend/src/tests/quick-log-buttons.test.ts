@@ -11,12 +11,11 @@ describe('QuickLogButtons', () => {
 		onnavigate = vi.fn();
 	});
 
-	it('renders 5 quick-log buttons plus a More Entries toggle', () => {
+	it('renders all 16 log-entry buttons unconditionally (5 primary + 11 extra)', () => {
 		render(QuickLogButtons, { props: { onselect, onnavigate } });
 
 		const buttons = screen.getAllByRole('button');
-		// 5 quick-log + 1 "More Entries" toggle = 6
-		expect(buttons).toHaveLength(6);
+		expect(buttons).toHaveLength(16);
 	});
 
 	it('renders Feed, Wet Diaper, Stool, Temp, and Medication Given buttons', () => {
@@ -69,30 +68,28 @@ describe('QuickLogButtons', () => {
 		expect(onselect).toHaveBeenCalledWith('med_given');
 	});
 
-	it('shows More Entries toggle button', () => {
+	it('renders extra entry buttons without requiring a toggle', () => {
 		render(QuickLogButtons, { props: { onselect, onnavigate } });
-
-		expect(screen.getByRole('button', { name: /more entries/i })).toBeInTheDocument();
-	});
-
-	it('expands to show extra buttons when More Entries is clicked', async () => {
-		render(QuickLogButtons, { props: { onselect, onnavigate } });
-
-		await fireEvent.click(screen.getByRole('button', { name: /more entries/i }));
 
 		expect(screen.getByRole('button', { name: /weight/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /abdomen/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /skin/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /bruising/i })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: /lab/i })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /^lab$/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /notes/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /manage medications/i })).toBeInTheDocument();
+	});
+
+	it('does not render a More Entries toggle', () => {
+		render(QuickLogButtons, { props: { onselect, onnavigate } });
+
+		expect(screen.queryByRole('button', { name: /more entries/i })).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /less entries/i })).not.toBeInTheDocument();
 	});
 
 	it('calls onselect with "weight" when Weight is clicked', async () => {
 		render(QuickLogButtons, { props: { onselect, onnavigate } });
 
-		await fireEvent.click(screen.getByRole('button', { name: /more entries/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /weight/i }));
 
 		expect(onselect).toHaveBeenCalledWith('weight');
@@ -101,19 +98,8 @@ describe('QuickLogButtons', () => {
 	it('calls onnavigate with "/medications" when Manage Medications is clicked', async () => {
 		render(QuickLogButtons, { props: { onselect, onnavigate } });
 
-		await fireEvent.click(screen.getByRole('button', { name: /more entries/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /manage medications/i }));
 
 		expect(onnavigate).toHaveBeenCalledWith('/medications');
-	});
-
-	it('collapses extra buttons when Less Entries is clicked', async () => {
-		render(QuickLogButtons, { props: { onselect, onnavigate } });
-
-		await fireEvent.click(screen.getByRole('button', { name: /more entries/i }));
-		expect(screen.getByRole('button', { name: /less entries/i })).toBeInTheDocument();
-
-		await fireEvent.click(screen.getByRole('button', { name: /less entries/i }));
-		expect(screen.queryByRole('button', { name: /weight/i })).not.toBeInTheDocument();
 	});
 });

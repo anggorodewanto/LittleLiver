@@ -7,8 +7,6 @@
 	}
 
 	let { onselect, onnavigate }: Props = $props();
-
-	let expanded = $state(false);
 </script>
 
 <div class="quick-log-buttons">
@@ -19,26 +17,18 @@
 	<button type="button" onclick={() => onselect('med_given')}>Medication Given</button>
 </div>
 
-<div class="more-entries">
-	<button type="button" class="toggle-more" onclick={() => expanded = !expanded}>
-		{expanded ? 'Less Entries' : 'More Entries'}
-	</button>
-
-	{#if expanded}
-		<div class="extra-buttons">
-			<button type="button" onclick={() => onselect('weight')}>Weight</button>
-			<button type="button" onclick={() => onselect('abdomen')}>Abdomen</button>
-			<button type="button" onclick={() => onselect('skin')}>Skin</button>
-			<button type="button" onclick={() => onselect('bruising')}>Bruising</button>
-			<button type="button" onclick={() => onselect('lab')}>Lab</button>
-			<button type="button" onclick={() => onselect('notes')}>Notes</button>
-			<button type="button" onclick={() => onselect('head_circumference')}>Head Circ.</button>
-			<button type="button" onclick={() => onselect('upper_arm_circumference')}>Arm Circ.</button>
-			<button type="button" onclick={() => onselect('other_intake')}>Other Intake</button>
-			<button type="button" onclick={() => onselect('other_output')}>Other Output</button>
-			<button type="button" onclick={() => onnavigate?.('/medications')}>Manage Medications</button>
-		</div>
-	{/if}
+<div class="extra-buttons">
+	<button type="button" onclick={() => onselect('weight')}>Weight</button>
+	<button type="button" onclick={() => onselect('abdomen')}>Abdomen</button>
+	<button type="button" onclick={() => onselect('skin')}>Skin</button>
+	<button type="button" onclick={() => onselect('bruising')}>Bruising</button>
+	<button type="button" onclick={() => onselect('lab')}>Lab</button>
+	<button type="button" onclick={() => onselect('notes')}>Notes</button>
+	<button type="button" onclick={() => onselect('head_circumference')}>Head Circ.</button>
+	<button type="button" onclick={() => onselect('upper_arm_circumference')}>Arm Circ.</button>
+	<button type="button" onclick={() => onselect('other_intake')}>Other Intake</button>
+	<button type="button" onclick={() => onselect('other_output')}>Other Output</button>
+	<button type="button" onclick={() => onnavigate?.('/medications')}>Manage Medications</button>
 </div>
 
 <style>
@@ -62,29 +52,10 @@
 		background: var(--color-primary-dark);
 	}
 
-	.more-entries {
-		text-align: center;
-	}
-
-	.toggle-more {
-		font-size: var(--font-size-sm);
-		background: transparent;
-		color: var(--color-text-muted);
-		border: 1px dashed var(--color-border);
-		width: 100%;
-		border-radius: var(--radius-sm);
-	}
-
-	.toggle-more:hover {
-		background: var(--color-primary-light);
-		color: var(--color-primary-dark);
-	}
-
 	.extra-buttons {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: var(--space-2);
-		margin-top: var(--space-2);
 	}
 
 	.extra-buttons button {

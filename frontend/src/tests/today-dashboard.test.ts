@@ -189,7 +189,7 @@ describe('TodayDashboard', () => {
 		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		expect(await screen.findByText(/4\.5/)).toBeInTheDocument();
-		expect(screen.getByText(/weight/i)).toBeInTheDocument();
+		expect(screen.getByText(/last weight/i)).toBeInTheDocument();
 	});
 
 	it('displays dashes for null summary values', async () => {
