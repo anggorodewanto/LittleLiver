@@ -12,6 +12,19 @@ vi.mock('$lib/api', () => ({
 
 import { apiClient } from '$lib/api';
 
+function makeFile(name: string, content = 'x'): File {
+	return new File([content], name, { type: 'image/jpeg' });
+}
+
+async function addFiles(files: File[]) {
+	const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
+	await fireEvent.change(input, { target: { files } });
+}
+
+async function clickSubmit() {
+	await fireEvent.click(screen.getByRole('button', { name: /^submit$/i }));
+}
+
 describe('LabImportFlow', () => {
 	let oncancel: ReturnType<typeof vi.fn>;
 	let onsaved: ReturnType<typeof vi.fn>;
@@ -24,7 +37,7 @@ describe('LabImportFlow', () => {
 		vi.mocked(apiClient.get).mockResolvedValue([]);
 	});
 
-	it('shows import button and file input initially', () => {
+	it('shows import hint, file input, and disabled Submit button initially', () => {
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
 		expect(screen.getByText(/select.*photo/i)).toBeInTheDocument();
@@ -32,6 +45,9 @@ describe('LabImportFlow', () => {
 		expect(input).toBeInTheDocument();
 		expect(input.type).toBe('file');
 		expect(input.multiple).toBe(true);
+
+		const submit = screen.getByRole('button', { name: /^submit$/i });
+		expect(submit).toBeDisabled();
 	});
 
 	it('accepts PDF files in addition to images', () => {
@@ -43,7 +59,70 @@ describe('LabImportFlow', () => {
 		expect(input.accept).toContain('application/pdf');
 	});
 
-	it('uploads multiple files and sends all R2 keys to extract endpoint', async () => {
+	it('does not upload until submit is clicked', async () => {
+		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
+
+		await addFiles([makeFile('a.jpg')]);
+
+		expect(apiClient.postForm).not.toHaveBeenCalled();
+		expect(apiClient.post).not.toHaveBeenCalled();
+	});
+
+	it('enables Submit once at least one file is queued', async () => {
+		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
+
+		expect(screen.getByRole('button', { name: /^submit$/i })).toBeDisabled();
+
+		await addFiles([makeFile('a.jpg')]);
+
+		expect(screen.getByRole('button', { name: /^submit$/i })).toBeEnabled();
+	});
+
+	it('lists queued filenames', async () => {
+		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
+
+		await addFiles([makeFile('report1.jpg'), makeFile('report2.jpg')]);
+
+		expect(screen.getByText('report1.jpg')).toBeInTheDocument();
+		expect(screen.getByText('report2.jpg')).toBeInTheDocument();
+	});
+
+	it('accumulates files across multiple selections', async () => {
+		vi.mocked(apiClient.postForm)
+			.mockResolvedValueOnce({ r2_key: 'k1' })
+			.mockResolvedValueOnce({ r2_key: 'k2' });
+		vi.mocked(apiClient.post).mockResolvedValueOnce({ extracted: [], notes: '' });
+
+		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
+
+		await addFiles([makeFile('a.jpg')]);
+		await addFiles([makeFile('b.jpg')]);
+
+		expect(screen.getByText('a.jpg')).toBeInTheDocument();
+		expect(screen.getByText('b.jpg')).toBeInTheDocument();
+
+		await clickSubmit();
+
+		await waitFor(() => {
+			expect(apiClient.postForm).toHaveBeenCalledTimes(2);
+		});
+	});
+
+	it('remove button drops a file from the queue', async () => {
+		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
+
+		await addFiles([makeFile('a.jpg'), makeFile('b.jpg')]);
+
+		const removeButtons = screen.getAllByRole('button', { name: /remove/i });
+		expect(removeButtons).toHaveLength(2);
+
+		await fireEvent.click(removeButtons[0]);
+
+		expect(screen.queryByText('a.jpg')).not.toBeInTheDocument();
+		expect(screen.getByText('b.jpg')).toBeInTheDocument();
+	});
+
+	it('uploads multiple files and sends all R2 keys to extract endpoint on submit', async () => {
 		vi.mocked(apiClient.postForm)
 			.mockResolvedValueOnce({ r2_key: 'photos/key1.jpg' })
 			.mockResolvedValueOnce({ r2_key: 'photos/key2.jpg' });
@@ -57,10 +136,8 @@ describe('LabImportFlow', () => {
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file1 = new File(['a'], 'report1.jpg', { type: 'image/jpeg' });
-		const file2 = new File(['b'], 'report2.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file1, file2] } });
+		await addFiles([makeFile('report1.jpg', 'a'), makeFile('report2.jpg', 'b')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(apiClient.postForm).toHaveBeenCalledTimes(2);
@@ -75,17 +152,13 @@ describe('LabImportFlow', () => {
 	});
 
 	it('shows loading state during extraction', async () => {
-		// postForm resolves immediately
 		vi.mocked(apiClient.postForm).mockResolvedValue({ r2_key: 'photos/key1.jpg' });
-
-		// extract endpoint never resolves (stays in loading)
 		vi.mocked(apiClient.post).mockImplementation(() => new Promise(() => {}));
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/extracting/i)).toBeInTheDocument();
@@ -103,9 +176,8 @@ describe('LabImportFlow', () => {
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
@@ -116,8 +188,6 @@ describe('LabImportFlow', () => {
 
 	it('calls batch endpoint on confirm with reviewed data', async () => {
 		vi.mocked(apiClient.postForm).mockResolvedValue({ r2_key: 'photos/key1.jpg' });
-
-		// First post call = extract, second = batch save
 		vi.mocked(apiClient.post)
 			.mockResolvedValueOnce({
 				extracted: [
@@ -125,13 +195,12 @@ describe('LabImportFlow', () => {
 				],
 				notes: ''
 			})
-			.mockResolvedValueOnce([]); // batch save response
+			.mockResolvedValueOnce([]);
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
@@ -166,9 +235,8 @@ describe('LabImportFlow', () => {
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
@@ -182,7 +250,6 @@ describe('LabImportFlow', () => {
 			);
 			expect(batchCall).toBeDefined();
 			const payload = batchCall![1] as { items: { timestamp: string }[] };
-			// Timestamp should be based on report_date (2026-03-15), not current date
 			expect(payload.items[0].timestamp).toContain('2026-03-15');
 		});
 	});
@@ -201,15 +268,13 @@ describe('LabImportFlow', () => {
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
 		});
 
-		// Add a blank row (will have empty test_name)
 		await fireEvent.click(screen.getByRole('button', { name: /add row/i }));
 
 		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
@@ -220,7 +285,6 @@ describe('LabImportFlow', () => {
 			);
 			expect(batchCall).toBeDefined();
 			const payload = batchCall![1] as { items: { test_name: string }[] };
-			// Should only have 1 item (the valid ALT), blank row filtered out
 			expect(payload.items).toHaveLength(1);
 			expect(payload.items[0].test_name).toBe('ALT');
 		});
@@ -237,9 +301,8 @@ describe('LabImportFlow', () => {
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
@@ -256,9 +319,8 @@ describe('LabImportFlow', () => {
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/extraction failed/i)).toBeInTheDocument();
@@ -270,9 +332,8 @@ describe('LabImportFlow', () => {
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/upload failed/i)).toBeInTheDocument();
@@ -288,13 +349,12 @@ describe('LabImportFlow', () => {
 				],
 				notes: ''
 			})
-			.mockResolvedValueOnce([]); // batch save
+			.mockResolvedValueOnce([]);
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
@@ -316,13 +376,12 @@ describe('LabImportFlow', () => {
 				],
 				notes: ''
 			})
-			.mockRejectedValueOnce(new Error('Save failed')); // save fails
+			.mockRejectedValueOnce(new Error('Save failed'));
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
@@ -334,7 +393,6 @@ describe('LabImportFlow', () => {
 			expect(screen.getByText(/failed to save/i)).toBeInTheDocument();
 		});
 
-		// Review screen should still be visible (not file select)
 		expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
 		expect(screen.getByDisplayValue('ALT')).toBeInTheDocument();
 	});
@@ -348,27 +406,24 @@ describe('LabImportFlow', () => {
 				],
 				notes: ''
 			})
-			.mockRejectedValueOnce(new Error('Save failed'))  // first save fails
-			.mockResolvedValueOnce([]);  // retry succeeds
+			.mockRejectedValueOnce(new Error('Save failed'))
+			.mockResolvedValueOnce([]);
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
 		});
 
-		// First confirm - fails
 		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
 
 		await waitFor(() => {
 			expect(screen.getByText(/failed to save/i)).toBeInTheDocument();
 		});
 
-		// Retry - click confirm again
 		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
 
 		await waitFor(() => {
@@ -385,9 +440,8 @@ describe('LabImportFlow', () => {
 
 		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
-		const file = new File(['a'], 'report.jpg', { type: 'image/jpeg' });
-		await fireEvent.change(input, { target: { files: [file] } });
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
 
 		await waitFor(() => {
 			expect(screen.getByText(/no lab results found/i)).toBeInTheDocument();
