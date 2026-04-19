@@ -60,6 +60,27 @@ func TestOpenDB_FileWAL(t *testing.T) {
 	}
 }
 
+func TestOpenDB_BusyTimeout(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+
+	db, err := OpenDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenDB(%s) returned error: %v", dbPath, err)
+	}
+	defer db.Close()
+
+	var timeoutMs int
+	err = db.QueryRow("PRAGMA busy_timeout").Scan(&timeoutMs)
+	if err != nil {
+		t.Fatalf("PRAGMA busy_timeout query failed: %v", err)
+	}
+	if timeoutMs < 5000 {
+		t.Errorf("expected busy_timeout>=5000ms, got %d", timeoutMs)
+	}
+}
+
 func TestRunMigrations_AppliesInOrder(t *testing.T) {
 	t.Parallel()
 	db, err := OpenDB(":memory:")
