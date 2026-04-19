@@ -1893,7 +1893,10 @@ func TestDashboardHandler_NextDoseAt_DoseTooEarlyDoesNotCoverSlot(t *testing.T) 
 		t.Skip("skipping near midnight to avoid flaky date boundary")
 	}
 
-	// Schedule 10 minutes from now; log a dose 35 min ago (45 min before schedule, outside window).
+	// For a once_daily schedule, SlotCoverageStart is 12h before the slot
+	// (midpoint with yesterday's slot). A dose logged >12h before the slot
+	// therefore does NOT cover it. Schedule 10 min from now; log a dose
+	// 13 hours ago (~13h10m before schedule, well outside the window).
 	schedTime := now.Add(10 * time.Minute).Format("15:04")
 	sched := `["` + schedTime + `"]`
 	med, err := store.CreateMedication(db, baby.ID, user.ID, "TooEarlyDoseMed", "5mg", "once_daily", &sched, &tz, nil, nil)
@@ -1901,7 +1904,7 @@ func TestDashboardHandler_NextDoseAt_DoseTooEarlyDoesNotCoverSlot(t *testing.T) 
 		t.Fatalf("create medication: %v", err)
 	}
 
-	givenAt := now.Add(-35 * time.Minute).Format("2006-01-02T15:04:05Z")
+	givenAt := now.Add(-13 * time.Hour).Format("2006-01-02T15:04:05Z")
 	_, err = store.CreateMedLog(db, baby.ID, med.ID, user.ID, nil, &givenAt, false, nil, nil)
 	if err != nil {
 		t.Fatalf("create med_log: %v", err)
@@ -1923,7 +1926,7 @@ func TestDashboardHandler_NextDoseAt_DoseTooEarlyDoesNotCoverSlot(t *testing.T) 
 		t.Fatalf("failed to parse next_dose_at %q: %v", *medResp.NextDoseAt, err)
 	}
 
-	// Dose was too early (outside 30-min window) → today's slot should NOT be covered.
+	// Dose was outside the 12h coverage window → today's slot should NOT be covered.
 	if nextDose.Day() != now.Day() || nextDose.Month() != now.Month() {
 		t.Errorf("expected next_dose_at to be today (%s), got %s",
 			now.Format("2006-01-02"), nextDose.Format("2006-01-02"))
