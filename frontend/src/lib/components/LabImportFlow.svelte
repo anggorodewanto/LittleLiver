@@ -20,11 +20,14 @@
 
 	type FlowState = 'select' | 'uploading' | 'extracting' | 'review' | 'saving' | 'error' | 'save-error';
 
+	const MAX_FILES = 10;
+
 	let state = $state<FlowState>('select');
 	let error = $state('');
 	let extractedItems = $state<ExtractedItem[]>([]);
 	let extractionNotes = $state('');
 	let reportDate = $state('');
+	let selectedFiles = $state<File[]>([]);
 
 	async function uploadFile(file: File): Promise<string> {
 		const formData = new FormData();
@@ -33,18 +36,30 @@
 		return data.r2_key;
 	}
 
-	async function handleFileSelect(event: Event) {
+	function handleFileAdd(event: Event) {
 		const input = event.target as HTMLInputElement;
 		if (!input.files || input.files.length === 0) return;
+
+		const incoming = Array.from(input.files);
+		const remaining = MAX_FILES - selectedFiles.length;
+		selectedFiles = [...selectedFiles, ...incoming.slice(0, remaining)];
+
+		input.value = '';
+	}
+
+	function removeFile(index: number) {
+		selectedFiles = selectedFiles.filter((_, i) => i !== index);
+	}
+
+	async function handleSubmit() {
+		if (selectedFiles.length === 0) return;
 
 		error = '';
 		state = 'uploading';
 
-		const files = Array.from(input.files);
-
 		let keys: string[];
 		try {
-			keys = await Promise.all(files.map((file) => uploadFile(file)));
+			keys = await Promise.all(selectedFiles.map((file) => uploadFile(file)));
 		} catch {
 			state = 'error';
 			error = 'Photo upload failed';
@@ -70,14 +85,12 @@
 
 	function buildTimestamp(): string {
 		if (reportDate) {
-			// Use report_date at noon local time as the timestamp
 			return toISO8601(`${reportDate}T12:00`);
 		}
 		return toISO8601(defaultTimestamp());
 	}
 
 	async function handleConfirm(items: ReviewedLabPayload[]) {
-		// Filter out items with empty test_name (validation)
 		const validItems = items.filter((item) => item.test_name.trim() !== '');
 		if (validItems.length === 0) {
 			oncancel();
@@ -102,7 +115,6 @@
 			error = 'Failed to save lab results';
 		}
 	}
-
 </script>
 
 {#if state === 'select' || state === 'error'}
@@ -116,14 +128,30 @@
 			type="file"
 			accept="image/*,.pdf,application/pdf"
 			multiple
-			onchange={handleFileSelect}
+			onchange={handleFileAdd}
 		/>
+
+		{#if selectedFiles.length > 0}
+			<ul class="queued-files">
+				{#each selectedFiles as file, i (i + '-' + file.name)}
+					<li>
+						<span>{file.name}</span>
+						<button type="button" aria-label="Remove {file.name}" onclick={() => removeFile(i)}>
+							Remove
+						</button>
+					</li>
+				{/each}
+			</ul>
+		{/if}
 
 		{#if error}
 			<p class="error" role="alert">{error}</p>
 		{/if}
 
-		<button type="button" onclick={oncancel}>Cancel</button>
+		<div class="actions">
+			<button type="button" onclick={handleSubmit} disabled={selectedFiles.length === 0}>Submit</button>
+			<button type="button" onclick={oncancel}>Cancel</button>
+		</div>
 	</div>
 {:else if state === 'uploading'}
 	<div class="loading-state">
@@ -167,5 +195,37 @@
 
 	.error {
 		color: var(--color-danger, #dc3545);
+	}
+
+	.queued-files {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1, 0.25rem);
+	}
+
+	.queued-files li {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2, 0.5rem);
+		padding: var(--space-2, 0.5rem);
+		background: var(--color-surface, #f8f9fa);
+		border: 1px solid var(--color-border, #dee2e6);
+		border-radius: var(--radius-sm, 0.25rem);
+	}
+
+	.queued-files li span {
+		flex: 1 1 auto;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.actions {
+		display: flex;
+		gap: var(--space-2, 0.5rem);
 	}
 </style>

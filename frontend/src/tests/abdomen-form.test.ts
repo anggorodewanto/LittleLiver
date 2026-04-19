@@ -94,7 +94,8 @@ describe('AbdomenForm', () => {
 	it('renders photo upload area', () => {
 		render(AbdomenForm, { props: { onsubmit, onphotoupload } });
 
-		expect(screen.getByLabelText(/photo/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/choose photo/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/take photo/i)).toBeInTheDocument();
 	});
 
 	it('disables submit button when submitting', () => {

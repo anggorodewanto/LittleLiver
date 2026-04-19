@@ -87,7 +87,7 @@ describe('NotesForm', () => {
 	it('renders multi-photo upload area', () => {
 		render(NotesForm, { props: { onsubmit, onphotoupload } });
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
+		const input = screen.getByLabelText(/choose photo/i) as HTMLInputElement;
 		expect(input).toBeInTheDocument();
 		expect(input.multiple).toBe(true);
 	});
@@ -103,7 +103,7 @@ describe('NotesForm', () => {
 			props: { onsubmit, onphotoupload, photoKeys: ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg'] }
 		});
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
+		const input = screen.getByLabelText(/choose photo/i) as HTMLInputElement;
 		expect(input.disabled).toBe(true);
 		expect(screen.getByText('4 / 4 photos')).toBeInTheDocument();
 	});
@@ -113,7 +113,7 @@ describe('NotesForm', () => {
 			props: { onsubmit, onphotoupload, photoKeys: ['a.jpg', 'b.jpg', 'c.jpg'] }
 		});
 
-		const input = screen.getByLabelText(/photo/i) as HTMLInputElement;
+		const input = screen.getByLabelText(/choose photo/i) as HTMLInputElement;
 		expect(input.disabled).toBe(false);
 		expect(screen.getByText('3 / 4 photos')).toBeInTheDocument();
 	});

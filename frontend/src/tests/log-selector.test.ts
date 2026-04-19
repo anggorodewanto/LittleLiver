@@ -60,7 +60,6 @@ describe('Log Selector Page', () => {
 	it('navigates to /medications when Manage Medications is clicked', async () => {
 		render(LogSelector);
 
-		await fireEvent.click(screen.getByRole('button', { name: /more entries/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /manage medications/i }));
 
 		expect(goto).toHaveBeenCalledWith('/medications');
