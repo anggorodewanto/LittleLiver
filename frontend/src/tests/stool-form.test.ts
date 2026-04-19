@@ -132,10 +132,11 @@ describe('StoolForm', () => {
 		expect(options).toContain('large');
 	});
 
-	it('renders photo upload area', () => {
+	it('renders photo upload area with camera and gallery inputs', () => {
 		render(StoolForm, { props: { onsubmit, onphotoupload } });
 
-		expect(screen.getByLabelText(/photo/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/take photo/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/choose photo/i)).toBeInTheDocument();
 	});
 
 	it('highlights selected color swatch', async () => {
