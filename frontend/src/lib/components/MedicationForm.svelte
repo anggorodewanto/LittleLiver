@@ -9,6 +9,10 @@
 		interval_days?: number;
 		starts_from?: string;
 		notes?: string;
+		dose_amount?: number;
+		dose_unit?: string;
+		low_stock_threshold?: number;
+		expiry_warning_days?: number;
 	}
 
 	export interface MedicationInitialData {
@@ -20,6 +24,10 @@
 		interval_days?: number;
 		starts_from?: string;
 		notes?: string;
+		dose_amount?: number | null;
+		dose_unit?: string | null;
+		low_stock_threshold?: number | null;
+		expiry_warning_days?: number | null;
 	}
 
 	interface Props {
@@ -49,6 +57,10 @@
 	let intervalDays = $state<number | undefined>(undefined);
 	let startsFrom = $state('');
 	let notes = $state('');
+	let doseAmount = $state<number | undefined>(undefined);
+	let doseUnit = $state('');
+	let lowStockThreshold = $state<number | undefined>(undefined);
+	let expiryWarningDays = $state<number | undefined>(undefined);
 	let validationError = $state('');
 
 	$effect(() => {
@@ -59,6 +71,10 @@
 		intervalDays = initialData?.interval_days;
 		startsFrom = initialData?.starts_from ?? '';
 		notes = initialData?.notes ?? '';
+		doseAmount = initialData?.dose_amount ?? undefined;
+		doseUnit = initialData?.dose_unit ?? '';
+		lowStockThreshold = initialData?.low_stock_threshold ?? undefined;
+		expiryWarningDays = initialData?.expiry_warning_days ?? undefined;
 		validationError = '';
 	});
 
@@ -145,6 +161,19 @@
 			payload.notes = notes.trim();
 		}
 
+		if (doseAmount !== undefined && !Number.isNaN(doseAmount) && doseAmount > 0) {
+			payload.dose_amount = doseAmount;
+		}
+		if (doseUnit) {
+			payload.dose_unit = doseUnit;
+		}
+		if (lowStockThreshold !== undefined && lowStockThreshold !== null && !Number.isNaN(lowStockThreshold)) {
+			payload.low_stock_threshold = lowStockThreshold;
+		}
+		if (expiryWarningDays !== undefined && expiryWarningDays !== null && !Number.isNaN(expiryWarningDays)) {
+			payload.expiry_warning_days = expiryWarningDays;
+		}
+
 		onsubmit(payload);
 	}
 </script>
@@ -215,6 +244,52 @@
 			<button type="button" onclick={addTime}>Add Time</button>
 		{/if}
 	{/if}
+
+	<fieldset>
+		<legend>Stock tracking (optional)</legend>
+		<p class="hint">Set dose amount + unit to enable auto-decrement when logging doses.</p>
+		<div>
+			<label for="med-dose-amount">Dose amount per administration</label>
+			<input
+				id="med-dose-amount"
+				type="number"
+				min="0"
+				step="any"
+				bind:value={doseAmount}
+			/>
+		</div>
+		<div>
+			<label for="med-dose-unit">Dose unit</label>
+			<select id="med-dose-unit" bind:value={doseUnit}>
+				<option value="">Select...</option>
+				<option value="mg">mg</option>
+				<option value="ml">mL</option>
+				<option value="tablet">tablet</option>
+				<option value="packet">packet</option>
+				<option value="dose">dose</option>
+			</select>
+		</div>
+		<div>
+			<label for="med-low-stock">Low stock alert (doses left)</label>
+			<input
+				id="med-low-stock"
+				type="number"
+				min="0"
+				placeholder="default 3"
+				bind:value={lowStockThreshold}
+			/>
+		</div>
+		<div>
+			<label for="med-expiry-warn">Expiry warning (days before)</label>
+			<input
+				id="med-expiry-warn"
+				type="number"
+				min="0"
+				placeholder="default 3"
+				bind:value={expiryWarningDays}
+			/>
+		</div>
+	</fieldset>
 
 	<div>
 		<label for="med-notes">Notes</label>

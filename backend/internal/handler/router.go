@@ -149,6 +149,14 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("GET /api/babies/{id}/medications", rateMw(authMw(http.HandlerFunc(ListMedicationsHandler(cfg.db)))))
 			mux.Handle("GET /api/babies/{id}/medications/{medId}", rateMw(authMw(http.HandlerFunc(GetMedicationHandler(cfg.db)))))
 			mux.Handle("PUT /api/babies/{id}/medications/{medId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateMedicationHandler(cfg.db))))))
+
+			// Medication stock containers (per-medication scoped)
+			mux.Handle("POST /api/babies/{id}/medications/{medId}/containers", rateMw(authMw(csrfMw(http.HandlerFunc(CreateMedicationContainerHandler(cfg.db))))))
+			mux.Handle("GET /api/babies/{id}/medications/{medId}/containers", rateMw(authMw(http.HandlerFunc(ListMedicationContainersHandler(cfg.db)))))
+			mux.Handle("GET /api/babies/{id}/medications/{medId}/containers/{containerId}", rateMw(authMw(http.HandlerFunc(GetMedicationContainerHandler(cfg.db)))))
+			mux.Handle("PUT /api/babies/{id}/medications/{medId}/containers/{containerId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateMedicationContainerHandler(cfg.db))))))
+			mux.Handle("DELETE /api/babies/{id}/medications/{medId}/containers/{containerId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteMedicationContainerHandler(cfg.db))))))
+			mux.Handle("POST /api/babies/{id}/medications/{medId}/containers/{containerId}/adjust", rateMw(authMw(csrfMw(http.HandlerFunc(AdjustMedicationContainerHandler(cfg.db))))))
 	
 			// Care plan CRUD endpoints (passive rotating-schedule tracker; no per-dose logs)
 			mux.Handle("POST /api/babies/{id}/care-plans", rateMw(authMw(csrfMw(http.HandlerFunc(CreateCarePlanHandler(cfg.db))))))

@@ -348,6 +348,8 @@ func TestMedicationsSchema_Columns(t *testing.T) {
 		"name", "dose", "frequency", "schedule",
 		"timezone", "active", "created_at", "updated_at",
 		"interval_days", "starts_from",
+		"dose_amount", "dose_unit",
+		"low_stock_threshold", "expiry_warning_days",
 	}
 	assertColumns(t, db, "medications", expected)
 }
@@ -483,5 +485,90 @@ func TestUpdateMedication_IntervalDays(t *testing.T) {
 	}
 	if updated.IntervalDays == nil || *updated.IntervalDays != 7 {
 		t.Errorf("expected interval_days=7, got %v", updated.IntervalDays)
+	}
+}
+
+
+func TestSetMedicationStockFields_SetsAllFour(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, _ := UpsertUser(db, "g1", "a@b.com", "P")
+	baby, _ := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	med, _ := CreateMedication(db, baby.ID, user.ID, "UDCA", "5mL", "twice_daily", nil, nil, nil, nil)
+
+	doseAmount := 5.0
+	doseUnit := "ml"
+	low := 4
+	warn := 3
+	updated, err := SetMedicationStockFields(db, baby.ID, med.ID, user.ID, MedicationStockFields{
+		DoseAmount:        &doseAmount,
+		DoseUnit:          &doseUnit,
+		LowStockThreshold: &low,
+		ExpiryWarningDays: &warn,
+	})
+	if err != nil {
+		t.Fatalf("SetMedicationStockFields: %v", err)
+	}
+	if updated.DoseAmount == nil || *updated.DoseAmount != 5.0 {
+		t.Errorf("DoseAmount = %v, want 5.0", updated.DoseAmount)
+	}
+	if updated.DoseUnit == nil || *updated.DoseUnit != "ml" {
+		t.Errorf("DoseUnit = %v, want ml", updated.DoseUnit)
+	}
+	if updated.LowStockThreshold == nil || *updated.LowStockThreshold != 4 {
+		t.Errorf("LowStockThreshold = %v, want 4", updated.LowStockThreshold)
+	}
+	if updated.ExpiryWarningDays == nil || *updated.ExpiryWarningDays != 3 {
+		t.Errorf("ExpiryWarningDays = %v, want 3", updated.ExpiryWarningDays)
+	}
+}
+
+func TestSetMedicationStockFields_PartialUpdatePreservesOthers(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, _ := UpsertUser(db, "g1", "a@b.com", "P")
+	baby, _ := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	med, _ := CreateMedication(db, baby.ID, user.ID, "UDCA", "5mL", "twice_daily", nil, nil, nil, nil)
+
+	doseAmount := 5.0
+	doseUnit := "ml"
+	_, _ = SetMedicationStockFields(db, baby.ID, med.ID, user.ID, MedicationStockFields{
+		DoseAmount: &doseAmount,
+		DoseUnit:   &doseUnit,
+	})
+
+	// Now update only the threshold; existing dose fields must stick.
+	low := 2
+	updated, err := SetMedicationStockFields(db, baby.ID, med.ID, user.ID, MedicationStockFields{
+		LowStockThreshold: &low,
+	})
+	if err != nil {
+		t.Fatalf("SetMedicationStockFields: %v", err)
+	}
+	if updated.DoseAmount == nil || *updated.DoseAmount != 5.0 {
+		t.Errorf("DoseAmount = %v, want preserved 5.0", updated.DoseAmount)
+	}
+	if updated.LowStockThreshold == nil || *updated.LowStockThreshold != 2 {
+		t.Errorf("LowStockThreshold = %v, want 2", updated.LowStockThreshold)
+	}
+}
+
+func TestSetMedicationStockFields_RejectsBadUnit(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, _ := UpsertUser(db, "g1", "a@b.com", "P")
+	baby, _ := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	med, _ := CreateMedication(db, baby.ID, user.ID, "UDCA", "5mL", "twice_daily", nil, nil, nil, nil)
+
+	bad := "gallons"
+	_, err := SetMedicationStockFields(db, baby.ID, med.ID, user.ID, MedicationStockFields{DoseUnit: &bad})
+	if err == nil {
+		t.Fatal("expected error for invalid dose_unit")
 	}
 }

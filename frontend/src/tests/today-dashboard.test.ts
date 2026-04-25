@@ -849,6 +849,67 @@ describe('TodayDashboard', () => {
 		await screen.findByText('6');
 		expect(screen.queryByText('Diagnosed')).not.toBeInTheDocument();
 	});
+
+	it('renders Low Stock alert with medication name and remaining doses', async () => {
+		mockGet.mockResolvedValue({
+			...mockDashboardResponse,
+			active_alerts: [
+				{
+					entry_id: 'med-9_low_stock',
+					alert_type: 'low_stock',
+					value: 2,
+					timestamp: '2026-04-25T12:00:00Z',
+					medication_id: 'med-9',
+					medication_name: 'UDCA'
+				}
+			]
+		});
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+		expect(await screen.findByText('Low Stock')).toBeInTheDocument();
+		expect(
+			screen.getByText(/UDCA is running low.*about 2 doses left/i)
+		).toBeInTheDocument();
+	});
+
+	it('renders Near Expiry alert with date', async () => {
+		mockGet.mockResolvedValue({
+			...mockDashboardResponse,
+			active_alerts: [
+				{
+					entry_id: 'c-9_near_expiry',
+					alert_type: 'near_expiry',
+					value: '2026-04-28',
+					timestamp: '2026-04-25T12:00:00Z',
+					medication_id: 'med-9',
+					medication_name: 'UDCA'
+				}
+			]
+		});
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+		expect(await screen.findByText('Near Expiry')).toBeInTheDocument();
+		expect(screen.getByText(/UDCA container expires on 2026-04-28/i)).toBeInTheDocument();
+	});
+
+	it('low_stock alert is dismissible via localStorage', async () => {
+		mockGet.mockResolvedValue({
+			...mockDashboardResponse,
+			active_alerts: [
+				{
+					entry_id: 'med-9_low_stock',
+					alert_type: 'low_stock',
+					value: 2,
+					timestamp: '2026-04-25T12:00:00Z',
+					medication_id: 'med-9',
+					medication_name: 'UDCA'
+				}
+			]
+		});
+		// Pre-dismiss it.
+		localStorage.setItem('dismissed_alerts', JSON.stringify(['med-9_low_stock']));
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+		await screen.findByText('6');
+		expect(screen.queryByText('Low Stock')).not.toBeInTheDocument();
+	});
 });
 
 describe('TodayDashboard - Care Plans card', () => {

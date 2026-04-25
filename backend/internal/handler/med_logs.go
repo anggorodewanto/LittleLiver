@@ -20,6 +20,8 @@ type medLogRequest struct {
 	Skipped       bool    `json:"skipped"`
 	SkipReason    *string `json:"skip_reason,omitempty"`
 	Notes         *string `json:"notes,omitempty"`
+	// ContainerID overrides FIFO container selection for stock auto-decrement.
+	ContainerID *string `json:"container_id,omitempty"`
 }
 
 // validate checks that the request is valid for create.
@@ -55,6 +57,8 @@ type medLogUpdateRequest struct {
 	Skipped       bool    `json:"skipped"`
 	SkipReason    *string `json:"skip_reason,omitempty"`
 	Notes         *string `json:"notes,omitempty"`
+	// ContainerID overrides FIFO container selection for stock auto-decrement.
+	ContainerID *string `json:"container_id,omitempty"`
 }
 
 // validate checks mutual exclusivity for update.
@@ -80,32 +84,36 @@ func (req *medLogUpdateRequest) validate() (string, bool) {
 
 // medLogResponse is the JSON response for a med-log.
 type medLogResponse struct {
-	ID            string  `json:"id"`
-	MedicationID  string  `json:"medication_id"`
-	BabyID        string  `json:"baby_id"`
-	LoggedBy      string  `json:"logged_by"`
-	UpdatedBy     *string `json:"updated_by,omitempty"`
-	ScheduledTime *string `json:"scheduled_time,omitempty"`
-	GivenAt       *string `json:"given_at,omitempty"`
-	Skipped       bool    `json:"skipped"`
-	SkipReason    *string `json:"skip_reason,omitempty"`
-	Notes         *string `json:"notes,omitempty"`
-	CreatedAt     string  `json:"created_at"`
-	UpdatedAt     string  `json:"updated_at"`
+	ID            string   `json:"id"`
+	MedicationID  string   `json:"medication_id"`
+	BabyID        string   `json:"baby_id"`
+	LoggedBy      string   `json:"logged_by"`
+	UpdatedBy     *string  `json:"updated_by,omitempty"`
+	ScheduledTime *string  `json:"scheduled_time,omitempty"`
+	GivenAt       *string  `json:"given_at,omitempty"`
+	Skipped       bool     `json:"skipped"`
+	SkipReason    *string  `json:"skip_reason,omitempty"`
+	Notes         *string  `json:"notes,omitempty"`
+	ContainerID   *string  `json:"container_id,omitempty"`
+	StockDeducted *float64 `json:"stock_deducted,omitempty"`
+	CreatedAt     string   `json:"created_at"`
+	UpdatedAt     string   `json:"updated_at"`
 }
 
 func toMedLogResponse(m *model.MedLog) medLogResponse {
 	resp := medLogResponse{
-		ID:           m.ID,
-		MedicationID: m.MedicationID,
-		BabyID:       m.BabyID,
-		LoggedBy:     m.LoggedBy,
-		UpdatedBy:    m.UpdatedBy,
-		Skipped:      m.Skipped,
-		SkipReason:   m.SkipReason,
-		Notes:        m.Notes,
-		CreatedAt:    m.CreatedAt.Format(model.DateTimeFormat),
-		UpdatedAt:    m.UpdatedAt.Format(model.DateTimeFormat),
+		ID:            m.ID,
+		MedicationID:  m.MedicationID,
+		BabyID:        m.BabyID,
+		LoggedBy:      m.LoggedBy,
+		UpdatedBy:     m.UpdatedBy,
+		Skipped:       m.Skipped,
+		SkipReason:    m.SkipReason,
+		Notes:         m.Notes,
+		ContainerID:   m.ContainerID,
+		StockDeducted: m.StockDeducted,
+		CreatedAt:     m.CreatedAt.Format(model.DateTimeFormat),
+		UpdatedAt:     m.UpdatedAt.Format(model.DateTimeFormat),
 	}
 	if m.ScheduledTime != nil {
 		s := m.ScheduledTime.Format(model.DateTimeFormat)
@@ -165,7 +173,17 @@ func CreateMedLogHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		ml, err := store.CreateMedLog(db, baby.ID, req.MedicationID, user.ID, req.ScheduledTime, req.GivenAt, req.Skipped, req.SkipReason, req.Notes)
+		ml, err := store.CreateMedLogWithStock(db, store.CreateMedLogParams{
+			BabyID:        baby.ID,
+			MedicationID:  req.MedicationID,
+			LoggedBy:      user.ID,
+			ScheduledTime: req.ScheduledTime,
+			GivenAt:       req.GivenAt,
+			Skipped:       req.Skipped,
+			SkipReason:    req.SkipReason,
+			Notes:         req.Notes,
+			ContainerID:   req.ContainerID,
+		})
 		if err != nil {
 			log.Printf("create med_log: %v", err)
 			http.Error(w, "failed to create med-log", http.StatusInternalServerError)
@@ -260,7 +278,17 @@ func UpdateMedLogHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		ml, err := store.UpdateMedLog(db, baby.ID, entryID, user.ID, req.ScheduledTime, req.GivenAt, req.Skipped, req.SkipReason, req.Notes)
+		ml, err := store.UpdateMedLogWithStock(db, store.UpdateMedLogParams{
+			BabyID:        baby.ID,
+			LogID:         entryID,
+			UpdatedBy:     user.ID,
+			ScheduledTime: req.ScheduledTime,
+			GivenAt:       req.GivenAt,
+			Skipped:       req.Skipped,
+			SkipReason:    req.SkipReason,
+			Notes:         req.Notes,
+			ContainerID:   req.ContainerID,
+		})
 		if err != nil {
 			handleStoreError(w, err, "med-log not found")
 			return

@@ -2,7 +2,11 @@
 	import { untrack } from 'svelte';
 	import { apiClient } from '$lib/api';
 	import { defaultTimestamp, toISO8601, fromISO8601 } from '$lib/datetime';
-	import type { Medication, MedicationsResponse } from '$lib/types/medication';
+	import type {
+		Medication,
+		MedicationContainer,
+		MedicationsResponse
+	} from '$lib/types/medication';
 
 	export interface DoseLogPayload {
 		medication_id: string;
@@ -11,6 +15,7 @@
 		skip_reason?: string;
 		scheduled_time?: string;
 		notes?: string;
+		container_id?: string;
 	}
 
 	export interface DoseLogInitialData {
@@ -19,6 +24,7 @@
 		given_at?: string;
 		skip_reason?: string;
 		notes?: string;
+		container_id?: string;
 	}
 
 	interface Props {
@@ -41,6 +47,8 @@
 	let notes = $state('');
 	let validationError = $state('');
 	let loadError = $state('');
+	let containers = $state<MedicationContainer[]>([]);
+	let selectedContainerId = $state('');
 
 	async function fetchMedications(): Promise<void> {
 		loadError = '';
@@ -64,8 +72,55 @@
 		givenAt = initialData?.given_at ? fromISO8601(initialData.given_at) : defaultTimestamp();
 		skipReason = initialData?.skip_reason ?? '';
 		notes = initialData?.notes ?? '';
+		selectedContainerId = initialData?.container_id ?? '';
 		validationError = '';
 	});
+
+	// When the medication changes, fetch its containers and pre-select the
+	// FIFO candidate (oldest opened, non-depleted) so the user sees what will
+	// be deducted by default. Empty selection means "let server decide".
+	$effect(() => {
+		void selectedMedicationId;
+		void babyId;
+		untrack(() => {
+			void loadContainersForSelected();
+		});
+	});
+
+	async function loadContainersForSelected(): Promise<void> {
+		containers = [];
+		if (!selectedMedicationId) return;
+		try {
+			containers = await apiClient.get<MedicationContainer[]>(
+				`/babies/${babyId}/medications/${selectedMedicationId}/containers`
+			);
+			if (!selectedContainerId) {
+				const fifo = pickFifoContainer(containers);
+				selectedContainerId = fifo ? fifo.id : '';
+			}
+		} catch {
+			containers = [];
+		}
+	}
+
+	function pickFifoContainer(list: MedicationContainer[]): MedicationContainer | null {
+		const opened = list
+			.filter((c) => !c.depleted && c.opened_at)
+			.sort((a, b) => (a.opened_at ?? '').localeCompare(b.opened_at ?? ''));
+		if (opened.length > 0) return opened[0];
+		const sealed = list
+			.filter((c) => !c.depleted && !c.opened_at)
+			.sort((a, b) => a.created_at.localeCompare(b.created_at));
+		return sealed[0] ?? null;
+	}
+
+	let selectedMedication = $derived(
+		medications.find((m) => m.id === selectedMedicationId) ?? null
+	);
+
+	let selectedContainer = $derived(
+		containers.find((c) => c.id === selectedContainerId) ?? null
+	);
 
 	function selectStatus(s: 'given' | 'skipped'): void {
 		status = s;
@@ -106,6 +161,17 @@
 			payload.notes = notes.trim();
 		}
 
+		// Only forward container_id when the medication has structured dose info
+		// (otherwise the backend would reject any container as mismatched/unused).
+		if (
+			status === 'given' &&
+			selectedContainerId &&
+			selectedMedication?.dose_amount &&
+			selectedMedication?.dose_unit
+		) {
+			payload.container_id = selectedContainerId;
+		}
+
 		onsubmit(payload);
 	}
 </script>
@@ -139,6 +205,25 @@
 			<label for="dose-given-at">Given At</label>
 			<input id="dose-given-at" type="datetime-local" bind:value={givenAt} />
 		</div>
+
+		{#if selectedMedication?.dose_amount && selectedMedication?.dose_unit && containers.length > 0}
+			<div>
+				<label for="dose-container">From container</label>
+				<select id="dose-container" bind:value={selectedContainerId}>
+					{#each containers as c (c.id)}
+						<option value={c.id} disabled={c.depleted}>
+							{c.kind} — {c.quantity_remaining}{c.unit}{c.depleted ? ' (depleted)' : ''}
+						</option>
+					{/each}
+				</select>
+				{#if selectedContainer}
+					<p class="hint" data-testid="deduction-preview">
+						Will deduct {selectedMedication.dose_amount}{selectedMedication.dose_unit} from this container
+						(currently {selectedContainer.quantity_remaining}{selectedContainer.unit}).
+					</p>
+				{/if}
+			</div>
+		{/if}
 	{/if}
 
 	{#if status === 'skipped'}
@@ -169,3 +254,11 @@
 		{submitting ? 'Logging...' : initialData ? 'Update Dose' : 'Log Dose'}
 	</button>
 </form>
+
+<style>
+	.hint {
+		font-size: var(--font-size-sm);
+		color: var(--color-text-muted);
+		margin-top: 0.25rem;
+	}
+</style>

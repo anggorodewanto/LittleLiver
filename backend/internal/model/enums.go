@@ -32,6 +32,8 @@ var (
 	noteCategoryValues     = validSet("behavior", "sleep", "vomiting", "irritability", "skin", "other")
 	fluidDirectionValues   = validSet("intake", "output")
 	fluidSourceTypeValues  = validSet("feeding", "urine", "stool")
+	doseUnitValues         = validSet("mg", "ml", "tablet", "packet", "dose")
+	containerKindValues    = validSet("bottle", "pill_pack", "packet", "vial", "other")
 )
 
 // ValidSex reports whether v is a valid sex value.
@@ -78,3 +80,9 @@ func ValidFluidDirection(v string) bool { return fluidDirectionValues[v] }
 
 // ValidFluidSourceType reports whether v is a valid fluid log source type.
 func ValidFluidSourceType(v string) bool { return fluidSourceTypeValues[v] }
+
+// ValidDoseUnit reports whether v is a valid medication dose unit.
+func ValidDoseUnit(v string) bool { return doseUnitValues[v] }
+
+// ValidContainerKind reports whether v is a valid medication container kind.
+func ValidContainerKind(v string) bool { return containerKindValues[v] }
