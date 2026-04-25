@@ -56,11 +56,12 @@ type chartDataSeriesResponse struct {
 
 // dashboardResponseJSON is the full dashboard API response.
 type dashboardResponseJSON struct {
-	SummaryCards    summaryCardsResponse    `json:"summary_cards"`
-	StoolColorTrend []stoolColorTrendEntry  `json:"stool_color_trend"`
-	UpcomingMeds    []upcomingMedResponse   `json:"upcoming_meds"`
-	ChartDataSeries chartDataSeriesResponse `json:"chart_data_series"`
-	ActiveAlerts    []store.Alert           `json:"active_alerts"`
+	SummaryCards           summaryCardsResponse           `json:"summary_cards"`
+	StoolColorTrend        []stoolColorTrendEntry         `json:"stool_color_trend"`
+	UpcomingMeds           []upcomingMedResponse          `json:"upcoming_meds"`
+	CurrentCarePlanPhases  []store.CurrentCarePlanPhase   `json:"current_care_plan_phases"`
+	ChartDataSeries        chartDataSeriesResponse        `json:"chart_data_series"`
+	ActiveAlerts           []store.Alert                  `json:"active_alerts"`
 }
 
 // DashboardHandler handles GET /api/babies/{id}/dashboard.
@@ -180,6 +181,13 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		currentPhases, err := store.GetCurrentCarePlanPhasesForBaby(db, baby.ID, time.Now())
+		if err != nil {
+			log.Printf("current care plan phases: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
 		// Fetch active alerts (global, ignores from/to)
 		storeAlerts, err := store.GetActiveAlerts(db, baby.ID)
 		if err != nil {
@@ -228,9 +236,10 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		result := dashboardResponseJSON{
-			SummaryCards:    summaryResp,
-			StoolColorTrend: trendResp,
-			UpcomingMeds:    upcomingMeds,
+			SummaryCards:          summaryResp,
+			StoolColorTrend:       trendResp,
+			UpcomingMeds:          upcomingMeds,
+			CurrentCarePlanPhases: currentPhases,
 			ChartDataSeries: chartDataSeriesResponse{
 				FeedingDaily: feedingDaily,
 				DiaperDaily:  diaperDaily,

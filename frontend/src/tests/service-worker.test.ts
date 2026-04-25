@@ -80,6 +80,39 @@ describe('service worker push handler', () => {
 		});
 	});
 
+	it('promotes top-level payload.url into notification data.url', async () => {
+		const { initServiceWorker } = await import('$lib/service-worker');
+		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
+
+		const pushData = {
+			title: 'Care plan: Antibiotic Rotation',
+			body: "'Amoxicillin' starts 2026-06-01",
+			url: '/care-plans/plan-1',
+			data: { care_plan_id: 'plan-1', phase_id: 'phase-2', kind: 'switch' }
+		};
+
+		const pushEvent = {
+			data: { json: () => pushData },
+			waitUntil: vi.fn((p: Promise<unknown>) => p)
+		};
+
+		sw._trigger('push', pushEvent);
+		await pushEvent.waitUntil.mock.calls[0][0];
+
+		expect(sw.registration.showNotification).toHaveBeenCalledWith(
+			'Care plan: Antibiotic Rotation',
+			{
+				body: "'Amoxicillin' starts 2026-06-01",
+				data: {
+					care_plan_id: 'plan-1',
+					phase_id: 'phase-2',
+					kind: 'switch',
+					url: '/care-plans/plan-1'
+				}
+			}
+		);
+	});
+
 	it('handles push event with no data gracefully', async () => {
 		const { initServiceWorker } = await import('$lib/service-worker');
 		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
@@ -127,6 +160,28 @@ describe('service worker notificationclick handler', () => {
 
 		expect(notification.close).toHaveBeenCalled();
 		expect(sw.clients.openWindow).toHaveBeenCalledWith('/log/med?medication_id=42');
+	});
+
+	it('opens data.url when present (e.g. /care-plans/{id})', async () => {
+		const { initServiceWorker } = await import('$lib/service-worker');
+		initServiceWorker(sw as unknown as ServiceWorkerGlobalScope);
+
+		const notification = {
+			data: { url: '/care-plans/abc', care_plan_id: 'abc', kind: 'switch' },
+			close: vi.fn()
+		};
+
+		const clickEvent = {
+			notification,
+			waitUntil: vi.fn((p: Promise<unknown>) => p)
+		};
+
+		sw._trigger('notificationclick', clickEvent);
+
+		expect(clickEvent.waitUntil).toHaveBeenCalled();
+		await clickEvent.waitUntil.mock.calls[0][0];
+
+		expect(sw.clients.openWindow).toHaveBeenCalledWith('/care-plans/abc');
 	});
 
 	it('opens root URL when notification has no medication_id', async () => {

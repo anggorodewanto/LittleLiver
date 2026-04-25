@@ -150,6 +150,13 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("GET /api/babies/{id}/medications/{medId}", rateMw(authMw(http.HandlerFunc(GetMedicationHandler(cfg.db)))))
 			mux.Handle("PUT /api/babies/{id}/medications/{medId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateMedicationHandler(cfg.db))))))
 	
+			// Care plan CRUD endpoints (passive rotating-schedule tracker; no per-dose logs)
+			mux.Handle("POST /api/babies/{id}/care-plans", rateMw(authMw(csrfMw(http.HandlerFunc(CreateCarePlanHandler(cfg.db))))))
+			mux.Handle("GET /api/babies/{id}/care-plans", rateMw(authMw(http.HandlerFunc(ListCarePlansHandler(cfg.db)))))
+			mux.Handle("GET /api/babies/{id}/care-plans/{planId}", rateMw(authMw(http.HandlerFunc(GetCarePlanHandler(cfg.db)))))
+			mux.Handle("PUT /api/babies/{id}/care-plans/{planId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateCarePlanHandler(cfg.db))))))
+			mux.Handle("DELETE /api/babies/{id}/care-plans/{planId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteCarePlanHandler(cfg.db))))))
+
 			// Med-log CRUD endpoints
 			mux.Handle("POST /api/babies/{id}/med-logs", rateMw(authMw(csrfMw(http.HandlerFunc(CreateMedLogHandler(cfg.db))))))
 			mux.Handle("GET /api/babies/{id}/med-logs", rateMw(authMw(http.HandlerFunc(ListMedLogsHandler(cfg.db)))))
