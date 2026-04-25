@@ -460,9 +460,9 @@
 	{/if}
 
 	<!-- Care Plans (currently active phases) -->
-	{#if (dashboard.current_care_plan_phases ?? []).length > 0}
-		<div class="care-plans-card">
-			<h3>Care Plans</h3>
+	<div class="care-plans-card">
+		<h3>Care Plans</h3>
+		{#if (dashboard.current_care_plan_phases ?? []).length > 0}
 			{#each dashboard.current_care_plan_phases as phase (phase.phase_id)}
 				<a class="care-plan-item" href={`/care-plans/${phase.plan_id}`}>
 					<div class="care-plan-info">
@@ -474,8 +474,10 @@
 					{/if}
 				</a>
 			{/each}
-		</div>
-	{/if}
+		{:else}
+			<a class="care-plan-empty" href="/care-plans/new">+ Create your first plan</a>
+		{/if}
+	</div>
 
 	<!-- Upcoming Medications -->
 	{#if dashboard.upcoming_meds.length > 0}
@@ -534,6 +536,13 @@
 	.care-plan-name { font-weight: 600; }
 	.care-plan-label { font-size: var(--font-size-sm, 0.85rem); color: var(--color-text-muted, #666); }
 	.care-plan-countdown { font-size: var(--font-size-sm, 0.85rem); color: var(--color-primary, #4a9c5e); }
+	.care-plan-empty {
+		display: block;
+		padding: var(--space-2) 0;
+		font-size: var(--font-size-sm, 0.85rem);
+		color: var(--color-primary, #4a9c5e);
+		text-decoration: none;
+	}
 
 	.quick-glance {
 		display: flex;
