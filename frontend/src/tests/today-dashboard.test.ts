@@ -886,12 +886,14 @@ describe('TodayDashboard - Care Plans card', () => {
 		expect(screen.getByText('12d left')).toBeInTheDocument();
 	});
 
-	it('does not render care plans card when phases array is empty', async () => {
+	it('renders empty-state CTA when phases array is empty', async () => {
 		mockGet.mockResolvedValue({ ...mockDashboardResponse, current_care_plan_phases: [] });
 		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		await screen.findByText('6');
-		expect(screen.queryByText('Care Plans')).toBeNull();
+		expect(screen.getByText('Care Plans')).toBeInTheDocument();
+		const cta = screen.getByRole('link', { name: /create your first plan/i });
+		expect(cta).toHaveAttribute('href', '/care-plans/new');
 	});
 
 	it('omits days-left chip when days_remaining is null', async () => {
