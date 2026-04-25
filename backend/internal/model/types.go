@@ -305,6 +305,37 @@ type MedLog struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
+// CarePlan represents a phased "what's currently active" schedule for a baby.
+// Unlike Medication, it has no per-dose log — phases are purely descriptive
+// of which item applies in which date range.
+type CarePlan struct {
+	ID        string    `json:"id"`
+	BabyID    string    `json:"baby_id"`
+	LoggedBy  string    `json:"logged_by"`
+	UpdatedBy *string   `json:"updated_by,omitempty"`
+	Name      string    `json:"name"`
+	Notes     *string   `json:"notes,omitempty"`
+	Timezone  string    `json:"timezone"`
+	Active    bool      `json:"active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CarePlanPhase is one ordered step in a CarePlan. start_date is a naive
+// 'YYYY-MM-DD' in the parent plan's timezone; ends_on is set explicitly only
+// for the final phase (when the plan has a hard end).
+type CarePlanPhase struct {
+	ID         string    `json:"id"`
+	CarePlanID string    `json:"care_plan_id"`
+	Seq        int       `json:"seq"`
+	Label      string    `json:"label"`
+	StartDate  string    `json:"start_date"`
+	EndsOn     *string   `json:"ends_on,omitempty"`
+	Notes      *string   `json:"notes,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 // PhotoUpload represents a photo upload staging row.
 type PhotoUpload struct {
 	ID           string     `json:"id"`

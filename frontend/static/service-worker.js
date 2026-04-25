@@ -90,9 +90,16 @@ self.addEventListener('push', (event) => {
 			}
 
 			const payload = event.data.json();
+			// Merge top-level `url` into `data.url` so the click handler
+			// can route from a single field regardless of how the backend
+			// shaped the payload.
+			const notificationData = { ...(payload.data || {}) };
+			if (payload.url && notificationData.url === undefined) {
+				notificationData.url = payload.url;
+			}
 			await self.registration.showNotification(payload.title, {
 				body: payload.body,
-				data: payload.data || {}
+				data: notificationData
 			});
 		})()
 	);

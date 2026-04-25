@@ -8,6 +8,7 @@ const APP_SHELL_URLS = ['/', '/index.html'];
 interface PushPayload {
 	title: string;
 	body: string;
+	url?: string;
 	data?: Record<string, unknown>;
 }
 
@@ -100,9 +101,16 @@ export function initServiceWorker(sw: ServiceWorkerGlobalScope): void {
 				}
 
 				const payload: PushPayload = pushEvent.data.json();
+				// Merge top-level `url` into `data.url` so the click handler
+				// can route from a single field regardless of how the backend
+				// shaped the payload.
+				const notificationData: Record<string, unknown> = { ...(payload.data || {}) };
+				if (payload.url && notificationData.url === undefined) {
+					notificationData.url = payload.url;
+				}
 				await sw.registration.showNotification(payload.title, {
 					body: payload.body,
-					data: payload.data || {}
+					data: notificationData
 				});
 			})()
 		);

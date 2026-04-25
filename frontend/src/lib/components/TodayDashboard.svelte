@@ -50,10 +50,20 @@
 		medication_name?: string;
 	}
 
+	interface CurrentCarePlanPhase {
+		plan_id: string;
+		plan_name: string;
+		phase_id: string;
+		label: string;
+		ends_on: string | null;
+		days_remaining: number | null;
+	}
+
 	interface DashboardResponse {
 		summary_cards: SummaryCards;
 		stool_color_trend: StoolColorTrendEntry[];
 		upcoming_meds: UpcomingMed[];
+		current_care_plan_phases: CurrentCarePlanPhase[];
 		active_alerts: Alert[];
 		chart_data_series: unknown;
 	}
@@ -449,6 +459,24 @@
 		</div>
 	{/if}
 
+	<!-- Care Plans (currently active phases) -->
+	{#if (dashboard.current_care_plan_phases ?? []).length > 0}
+		<div class="care-plans-card">
+			<h3>Care Plans</h3>
+			{#each dashboard.current_care_plan_phases as phase (phase.phase_id)}
+				<a class="care-plan-item" href={`/care-plans/${phase.plan_id}`}>
+					<div class="care-plan-info">
+						<span class="care-plan-name">{phase.plan_name}</span>
+						<span class="care-plan-label">{phase.label}</span>
+					</div>
+					{#if phase.days_remaining != null}
+						<div class="care-plan-countdown">{phase.days_remaining}d left</div>
+					{/if}
+				</a>
+			{/each}
+		</div>
+	{/if}
+
 	<!-- Upcoming Medications -->
 	{#if dashboard.upcoming_meds.length > 0}
 		<div class="upcoming-meds">
@@ -484,6 +512,28 @@
 	.dashboard {
 		padding-top: var(--space-2);
 	}
+
+	.care-plans-card {
+		margin-bottom: var(--space-3);
+		padding: var(--space-2);
+		border: 1px solid var(--color-border, #ddd);
+		border-radius: var(--radius-md, 8px);
+		background: var(--color-surface, #fff);
+	}
+	.care-plan-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: var(--space-2) 0;
+		border-bottom: 1px solid var(--color-border-subtle, #eee);
+		text-decoration: none;
+		color: inherit;
+	}
+	.care-plan-item:last-child { border-bottom: none; }
+	.care-plan-info { display: flex; flex-direction: column; }
+	.care-plan-name { font-weight: 600; }
+	.care-plan-label { font-size: var(--font-size-sm, 0.85rem); color: var(--color-text-muted, #666); }
+	.care-plan-countdown { font-size: var(--font-size-sm, 0.85rem); color: var(--color-primary, #4a9c5e); }
 
 	.quick-glance {
 		display: flex;

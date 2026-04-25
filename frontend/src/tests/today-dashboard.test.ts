@@ -103,7 +103,8 @@ const mockDashboardResponse = {
 		abdomen_girth: [],
 		stool_color: [],
 		lab_trends: {}
-	}
+	},
+	current_care_plan_phases: []
 };
 
 describe('TodayDashboard', () => {
@@ -847,5 +848,69 @@ describe('TodayDashboard', () => {
 
 		await screen.findByText('6');
 		expect(screen.queryByText('Diagnosed')).not.toBeInTheDocument();
+	});
+});
+
+describe('TodayDashboard - Care Plans card', () => {
+	let mockGet: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		mockGet = apiClient.get as ReturnType<typeof vi.fn>;
+		localStorage.clear();
+	});
+
+	afterEach(() => {
+		localStorage.clear();
+	});
+
+	it('renders care plans card when current_care_plan_phases has entries', async () => {
+		mockGet.mockResolvedValue({
+			...mockDashboardResponse,
+			current_care_plan_phases: [
+				{
+					plan_id: 'plan-1',
+					plan_name: 'Antibiotic Rotation',
+					phase_id: 'phase-2',
+					label: 'Cefixime',
+					ends_on: '2026-06-01',
+					days_remaining: 12
+				}
+			]
+		});
+
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		expect(await screen.findByText('Care Plans')).toBeInTheDocument();
+		expect(screen.getByText('Antibiotic Rotation')).toBeInTheDocument();
+		expect(screen.getByText('Cefixime')).toBeInTheDocument();
+		expect(screen.getByText('12d left')).toBeInTheDocument();
+	});
+
+	it('does not render care plans card when phases array is empty', async () => {
+		mockGet.mockResolvedValue({ ...mockDashboardResponse, current_care_plan_phases: [] });
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		await screen.findByText('6');
+		expect(screen.queryByText('Care Plans')).toBeNull();
+	});
+
+	it('omits days-left chip when days_remaining is null', async () => {
+		mockGet.mockResolvedValue({
+			...mockDashboardResponse,
+			current_care_plan_phases: [
+				{
+					plan_id: 'plan-1',
+					plan_name: 'Open Plan',
+					phase_id: 'phase-1',
+					label: 'Phase A',
+					ends_on: null,
+					days_remaining: null
+				}
+			]
+		});
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		await screen.findByText('Open Plan');
+		expect(screen.queryByText(/d left/)).toBeNull();
 	});
 });

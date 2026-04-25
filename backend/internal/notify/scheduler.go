@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ablankz/LittleLiver/backend/internal/model"
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
@@ -66,6 +67,10 @@ type activeMed struct {
 	Timezone *string
 }
 
+// carePlanNotifyHour is the local-time hour at which care plan boundary
+// notifications fire. Tied to plan timezone, not user timezone.
+const carePlanNotifyHour = 9
+
 // Tick performs a single scheduling check at the given time.
 // It queries all active medications with schedules, checks which ones
 // are due (at 0, +15, or +30 minutes), suppresses those with recent
@@ -79,6 +84,170 @@ func (s *Scheduler) Tick(now time.Time) {
 
 	for _, med := range meds {
 		s.processMedication(med, now)
+	}
+
+	s.processCarePlans(now)
+}
+
+// processCarePlans walks every active care plan and fires phase-boundary
+// notifications when nowLocal lands on the trigger hour for a phase's
+// switch-day or two-days-prior heads-up.
+func (s *Scheduler) processCarePlans(now time.Time) {
+	plans, err := s.queryActiveCarePlans()
+	if err != nil {
+		log.Printf("scheduler: query care plans: %v", err)
+		return
+	}
+
+	for _, plan := range plans {
+		loc, err := time.LoadLocation(plan.Timezone)
+		if err != nil {
+			log.Printf("scheduler: invalid timezone %q for care plan %s: %v", plan.Timezone, plan.ID, err)
+			continue
+		}
+		nowLocal := now.In(loc)
+		if nowLocal.Hour() != carePlanNotifyHour || nowLocal.Minute() != 0 {
+			continue
+		}
+
+		phases, err := store.ListCarePlanPhases(s.db, plan.ID)
+		if err != nil {
+			log.Printf("scheduler: list phases for plan %s: %v", plan.ID, err)
+			continue
+		}
+
+		for _, phase := range phases {
+			if phase.Seq == 1 {
+				// First phase fires no notification — creating the plan
+				// implies the user already knows about it.
+				continue
+			}
+			startDate, err := time.ParseInLocation("2006-01-02", phase.StartDate, loc)
+			if err != nil {
+				log.Printf("scheduler: bad phase start_date %q: %v", phase.StartDate, err)
+				continue
+			}
+			today := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc)
+
+			switch {
+			case today.Equal(startDate):
+				s.firePhaseNotification(plan, phase, "switch")
+			case today.Equal(startDate.AddDate(0, 0, -2)):
+				s.firePhaseNotification(plan, phase, "heads_up")
+			}
+		}
+	}
+}
+
+// firePhaseNotification gates on the audit ledger so each (phase, kind) is
+// pushed exactly once, then sends to all parents of the baby.
+func (s *Scheduler) firePhaseNotification(plan carePlanRow, phase model.CarePlanPhase, kind string) {
+	sent, err := store.RecordPhaseNotification(s.db, phase.ID, kind)
+	if err != nil {
+		log.Printf("scheduler: record phase notification: %v", err)
+		return
+	}
+	if !sent {
+		return
+	}
+
+	parentIDs, err := s.queryBabyParents(plan.BabyID)
+	if err != nil {
+		log.Printf("scheduler: query parents for baby %s: %v", plan.BabyID, err)
+		return
+	}
+	if len(parentIDs) == 0 {
+		return
+	}
+
+	payload := buildCarePlanPayload(plan, phase, kind)
+	for _, parentID := range parentIDs {
+		subs, err := s.queryPushSubscriptions(parentID)
+		if err != nil {
+			log.Printf("scheduler: query subs for user %s: %v", parentID, err)
+			continue
+		}
+		for _, sub := range subs {
+			resp, err := s.pusher.Send(sub, payload)
+			if err != nil {
+				log.Printf("scheduler: push send to %s: %v", sub.Endpoint, err)
+				continue
+			}
+			if resp != nil && (resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusNotFound) {
+				if delErr := store.DeletePushSubscriptionByEndpoint(s.db, sub.Endpoint); delErr != nil {
+					log.Printf("scheduler: failed to delete stale subscription: %v", delErr)
+				}
+			}
+		}
+	}
+}
+
+type carePlanRow struct {
+	ID       string
+	BabyID   string
+	BabyName string
+	Name     string
+	Timezone string
+}
+
+func (s *Scheduler) queryActiveCarePlans() ([]carePlanRow, error) {
+	rows, err := s.db.Query(
+		`SELECT p.id, p.baby_id, b.name, p.name, p.timezone
+		 FROM care_plans p
+		 JOIN babies b ON p.baby_id = b.id
+		 WHERE p.active = 1`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query care plans: %w", err)
+	}
+	defer rows.Close()
+
+	var plans []carePlanRow
+	for rows.Next() {
+		var p carePlanRow
+		if err := rows.Scan(&p.ID, &p.BabyID, &p.BabyName, &p.Name, &p.Timezone); err != nil {
+			return nil, fmt.Errorf("scan care plan: %w", err)
+		}
+		plans = append(plans, p)
+	}
+	return plans, rows.Err()
+}
+
+func (s *Scheduler) queryBabyParents(babyID string) ([]string, error) {
+	rows, err := s.db.Query("SELECT user_id FROM baby_parents WHERE baby_id = ?", babyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var uid string
+		if err := rows.Scan(&uid); err != nil {
+			return nil, err
+		}
+		ids = append(ids, uid)
+	}
+	return ids, rows.Err()
+}
+
+// buildCarePlanPayload constructs the Web Push payload for a phase boundary.
+func buildCarePlanPayload(plan carePlanRow, phase model.CarePlanPhase, kind string) Payload {
+	title := fmt.Sprintf("Care plan: %s", plan.Name)
+	body := fmt.Sprintf("'%s' starts %s", phase.Label, phase.StartDate)
+	if kind == "heads_up" {
+		body = fmt.Sprintf("Heads up: '%s' starts %s", phase.Label, phase.StartDate)
+	}
+	return Payload{
+		Title: title,
+		Body:  body,
+		URL:   fmt.Sprintf("/care-plans/%s", plan.ID),
+		Data: map[string]string{
+			"care_plan_id": plan.ID,
+			"phase_id":     phase.ID,
+			"kind":         kind,
+			"baby_name":    plan.BabyName,
+		},
 	}
 }
 
