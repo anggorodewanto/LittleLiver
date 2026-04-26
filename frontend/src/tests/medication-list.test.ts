@@ -48,7 +48,13 @@ describe('MedicationList', () => {
 	beforeEach(() => {
 		mockGet = apiClient.get as ReturnType<typeof vi.fn>;
 		mockPut = apiClient.put as ReturnType<typeof vi.fn>;
-		mockGet.mockResolvedValue({ medications: [activeMed, inactiveMed] });
+		// MedStockSummary fetches /containers per medication; default to empty
+		// for those calls so tests that only care about medications list keep
+		// working without setting up per-test container mocks.
+		mockGet.mockImplementation((path: string) => {
+			if (path.includes('/containers')) return Promise.resolve([]);
+			return Promise.resolve({ medications: [activeMed, inactiveMed] });
+		});
 		mockPut.mockResolvedValue({ ...activeMed, active: false });
 	});
 
@@ -121,12 +127,19 @@ describe('MedicationList', () => {
 
 	it('deactivation updates the display to show inactive', async () => {
 		mockPut.mockResolvedValue({ ...activeMed, active: false });
-		// After deactivation, refetch returns updated data
-		mockGet
-			.mockResolvedValueOnce({ medications: [activeMed, inactiveMed] })
-			.mockResolvedValueOnce({
+		// After deactivation, refetch returns updated data. MedStockSummary
+		// also calls /containers, so we route by URL.
+		let medsResponse: any = { medications: [activeMed, inactiveMed] };
+		mockGet.mockImplementation((path: string) => {
+			if (path.includes('/containers')) return Promise.resolve([]);
+			return Promise.resolve(medsResponse);
+		});
+		mockPut.mockImplementation(() => {
+			medsResponse = {
 				medications: [{ ...activeMed, active: false }, inactiveMed]
-			});
+			};
+			return Promise.resolve({ ...activeMed, active: false });
+		});
 
 		render(MedicationList, { props: { babyId: 'baby-1' } });
 

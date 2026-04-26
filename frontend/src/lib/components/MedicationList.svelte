@@ -3,15 +3,17 @@
 	import { apiClient } from '$lib/api';
 	import type { Medication, MedicationsResponse } from '$lib/types/medication';
 	import { formatFrequency } from '$lib/medication-utils';
+	import MedStockSummary from './MedStockSummary.svelte';
 
 	interface Props {
 		babyId: string;
 		oncreate?: () => void;
 		onedit?: (medicationId: string) => void;
 		onaddlog?: (medicationId: string) => void;
+		onmanagestock?: (medicationId: string) => void;
 	}
 
-	let { babyId, oncreate, onedit, onaddlog }: Props = $props();
+	let { babyId, oncreate, onedit, onaddlog, onmanagestock }: Props = $props();
 
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -73,6 +75,12 @@
 					<span class="med-name">{med.name}</span>
 					<span class="med-dose">{med.dose}</span>
 					<span class="med-frequency">{formatFrequency(med.frequency, med.interval_days, med.starts_from)}</span>
+					<MedStockSummary
+						babyId={babyId}
+						medicationId={med.id}
+						doseAmount={med.dose_amount}
+						doseUnit={med.dose_unit}
+					/>
 				</div>
 				<div class="med-actions">
 					{#if med.active}
@@ -85,6 +93,9 @@
 					{/if}
 					{#if onaddlog}
 						<button type="button" onclick={() => onaddlog(med.id)}>Add Log</button>
+					{/if}
+					{#if onmanagestock}
+						<button type="button" onclick={() => onmanagestock(med.id)}>Manage Stock</button>
 					{/if}
 				</div>
 			</div>

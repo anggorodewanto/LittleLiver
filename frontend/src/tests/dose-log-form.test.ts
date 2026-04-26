@@ -289,4 +289,109 @@ describe('DoseLogForm', () => {
 		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('Will retry later');
 		expect(screen.getByRole('button', { name: /update dose/i })).toBeInTheDocument();
 	});
+
+	describe('stock container picker', () => {
+		const medsWithStock = [
+			{
+				id: 'med-stock',
+				name: 'UDCA',
+				dose: '5mL',
+				frequency: 'twice_daily',
+				active: true,
+				dose_amount: 5,
+				dose_unit: 'ml'
+			}
+		];
+		const containers = [
+			{
+				id: 'c-old',
+				medication_id: 'med-stock',
+				baby_id: 'baby-1',
+				kind: 'bottle',
+				unit: 'ml',
+				quantity_initial: 100,
+				quantity_remaining: 60,
+				opened_at: '2026-01-01T00:00:00Z',
+				max_days_after_opening: null,
+				expiration_date: null,
+				effective_expiry: null,
+				depleted: false,
+				notes: null,
+				created_at: '2026-01-01T00:00:00Z',
+				updated_at: '2026-01-01T00:00:00Z'
+			},
+			{
+				id: 'c-new',
+				medication_id: 'med-stock',
+				baby_id: 'baby-1',
+				kind: 'bottle',
+				unit: 'ml',
+				quantity_initial: 100,
+				quantity_remaining: 100,
+				opened_at: '2026-02-01T00:00:00Z',
+				max_days_after_opening: null,
+				expiration_date: null,
+				effective_expiry: null,
+				depleted: false,
+				notes: null,
+				created_at: '2026-02-01T00:00:00Z',
+				updated_at: '2026-02-01T00:00:00Z'
+			}
+		];
+
+		beforeEach(() => {
+			mockGet.mockImplementation((path: string) => {
+				if (path.endsWith('/medications')) {
+					return Promise.resolve(medsWithStock);
+				}
+				if (path.includes('/containers')) {
+					return Promise.resolve(containers);
+				}
+				return Promise.resolve([]);
+			});
+		});
+
+		it('shows container picker after switching to Given for a stock-tracked med', async () => {
+			render(DoseLogForm, {
+				props: { onsubmit, babyId: 'baby-1', medicationId: 'med-stock' }
+			});
+			await screen.findByLabelText(/medication/i);
+			await fireEvent.click(screen.getByRole('button', { name: /^given$/i }));
+			expect(await screen.findByLabelText(/from container/i)).toBeInTheDocument();
+		});
+
+		it('defaults the container selection to FIFO (oldest opened)', async () => {
+			render(DoseLogForm, {
+				props: { onsubmit, babyId: 'baby-1', medicationId: 'med-stock' }
+			});
+			await screen.findByLabelText(/medication/i);
+			await fireEvent.click(screen.getByRole('button', { name: /^given$/i }));
+			const sel = (await screen.findByLabelText(/from container/i)) as HTMLSelectElement;
+			expect(sel.value).toBe('c-old');
+		});
+
+		it('renders the deduction preview line with chosen container', async () => {
+			render(DoseLogForm, {
+				props: { onsubmit, babyId: 'baby-1', medicationId: 'med-stock' }
+			});
+			await screen.findByLabelText(/medication/i);
+			await fireEvent.click(screen.getByRole('button', { name: /^given$/i }));
+			const preview = await screen.findByTestId('deduction-preview');
+			expect(preview.textContent).toMatch(/deduct 5ml/i);
+			expect(preview.textContent).toMatch(/currently 60ml/i);
+		});
+
+		it('forwards container_id in payload when given', async () => {
+			render(DoseLogForm, {
+				props: { onsubmit, babyId: 'baby-1', medicationId: 'med-stock' }
+			});
+			await screen.findByLabelText(/medication/i);
+			await fireEvent.click(screen.getByRole('button', { name: /^given$/i }));
+			await screen.findByLabelText(/from container/i);
+			await fireEvent.click(screen.getByRole('button', { name: /log dose/i }));
+
+			expect(onsubmit).toHaveBeenCalledTimes(1);
+			expect(onsubmit.mock.calls[0][0].container_id).toBe('c-old');
+		});
+	});
 });

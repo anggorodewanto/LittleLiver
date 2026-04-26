@@ -13,7 +13,7 @@ describe('MedicationForm', () => {
 		render(MedicationForm, { props: { onsubmit } });
 
 		expect(screen.getByLabelText(/medication name/i)).toBeInTheDocument();
-		expect(screen.getByLabelText(/dose/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/^Dose$/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/frequency/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/notes/i)).toBeInTheDocument();
 	});
@@ -135,7 +135,7 @@ describe('MedicationForm', () => {
 		await fireEvent.input(screen.getByLabelText(/medication name/i), {
 			target: { value: 'UDCA' }
 		});
-		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '50mg' } });
+		await fireEvent.input(screen.getByLabelText(/^Dose$/i), { target: { value: '50mg' } });
 		await fireEvent.click(screen.getByRole('button', { name: /save medication/i }));
 
 		expect(screen.getByText(/frequency is required/i)).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('MedicationForm', () => {
 		await fireEvent.input(screen.getByLabelText(/medication name/i), {
 			target: { value: 'UDCA (ursodiol)' }
 		});
-		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '50mg' } });
+		await fireEvent.input(screen.getByLabelText(/^Dose$/i), { target: { value: '50mg' } });
 		await fireEvent.change(screen.getByLabelText(/frequency/i), {
 			target: { value: 'twice_daily' }
 		});
@@ -174,7 +174,7 @@ describe('MedicationForm', () => {
 		await fireEvent.input(screen.getByLabelText(/medication name/i), {
 			target: { value: 'Vitamin D' }
 		});
-		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '400IU' } });
+		await fireEvent.input(screen.getByLabelText(/^Dose$/i), { target: { value: '400IU' } });
 		await fireEvent.change(screen.getByLabelText(/frequency/i), {
 			target: { value: 'as_needed' }
 		});
@@ -199,7 +199,7 @@ describe('MedicationForm', () => {
 		expect((screen.getByLabelText(/medication name/i) as HTMLInputElement).value).toBe(
 			'UDCA (ursodiol)'
 		);
-		expect((screen.getByLabelText(/dose/i) as HTMLInputElement).value).toBe('50mg');
+		expect((screen.getByLabelText(/^Dose$/i) as HTMLInputElement).value).toBe('50mg');
 		expect((screen.getByLabelText(/frequency/i) as HTMLSelectElement).value).toBe('twice_daily');
 	});
 
@@ -241,7 +241,7 @@ describe('MedicationForm', () => {
 		await fireEvent.input(screen.getByLabelText(/medication name/i), {
 			target: { value: 'Vitamin A' }
 		});
-		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '5000IU' } });
+		await fireEvent.input(screen.getByLabelText(/^Dose$/i), { target: { value: '5000IU' } });
 		await fireEvent.change(screen.getByLabelText(/frequency/i), {
 			target: { value: 'every_x_days' }
 		});
@@ -263,7 +263,7 @@ describe('MedicationForm', () => {
 		await fireEvent.input(screen.getByLabelText(/medication name/i), {
 			target: { value: 'Vitamin A' }
 		});
-		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '5000IU' } });
+		await fireEvent.input(screen.getByLabelText(/^Dose$/i), { target: { value: '5000IU' } });
 		await fireEvent.change(screen.getByLabelText(/frequency/i), {
 			target: { value: 'every_x_days' }
 		});
@@ -315,7 +315,7 @@ describe('MedicationForm', () => {
 		await fireEvent.input(screen.getByLabelText(/medication name/i), {
 			target: { value: 'Vitamin A' }
 		});
-		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '5000IU' } });
+		await fireEvent.input(screen.getByLabelText(/^Dose$/i), { target: { value: '5000IU' } });
 		await fireEvent.change(screen.getByLabelText(/frequency/i), {
 			target: { value: 'every_x_days' }
 		});
@@ -338,7 +338,7 @@ describe('MedicationForm', () => {
 		await fireEvent.input(screen.getByLabelText(/medication name/i), {
 			target: { value: 'Vitamin A' }
 		});
-		await fireEvent.input(screen.getByLabelText(/dose/i), { target: { value: '5000IU' } });
+		await fireEvent.input(screen.getByLabelText(/^Dose$/i), { target: { value: '5000IU' } });
 		await fireEvent.change(screen.getByLabelText(/frequency/i), {
 			target: { value: 'every_x_days' }
 		});
@@ -366,5 +366,60 @@ describe('MedicationForm', () => {
 		render(MedicationForm, { props: { onsubmit, initialData } });
 
 		expect((screen.getByLabelText(/starts from/i) as HTMLInputElement).value).toBe('2026-03-20');
+	});
+
+	it('renders stock-tracking inputs (dose amount, unit, low stock, expiry warning)', () => {
+		render(MedicationForm, { props: { onsubmit } });
+		expect(screen.getByLabelText(/dose amount/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/dose unit/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/low stock/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/expiry warning/i)).toBeInTheDocument();
+	});
+
+	it('submits dose_amount + dose_unit when set', async () => {
+		render(MedicationForm, { props: { onsubmit } });
+		await fireEvent.input(screen.getByLabelText(/medication name/i), { target: { value: 'UDCA' } });
+		await fireEvent.input(screen.getByLabelText(/^Dose$/i), { target: { value: '5mL' } });
+		await fireEvent.change(screen.getByLabelText(/frequency/i), { target: { value: 'twice_daily' } });
+		await fireEvent.input(screen.getByLabelText(/dose amount/i), { target: { value: '5' } });
+		await fireEvent.change(screen.getByLabelText(/dose unit/i), { target: { value: 'ml' } });
+		await fireEvent.click(screen.getByRole('button', { name: /save medication/i }));
+
+		expect(onsubmit).toHaveBeenCalledTimes(1);
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.dose_amount).toBe(5);
+		expect(payload.dose_unit).toBe('ml');
+	});
+
+	it('omits stock fields when left blank', async () => {
+		render(MedicationForm, { props: { onsubmit } });
+		await fireEvent.input(screen.getByLabelText(/medication name/i), { target: { value: 'Legacy' } });
+		await fireEvent.input(screen.getByLabelText(/^Dose$/i), { target: { value: '10mg' } });
+		await fireEvent.change(screen.getByLabelText(/frequency/i), { target: { value: 'once_daily' } });
+		await fireEvent.click(screen.getByRole('button', { name: /save medication/i }));
+
+		expect(onsubmit).toHaveBeenCalledTimes(1);
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.dose_amount).toBeUndefined();
+		expect(payload.dose_unit).toBeUndefined();
+	});
+
+	it('pre-fills stock fields from initialData', () => {
+		const initialData = {
+			name: 'UDCA',
+			dose: '5mL',
+			frequency: 'twice_daily',
+			schedule_times: ['08:00', '20:00'],
+			active: true,
+			dose_amount: 5,
+			dose_unit: 'ml',
+			low_stock_threshold: 4,
+			expiry_warning_days: 7
+		};
+		render(MedicationForm, { props: { onsubmit, initialData } });
+		expect((screen.getByLabelText(/dose amount/i) as HTMLInputElement).value).toBe('5');
+		expect((screen.getByLabelText(/dose unit/i) as HTMLSelectElement).value).toBe('ml');
+		expect((screen.getByLabelText(/low stock/i) as HTMLInputElement).value).toBe('4');
+		expect((screen.getByLabelText(/expiry warning/i) as HTMLInputElement).value).toBe('7');
 	});
 });

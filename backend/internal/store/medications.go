@@ -8,20 +8,25 @@ import (
 )
 
 const medicationColumns = `id, baby_id, logged_by, updated_by, name, dose,
-	frequency, schedule, timezone, interval_days, starts_from, active, created_at, updated_at`
+	frequency, schedule, timezone, interval_days, starts_from, active,
+	dose_amount, dose_unit, low_stock_threshold, expiry_warning_days,
+	created_at, updated_at`
 
 // scanMedication scans a single medication row from the given scanner.
 func scanMedication(s scanner) (*model.Medication, error) {
 	var m model.Medication
-	var updatedBy, schedule, timezone, startsFrom sql.NullString
-	var intervalDays sql.NullInt64
+	var updatedBy, schedule, timezone, startsFrom, doseUnit sql.NullString
+	var intervalDays, lowStock, expiryWarn sql.NullInt64
+	var doseAmount sql.NullFloat64
 	var createdStr, updatedStr string
 	var active bool
 
 	err := s.Scan(
 		&m.ID, &m.BabyID, &m.LoggedBy, &updatedBy,
 		&m.Name, &m.Dose, &m.Frequency, &schedule,
-		&timezone, &intervalDays, &startsFrom, &active, &createdStr, &updatedStr,
+		&timezone, &intervalDays, &startsFrom, &active,
+		&doseAmount, &doseUnit, &lowStock, &expiryWarn,
+		&createdStr, &updatedStr,
 	)
 	if err != nil {
 		return nil, err
@@ -32,10 +37,11 @@ func scanMedication(s scanner) (*model.Medication, error) {
 	m.Schedule = nullStr(schedule)
 	m.Timezone = nullStr(timezone)
 	m.StartsFrom = nullStr(startsFrom)
-	if intervalDays.Valid {
-		v := int(intervalDays.Int64)
-		m.IntervalDays = &v
-	}
+	m.IntervalDays = nullInt(intervalDays)
+	m.DoseAmount = nullFloat(doseAmount)
+	m.DoseUnit = nullStr(doseUnit)
+	m.LowStockThreshold = nullInt(lowStock)
+	m.ExpiryWarningDays = nullInt(expiryWarn)
 
 	m.CreatedAt, err = ParseTime(createdStr)
 	if err != nil {
@@ -155,5 +161,67 @@ func UpdateMedication(db *sql.DB, babyID, medID, updatedBy, name, dose, frequenc
 		return nil, err
 	}
 
+	return GetMedicationByID(db, babyID, medID)
+}
+
+// MedicationStockFields bundles the structured-dose / threshold columns.
+// Each field is optional; when provided, it overwrites the existing value
+// (including clearing back to NULL via an explicit nil-with-flag — see
+// SetMedicationStockFields for the full update semantics).
+type MedicationStockFields struct {
+	DoseAmount        *float64
+	DoseUnit          *string
+	LowStockThreshold *int
+	ExpiryWarningDays *int
+}
+
+// SetMedicationStockFields updates the four stock-related columns on a
+// medication. Pass any combination; nil pointers leave the corresponding
+// column unchanged. To clear a field, callers should fetch the current row
+// and explicitly write the new state.
+func SetMedicationStockFields(db *sql.DB, babyID, medID, updatedBy string, f MedicationStockFields) (*model.Medication, error) {
+	existing, err := GetMedicationByID(db, babyID, medID)
+	if err != nil {
+		return nil, err
+	}
+
+	doseAmount := existing.DoseAmount
+	if f.DoseAmount != nil {
+		doseAmount = f.DoseAmount
+	}
+	doseUnit := existing.DoseUnit
+	if f.DoseUnit != nil {
+		doseUnit = f.DoseUnit
+	}
+	if doseUnit != nil && !model.ValidDoseUnit(*doseUnit) {
+		return nil, fmt.Errorf("invalid dose_unit: %s", *doseUnit)
+	}
+	lowStock := existing.LowStockThreshold
+	if f.LowStockThreshold != nil {
+		lowStock = f.LowStockThreshold
+	}
+	expiryWarn := existing.ExpiryWarningDays
+	if f.ExpiryWarningDays != nil {
+		expiryWarn = f.ExpiryWarningDays
+	}
+
+	res, err := db.Exec(
+		`UPDATE medications SET
+			updated_by = ?,
+			dose_amount = ?, dose_unit = ?,
+			low_stock_threshold = ?, expiry_warning_days = ?,
+			updated_at = CURRENT_TIMESTAMP
+		 WHERE id = ? AND baby_id = ?`,
+		updatedBy,
+		doseAmount, doseUnit,
+		lowStock, expiryWarn,
+		medID, babyID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("set medication stock fields: %w", err)
+	}
+	if err := checkRowsAffected(res, "set medication stock fields"); err != nil {
+		return nil, err
+	}
 	return GetMedicationByID(db, babyID, medID)
 }

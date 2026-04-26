@@ -17,6 +17,14 @@ const (
 	AlertTypeFever             = "fever"
 	AlertTypeJaundiceWorsening = "jaundice_worsening"
 	AlertTypeMissedMedication  = "missed_medication"
+	AlertTypeLowStock          = "low_stock"
+	AlertTypeNearExpiry        = "near_expiry"
+)
+
+// Default thresholds applied when a medication doesn't override them.
+const (
+	defaultLowStockThreshold = 3
+	defaultExpiryWarningDays = 3
 )
 
 // Alert represents a single active alert for the dashboard.
@@ -117,6 +125,20 @@ func GetActiveAlerts(db *sql.DB, babyID string) ([]Alert, error) {
 		return nil, err
 	}
 	alerts = append(alerts, missedAlerts...)
+
+	// 5. Low stock: total doses across containers <= threshold
+	lowStockAlerts, err := getLowStockAlerts(db, babyID)
+	if err != nil {
+		return nil, err
+	}
+	alerts = append(alerts, lowStockAlerts...)
+
+	// 6. Near expiry: any non-depleted container's effective expiry within warning window
+	nearExpiryAlerts, err := getNearExpiryAlerts(db, babyID)
+	if err != nil {
+		return nil, err
+	}
+	alerts = append(alerts, nearExpiryAlerts...)
 
 	return emptySliceIfNil(alerts), nil
 }

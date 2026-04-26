@@ -167,6 +167,10 @@
 				return 'Jaundice Worsening';
 			case 'missed_medication':
 				return 'Missed Medication';
+			case 'low_stock':
+				return 'Low Stock';
+			case 'near_expiry':
+				return 'Near Expiry';
 			default:
 				return alertType;
 		}
@@ -184,6 +188,16 @@
 				return alert.medication_name
 					? `${alert.medication_name} dose was missed. Tap to log.`
 					: 'A scheduled medication dose was missed. Tap to log.';
+			case 'low_stock': {
+				const dosesLeft = typeof alert.value === 'number' ? Math.floor(alert.value) : alert.value;
+				return alert.medication_name
+					? `${alert.medication_name} is running low — about ${dosesLeft} doses left. Restock soon.`
+					: `Stock running low — about ${dosesLeft} doses left.`;
+			}
+			case 'near_expiry':
+				return alert.medication_name
+					? `${alert.medication_name} container expires on ${alert.value}.`
+					: `A medication container expires on ${alert.value}.`;
 			default:
 				return '';
 		}

@@ -285,6 +285,12 @@ type Medication struct {
 	IntervalDays *int      `json:"interval_days,omitempty"`
 	StartsFrom   *string   `json:"starts_from,omitempty"`
 	Active       bool      `json:"active"`
+	// DoseAmount and DoseUnit together describe how much stock to deduct per
+	// administration. Both must be set for auto-decrement to apply.
+	DoseAmount        *float64 `json:"dose_amount,omitempty"`
+	DoseUnit          *string  `json:"dose_unit,omitempty"`
+	LowStockThreshold *int     `json:"low_stock_threshold,omitempty"`
+	ExpiryWarningDays *int     `json:"expiry_warning_days,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -301,8 +307,47 @@ type MedLog struct {
 	Skipped       bool       `json:"skipped"`
 	SkipReason    *string    `json:"skip_reason,omitempty"`
 	Notes         *string    `json:"notes,omitempty"`
+	// ContainerID and StockDeducted record which stock container this dose
+	// drew from and how much was taken. Both are nil when no stock tracking
+	// applied (legacy log, skipped dose, or medication without dose_amount).
+	ContainerID    *string  `json:"container_id,omitempty"`
+	StockDeducted  *float64 `json:"stock_deducted,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+// MedicationContainer represents one physical inventory unit of a medication
+// (e.g. a bottle, a packet, a pill pack). A medication may have many.
+type MedicationContainer struct {
+	ID                  string    `json:"id"`
+	MedicationID        string    `json:"medication_id"`
+	BabyID              string    `json:"baby_id"`
+	Kind                string    `json:"kind"`
+	Unit                string    `json:"unit"`
+	QuantityInitial     float64   `json:"quantity_initial"`
+	QuantityRemaining   float64   `json:"quantity_remaining"`
+	OpenedAt            *time.Time `json:"opened_at,omitempty"`
+	MaxDaysAfterOpening *int       `json:"max_days_after_opening,omitempty"`
+	ExpirationDate      *string    `json:"expiration_date,omitempty"`
+	Depleted            bool       `json:"depleted"`
+	Notes               *string    `json:"notes,omitempty"`
+	CreatedBy           string     `json:"created_by"`
+	UpdatedBy           *string    `json:"updated_by,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+}
+
+// MedicationStockAdjustment records a manual change to a container's quantity
+// (top-up, spillage correction, "switched bottles" reconciliation).
+// Auto-decrement from logging a dose does NOT write here.
+type MedicationStockAdjustment struct {
+	ID           string    `json:"id"`
+	ContainerID  string    `json:"container_id"`
+	Delta        float64   `json:"delta"`
+	Reason       *string   `json:"reason,omitempty"`
+	AdjustedBy   string    `json:"adjusted_by"`
+	AdjustedAt   time.Time `json:"adjusted_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // CarePlan represents a phased "what's currently active" schedule for a baby.

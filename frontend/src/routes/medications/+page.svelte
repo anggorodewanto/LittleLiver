@@ -17,6 +17,7 @@
 		oncreate={() => goto('/log/medication')}
 		onedit={(medicationId) => goto(`/log/medication?edit=${medicationId}`)}
 		onaddlog={(medicationId) => goto(`/log/med?medicationId=${medicationId}`)}
+		onmanagestock={(medicationId) => goto(`/medications/${medicationId}/stock`)}
 	/>
 {/if}
 
