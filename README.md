@@ -23,14 +23,27 @@ LittleLiver is a personal-use web app for parents to track daily health metrics 
 ### Clinical Alerts
 - **Acholic stool warning** — Prominent alert when stool color rating is 1-3 (bile flow failure indicator)
 - **Cholangitis warning** — Fever alert with method-specific thresholds prompting immediate medical contact
+- **Jaundice worsening** — Alert when skin observation shows severe jaundice or scleral icterus
+- **Missed medication** — Surfaces scheduled doses >30 min past due with no log
+- **Low stock** — Warns when remaining medication stock falls below the per-medication threshold
+- **Near expiry** — Warns when a medication container is approaching its expiration date
 
 ### Medications & Reminders
 - Medication management with pre-populated suggestions (UDCA, Bactrim, vitamins, iron)
 - Dose logging (given/skipped) with flexible scheduling (daily, twice daily, every X days, custom)
 - Web Push notifications for medication reminders
+- Stock tracking with per-medication containers (bottles, vials, packets)
+- Auto-decrement of remaining quantity on each logged dose (FIFO container selection)
+- Manual stock adjustments with audit trail
+
+### Care Plans
+- Rotating phase schedules for clinician-prescribed regimens (e.g. monthly antibiotic rotation)
+- Current phase displayed on the dashboard with countdown to the next phase
+- Push notifications on phase change and a 2-day-before warning
 
 ### AI Lab Extraction
 - Upload lab report images and auto-extract results via Claude Vision API
+- Duplicate detection against prior lab entries (±3-day window)
 - Batch import of extracted lab values
 
 ### Reporting & Analytics
@@ -54,6 +67,8 @@ LittleLiver is a personal-use web app for parents to track daily health metrics 
 - Cloudflare R2 storage with signed URLs
 - HEIC to JPEG auto-conversion
 - Attach photos to stools, abdomen, skin, bruising, and notes
+- Take-photo camera capture and gallery upload from log forms
+- Full-screen lightbox with prev/next navigation when viewing logged photos
 
 ## Tech Stack
 
@@ -129,29 +144,31 @@ LittleLiver/
 │   ├── cmd/server/        # HTTP server entrypoint
 │   ├── internal/
 │   │   ├── auth/          # Google OAuth, sessions
-│   │   ├── handler/       # HTTP handlers (29 files)
-│   │   ├── store/         # Data access layer (22 files)
+│   │   ├── handler/       # HTTP handlers
+│   │   ├── store/         # Data access layer
 │   │   ├── model/         # Domain types, validation
-│   │   ├── middleware/     # Auth, CSRF, rate limiting
+│   │   ├── middleware/    # Auth, CSRF, rate limiting
 │   │   ├── labextract/    # Claude Vision integration
-│   │   ├── notify/        # Web Push, reminder scheduler
+│   │   ├── notify/        # Web Push, reminder + care-plan scheduler
 │   │   ├── report/        # PDF generation
 │   │   ├── storage/       # R2 client
 │   │   ├── who/           # WHO growth data
 │   │   ├── cron/          # Cleanup jobs
 │   │   └── backup/        # DB backup to R2
-│   └── migrations/        # 14 SQL migrations
+│   └── migrations/        # SQL migrations
 ├── frontend/
 │   ├── src/
 │   │   ├── routes/        # SvelteKit pages
 │   │   └── lib/
-│   │       ├── components/ # 40+ Svelte components
+│   │       ├── components/ # Svelte components
 │   │       ├── stores/    # State management
 │   │       └── api.ts     # REST client
 │   └── src/tests/         # Vitest tests
 ├── docs/
 │   ├── SPEC.md            # Full product specification
-│   └── PHASES.md          # Implementation phases
+│   ├── PHASES.md          # Implementation phases
+│   ├── DEPLOY.md          # Deployment notes
+│   └── UI_TEST_CASES.md   # UI test scenarios
 ├── scripts/deploy.sh      # Deployment automation
 ├── Dockerfile             # Multi-stage build
 ├── fly.toml               # fly.io config

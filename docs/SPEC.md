@@ -157,7 +157,7 @@ New or worsening bruising can indicate vitamin K deficiency / coagulopathy.
 
 **Reminder system:** see §6 (Push Notifications).
 
-### 3.10 Lab Results (per clinic visit, entered manually)
+**Structured dose & stock tracking (optional):** A medication may declare a numeric dose by setting `dose_amount` (REAL) and `dose_unit` (TEXT, e.g., `"mg"`, `"mL"`, `"tablet"`). When set, logging a non-skipped dose auto-decrements per-medication stock — see §5.5 *Stock Containers*. Two additional columns control alert behavior: `low_stock_threshold` (default 3, units of dose) and `expiry_warning_days` (default 3). Both `low_stock` and `near_expiry` alerts surface on the dashboard — see §7.1. Medications without `dose_amount` keep working unchanged (no decrement, no stock alerts).
 
 Stored as individual test entries using an EAV-style table (`test_name`, `value`, `unit`, `normal_range`, `notes`). Each row is one test result. Lab entries from the same visit share the exact same timestamp for implicit grouping (no explicit visit_id). The schema is generic to support any lab test.
 
@@ -230,6 +230,28 @@ Head circumference is plotted against **WHO Child Growth Standards** (head-circu
 | Notes | text | |
 
 Mid-upper arm circumference (MUAC) is a quick indicator of nutritional status. Useful for tracking malnutrition risk in post-Kasai infants.
+
+### 3.15 Care Plans (Rotating Phase Schedules)
+
+Care plans are a passive scheduling surface for clinician-prescribed regimens that rotate through phases over time — for example, a monthly antibiotic rotation (month 1 = drug A, month 2 = drug B, …). They are **not a metric**: there are no per-phase logs or confirmations. The system only tracks where in the rotation the baby currently is and surfaces that on the dashboard.
+
+**Model.** A plan has a `name`, optional `notes`, an IANA `timezone`, and an `active` flag. Each plan owns an ordered list of **phases**:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| Sequence | integer | Plan-relative order (`seq` is unique per plan) |
+| Label | text | What's prescribed during this phase (e.g., "Bactrim") |
+| Start date | date (YYYY-MM-DD) | Naive calendar date interpreted in the parent plan's timezone |
+| Ends on | date (YYYY-MM-DD) | Optional; the next phase's `start_date` is the implicit end of the prior phase, so this only matters for the final phase |
+| Notes | text | Optional |
+
+**Current phase computation.** "Today" is computed in the plan's own timezone. The current phase is the one with the highest `seq` whose `start_date ≤ today`. If `today` is before the earliest phase, no phase is current.
+
+**Dashboard surfacing.** The dashboard returns a `current_care_plan_phases` array — one entry per active plan with a current phase — including days remaining until the next phase. See §5.8.
+
+**Notifications.** Phase transitions send push notifications at 09:00 plan-tz on the day of the transition and as a 2-day-before warning. See §6.5.
+
+**Endpoints.** See §5.9.
 
 ---
 
@@ -370,6 +392,27 @@ POST   /api/push/subscribe                    → Register push subscription (pe
 DELETE /api/push/subscribe                    → Unregister
 ```
 
+**Stock containers & adjustments:** Medications with `dose_amount` set (see §3.9) own a list of stock containers (bottles, vials, packets). The container endpoints are all baby-scoped:
+
+```
+POST   /api/babies/:id/medications/:medId/containers                          → Create a container (kind, unit, quantity_initial, quantity_remaining, optional opened_at, max_days_after_opening, expiration_date, notes)
+GET    /api/babies/:id/medications/:medId/containers                          → List containers for a medication
+GET    /api/babies/:id/medications/:medId/containers/:containerId              → Get a single container
+PUT    /api/babies/:id/medications/:medId/containers/:containerId              → Update container fields
+DELETE /api/babies/:id/medications/:medId/containers/:containerId              → Hard-delete a container
+POST   /api/babies/:id/medications/:medId/containers/:containerId/adjust       → Apply a manual stock adjustment (signed delta + reason); also writes an audit row to medication_stock_adjustments
+```
+
+**Auto-decrement on dose log:** When a med-log is created with `skipped=false` for a medication that has `dose_amount` set, the server, in the same transaction:
+1. Selects the **oldest opened** container (by `opened_at`) that is not depleted. If none is open, it auto-opens the oldest **sealed** container (sets `opened_at = NOW()`).
+2. Deducts `dose_amount` from the chosen container's `quantity_remaining`.
+3. Stores `container_id` and `stock_deducted` on the med-log row.
+4. If `quantity_remaining ≤ 0`, sets `depleted = true`.
+
+If the medication has no `dose_amount` (legacy med), the dose logs without touching stock — `container_id` and `stock_deducted` remain NULL. Skipped doses never decrement stock.
+
+**Edits and deletes:** When a given med-log is updated, the server first restores the prior `stock_deducted` to the prior `container_id`, then re-applies the new state (which may select a different container or be a no-op if the medication has no `dose_amount`). Deleting a given med-log restores `stock_deducted` to its `container_id` and clears the `depleted` flag if the container is no longer empty. Manual adjustments via the `/adjust` endpoint write to `medication_stock_adjustments` as a separate audit trail and do not touch med-log rows.
+
 ### 5.6 Lab Result Extraction (AI Vision)
 
 ```
@@ -396,7 +439,7 @@ Multiple images/keys support two use cases: (1) a multi-page lab report split ac
 4. Claude returns a JSON array of extracted lab results.
 5. Server returns the extracted results to the client for review — **nothing is saved yet**.
 
-**Extraction prompt strategy:** The system prompt instructs Claude to extract lab test results and return structured JSON. It includes the list of known test names (`total_bilirubin`, `direct_bilirubin`, `ALT`, `AST`, `GGT`, `albumin`, `INR`, `platelets`) as preferred mappings, but also accepts any test name found in the document. The prompt explicitly handles multi-page context: "These images are pages of a single lab report. Extract all unique test results across all pages."
+**Extraction prompt strategy:** The system prompt instructs Claude to extract lab test results and return structured JSON. It includes the list of known test names (`total_bilirubin`, `direct_bilirubin`, `ALT`, `AST`, `GGT`, `albumin`, `INR`, `platelets`) as preferred mappings, but also accepts any test name found in the document. The prompt is additionally seeded with the **baby's own previously-logged test names** (de-duplicated case-insensitively) so the extraction stays consistent with prior naming for that baby — e.g., a baby whose history uses `ALP` keeps that label rather than being re-tagged as `alkaline_phosphatase`. The prompt explicitly handles multi-page context: "These images are pages of a single lab report. Extract all unique test results across all pages."
 
 **Response schema:**
 ```json
@@ -436,7 +479,7 @@ The `confidence` field is `"high"`, `"medium"`, or `"low"` — the frontend uses
 
 When `existing_match` is non-null, the frontend marks that row as a **probable duplicate** (visual indicator + "Already logged" label). The row is **unchecked by default** in the review screen so the user doesn't accidentally double-enter results. The user can still override and include it if they want (e.g., genuinely repeated test on a different date).
 
-**Client-side flow:** After receiving the extraction response, the frontend shows a review/edit screen where the user can correct values, remove false positives, or add missing results. Rows with `existing_match` are shown with a duplicate warning and unchecked by default. On confirmation, the client submits only the checked/reviewed results via the existing `POST /api/babies/:id/labs` batch endpoint. The extraction endpoint is purely a **read-only suggestion** — it never writes to the database.
+**Client-side flow:** After receiving the extraction response, the frontend shows a review/edit screen where the user can correct values, remove false positives, or add missing results. Rows with `existing_match` are shown with a duplicate warning and unchecked by default. On confirmation, the client submits only the checked/reviewed results via `POST /api/babies/:id/labs/batch` (the dedicated batch endpoint — distinct from the per-entry `POST /api/babies/:id/labs`). The extraction endpoint is purely a **read-only suggestion** — it never writes to the database.
 
 **Error handling:** If Claude cannot extract any results (e.g., image is not a lab report, too blurry), the server returns `200` with an empty `extracted` array and a `notes` field explaining the issue. Network/API errors return `502`.
 
@@ -465,7 +508,8 @@ GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON
   },
   "stool_color_trend": [],         // always last 7 days, regardless of from/to — frontend uses this for the Today View mini-chart
   "upcoming_meds": [],             // next due ACTIVE medications with countdown (deactivated medications excluded)
-  "active_alerts": [],             // array of alert objects: { entry_id, alert_type, method?, value, timestamp } — always computed from the globally most recent entry of each alert type across ALL time, ignoring the from/to date range parameters (alerts are global state). See §7.1 for alert types and trigger conditions.
+  "current_care_plan_phases": [],  // [{ id, care_plan_id, seq, label, start_date, ends_on, days_in_phase, days_until_next_phase }] — one entry per active care plan that has a current phase (highest seq with start_date ≤ today in plan-tz). Empty when the baby has no active care plans. See §3.15 and §5.9.
+  "active_alerts": [],             // array of alert objects: { entry_id, alert_type, method?, value, timestamp } — always computed from the globally most recent entry of each alert type across ALL time, ignoring the from/to date range parameters (alerts are global state). See §7.1 for alert types (acholic_stool, fever, jaundice_worsening, missed_medication, low_stock, near_expiry).
   "chart_data_series": {           // for the requested date range
     "feeding_daily": [],           // [{ date, total_volume_ml, total_calories, feed_count, by_type: { breast_milk, formula, solid, other } }] — daily aggregates
     "diaper_daily": [],            // [{ date, wet_count, stool_count }] — daily aggregates
@@ -482,6 +526,20 @@ GET    /api/babies/:id/dashboard?from=&to=   → Dashboard data (aggregated JSON
 Frontend compares `active_alerts` with the local dismissed set and removes dismissed IDs for alerts that now have recovery entries.
 GET    /api/babies/:id/report?from=&to=      → Generate + download clinical PDF (always includes all photos within date range)
 ```
+
+### 5.9 Care Plans
+
+Endpoints for managing rotating phase schedules — see §3.15 for the domain model.
+
+```
+POST   /api/babies/:id/care-plans              → Create plan and its phases (phases passed as nested array in request body)
+GET    /api/babies/:id/care-plans              → List plans for the baby (each entry includes its phases)
+GET    /api/babies/:id/care-plans/:planId      → Get a single plan with phases
+PUT    /api/babies/:id/care-plans/:planId      → Update plan fields and replace its phase list
+DELETE /api/babies/:id/care-plans/:planId      → Hard-delete the plan (cascades to phases and phase-notification ledger)
+```
+
+Phases are nested inside the plan request and response — there are no separate phase-level endpoints. The server validates that `seq` values are unique within a plan; phases are returned ordered by `seq`. `start_date` is a naive `YYYY-MM-DD` string interpreted in the plan's `timezone`. The plan's `timezone` is required at creation. Setting `active=false` keeps the plan visible for editing but prevents the scheduler from sending phase-transition notifications and excludes it from `current_care_plan_phases` on the dashboard.
 
 ---
 
@@ -513,6 +571,15 @@ Clicking the notification opens the app to `/log/med?medication_id=<id>` with th
 - **Missed notifications:** If the server was down and a scheduled time + 15 min or + 30 min has already passed, the follow-up is simply skipped. No backfill of missed notifications.
 - Max **2 follow-ups** per dose.
 
+### 6.5 Care Plan Phase Transitions
+The same scheduler tick that drives medication reminders also handles care-plan phase transitions. For every active care plan (see §3.15), the scheduler computes the current "today" in the plan's own timezone and walks the plan's phases:
+- **`phase_change`** — fires at **09:00 plan-tz on the day** a phase's `start_date` is reached. Title: "🔄 [Plan name] — Phase change". Body: "Now starting: [phase label]".
+- **`phase_warning_t_minus_2`** — fires at **09:00 plan-tz two days before** the next phase's `start_date`. Body: "Heads up: [next phase label] starts in 2 days".
+
+Both notifications are sent to all subscribed devices for that baby's parents.
+
+**Exactly-once semantics.** The scheduler is stateless. Before sending, it `INSERT OR IGNORE`s a row into `care_plan_phase_notifications(phase_id, kind)` and only sends a push if the row was newly inserted. Restarting the server, a flapping crontab, or a clock jump will not duplicate notifications. The ledger cascades with the phase (deleting the plan or phase removes its ledger rows). Plans with `active=false` are skipped entirely — their ledger rows persist but no further notifications are evaluated.
+
 ---
 
 ## 7. Dashboard (Parent-Facing)
@@ -523,12 +590,15 @@ The main screen parents see daily. Designed for quick data entry and at-a-glance
 - **Summary cards** at top: total feeds today, total wet diapers, total stools (with color indicator), last temperature, last weight
 - **Stool color trend** — last 7 days mini-chart with color-coded dots (red for acholic, green for pigmented)
 - **Upcoming medications** — next due med with countdown
+- **Current care plan phases** — one card per active care plan with a current phase, showing plan name, current phase label, and days remaining until the next phase (see §3.15, §5.8 `current_care_plan_phases`)
 - **Quick-log buttons** — large tap targets for: Feed, Diaper (wet), Diaper (stool), Temp, Medication Given
 - **Alert banners** — each alert is an object: `{ entry_id, alert_type, method?, value, timestamp }`. Alert types and trigger conditions:
   - `acholic_stool` — stool entry with `color_rating <= 3`. Cleared when most recent stool has `color_rating >= 4`.
   - `fever` — temperature entry exceeding threshold for its method (see §3.6). Cleared when most recent temperature is sub-threshold.
   - `jaundice_worsening` — skin observation with `jaundice_level = 'severe_limbs_and_trunk'` OR `scleral_icterus = true`. Cleared when most recent skin observation has neither condition.
   - `missed_medication` — `entry_id` is a synthetic key (`medication_id + "_" + scheduled_time`) for client-side dismissal tracking, not a real database row ID. Checks all scheduled doses in the **last 24 hours** (expanding each active medication's `schedule` array into concrete UTC datetimes using the medication's stored timezone) that are **>30 min past due** with no corresponding `med_log` (given or skipped) with `given_at`/`created_at` within **±30 min** of the scheduled time. This uses the same ±30 min window as notification suppression (§6.4), ensuring consistent behavior. One alert per missed dose. Cleared when a `med_log` is logged for that scheduled time.
+  - `low_stock` — sum of `quantity_remaining` across a medication's non-depleted containers ≤ the medication's `low_stock_threshold` (default 3 units of dose). One alert per medication. Cleared when stock rises above the threshold (e.g., a new container is added or stock is manually adjusted upward via §5.5 `/adjust`).
+  - `near_expiry` — any non-depleted container whose `expiration_date` is within the medication's `expiry_warning_days` (default 3) of today, **or** an opened container whose `opened_at + max_days_after_opening` falls within that window. One alert per qualifying container. Cleared when the container is depleted, deleted, or its expiration passes.
   Alert queries use `ORDER BY timestamp DESC, id DESC` for deterministic results on timestamp ties. Alerts are based on the **most recent entry of that type across all time**, regardless of age — there is no lookback window or auto-expiry. `active_alerts` is always computed globally, ignoring any `from`/`to` date range on the dashboard request. **Temperature alerts:** Only one temperature alert exists at a time, based on the **single most recent temperature entry** regardless of method. If that entry exceeds the threshold for its method, the alert fires. If the most recent entry is sub-threshold for its own method, there is no alert — regardless of prior readings by other methods. Since only the most recent entry matters, "recovery" simply means the newest temperature entry is sub-threshold for its own method. The `active_alerts` response from the dashboard includes the alerting entry's `method` so the frontend can display appropriate guidance (e.g., "Take another reading to confirm recovery"). Stool color rating 4+ clears acholic alerts. Alerts persist until a **recovery entry** is logged or **manually dismissed**. **Dismissal is per-user, stored as a set of dismissed entry IDs in client-side local storage** (not persisted in the database). When a recovery entry is logged, all entry IDs of that alert type are auto-removed from the dismissed set (effectively clearing stale alerts). New alarming entries add new IDs, creating new alerts regardless of prior dismissals. Other parents still see alerts independently. No additional DB table needed.
 
 ### 7.2 Trends View
@@ -849,9 +919,51 @@ CREATE TABLE medications (
     interval_days INTEGER,         -- for every_x_days frequency: number of days between doses; NULL otherwise
     starts_from TEXT,              -- for every_x_days frequency: anchor date (YYYY-MM-DD) for interval calculation; NULL otherwise
     active      BOOLEAN DEFAULT TRUE,
+    -- Optional structured dose for stock auto-decrement (see §3.9, §5.5). All NULL for legacy meds without stock tracking.
+    dose_amount         REAL,      -- numeric dose quantity (e.g., 50 for "50mg"); paired with dose_unit
+    dose_unit           TEXT,      -- unit string (e.g., "mg", "mL", "tablet")
+    low_stock_threshold INTEGER,   -- alert when sum of non-depleted containers' quantity_remaining ≤ this; default 3
+    expiry_warning_days INTEGER,   -- alert when any non-depleted container expires within this many days; default 3
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Per-medication stock containers (bottles, vials, packets). One medication may own many.
+-- Auto-decrement on dose log targets the oldest opened container; auto-opens the oldest sealed
+-- container if none is open (see §5.5). Manual edits go through the /adjust endpoint.
+CREATE TABLE medication_containers (
+    id                     TEXT PRIMARY KEY,
+    medication_id          TEXT REFERENCES medications(id) ON DELETE CASCADE NOT NULL,
+    baby_id                TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    kind                   TEXT NOT NULL,            -- e.g., "bottle", "vial", "packet"
+    unit                   TEXT NOT NULL,            -- unit of quantity_initial/remaining (often matches medications.dose_unit)
+    quantity_initial       REAL NOT NULL,
+    quantity_remaining     REAL NOT NULL,
+    opened_at              DATETIME,                 -- NULL until first dose drawn from this container
+    max_days_after_opening INTEGER,                  -- soft expiry once opened (e.g., suspension good for 30 days)
+    expiration_date        TEXT,                     -- absolute YYYY-MM-DD expiry from packaging
+    depleted               BOOLEAN NOT NULL DEFAULT FALSE,
+    notes                  TEXT,
+    created_by             TEXT REFERENCES users(id) NOT NULL,
+    updated_by             TEXT REFERENCES users(id),
+    created_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at             DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_medication_containers_medication_id ON medication_containers(medication_id);
+CREATE INDEX idx_medication_containers_baby_id       ON medication_containers(baby_id);
+
+-- Audit trail for manual stock changes (non-dose). Auto-decrements on dose log do NOT write here —
+-- those are recorded on the med_logs row itself (container_id, stock_deducted).
+CREATE TABLE medication_stock_adjustments (
+    id            TEXT PRIMARY KEY,
+    container_id  TEXT REFERENCES medication_containers(id) ON DELETE CASCADE NOT NULL,
+    delta         REAL NOT NULL,           -- signed: positive adds stock, negative removes
+    reason        TEXT,
+    adjusted_by   TEXT REFERENCES users(id) NOT NULL,
+    adjusted_at   DATETIME NOT NULL,
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_medication_stock_adjustments_container_id ON medication_stock_adjustments(container_id);
 
 -- Medication administration log
 -- baby_id is intentionally denormalized (also available via medications.baby_id) for query
@@ -868,8 +980,51 @@ CREATE TABLE med_logs (
     skipped         BOOLEAN DEFAULT FALSE,  -- mutually exclusive with given_at: skipped=true → given_at is null; skipped=false → given_at is non-null
     skip_reason     TEXT,              -- optional even when skipped=true
     notes           TEXT,
+    -- Stock auto-decrement bookkeeping (see §5.5). NULL on skipped doses and on meds without dose_amount.
+    container_id    TEXT REFERENCES medication_containers(id) ON DELETE SET NULL,
+    stock_deducted  REAL,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Care plans: rotating phase schedules (see §3.15). Pure scheduling surface — no per-phase logs.
+CREATE TABLE care_plans (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),
+    name        TEXT NOT NULL,
+    notes       TEXT,
+    timezone    TEXT NOT NULL,                       -- IANA timezone; "today" for current-phase computation is in this zone
+    active      BOOLEAN DEFAULT TRUE,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_care_plans_baby_id ON care_plans(baby_id);
+
+-- Ordered phases within a plan. "Current" phase = highest seq with start_date ≤ today (in plan tz).
+CREATE TABLE care_plan_phases (
+    id            TEXT PRIMARY KEY,
+    care_plan_id  TEXT REFERENCES care_plans(id) ON DELETE CASCADE NOT NULL,
+    seq           INTEGER NOT NULL,
+    label         TEXT NOT NULL,
+    start_date    TEXT NOT NULL,                     -- naive YYYY-MM-DD, resolved in care_plans.timezone
+    ends_on       TEXT,                              -- optional; only meaningful for the final phase
+    notes         TEXT,
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (care_plan_id, seq)
+);
+CREATE INDEX idx_care_plan_phases_plan  ON care_plan_phases(care_plan_id);
+CREATE INDEX idx_care_plan_phases_start ON care_plan_phases(start_date);
+
+-- Audit ledger giving the stateless scheduler exactly-once notification semantics (§6.5).
+-- The scheduler INSERT OR IGNOREs keyed on (phase_id, kind) and only sends a push when a row was newly inserted.
+CREATE TABLE care_plan_phase_notifications (
+    phase_id   TEXT NOT NULL REFERENCES care_plan_phases(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL,                       -- e.g., 'phase_change', 'phase_warning_t_minus_2'
+    sent_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (phase_id, kind)
 );
 
 -- Photo upload staging (for orphan cleanup)
@@ -907,7 +1062,7 @@ CREATE TABLE push_subscriptions (
 
 **Account deletion & foreign keys:** The `logged_by` and `updated_by` columns across all metric tables (including `medications`) do NOT use `ON DELETE CASCADE`. Instead, the `DELETE /api/users/me` handler explicitly sets these to `'deleted_user'` before removing the user record. The handler also deletes all invites created by the user (`invites.created_by`) and anonymizes `invites.used_by` to `'deleted_user'` where it references the deleted user. The `baby_parents`, `sessions`, and `push_subscriptions` tables use `ON DELETE CASCADE` on `user_id` so they are cleaned up automatically.
 
-Indexes on `(baby_id, timestamp)` for all metric tables.
+Indexes on `(baby_id, timestamp)` for all metric tables. Additional indexes shown inline above for `fluid_log`, `head_circumferences`, `upper_arm_circumferences`, `medication_containers`, `medication_stock_adjustments`, `care_plans`, and `care_plan_phases`.
 
 ---
 
@@ -1046,6 +1201,11 @@ The stool logging screen shows these colors as large tappable swatches with colo
 - SQLite backup automation
 - Deploy to fly.io production
 
+### Phase 5 — Post-launch additions (ongoing)
+- Lab result extraction via Claude Vision API (§5.6)
+- Medication stock tracking with auto-decrement and low-stock / near-expiry alerts (§3.9, §5.5, §7.1, §10)
+- Care plans / rotating phase tracker with phase-transition push notifications (§3.15, §5.9, §6.5, §7.1, §10)
+
 ---
 
 ## 15. Future Considerations (v2+)
@@ -1069,4 +1229,4 @@ App name: **LittleLiver**. The name should be:
 
 ---
 
-*This spec is a living document. Last updated: March 2026.*
+*This spec is a living document. Last updated: April 2026.*
