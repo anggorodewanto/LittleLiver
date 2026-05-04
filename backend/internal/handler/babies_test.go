@@ -1120,3 +1120,222 @@ func TestUpdateBabyHandler_RecalculateCalories_NoAffectedEntries(t *testing.T) {
 		t.Errorf("expected recalculated_count=0, got %d", resp.RecalculatedCount)
 	}
 }
+
+// --- gestational age (preterm) ---
+
+func TestCreateBabyHandler_WithGestationalAge_Persists(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+
+	body := `{"name":"Preemie","sex":"female","date_of_birth":"2026-01-10","gestational_age_weeks":32,"gestational_age_days":4}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateBabyHandler(db))))
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		ID                  string `json:"id"`
+		GestationalAgeWeeks *int   `json:"gestational_age_weeks"`
+		GestationalAgeDays  *int   `json:"gestational_age_days"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if resp.GestationalAgeWeeks == nil || *resp.GestationalAgeWeeks != 32 {
+		t.Errorf("expected gestational_age_weeks=32, got %v", resp.GestationalAgeWeeks)
+	}
+	if resp.GestationalAgeDays == nil || *resp.GestationalAgeDays != 4 {
+		t.Errorf("expected gestational_age_days=4, got %v", resp.GestationalAgeDays)
+	}
+
+	// Round-trip: load from DB.
+	got, err := store.GetBabyByID(db, resp.ID)
+	if err != nil {
+		t.Fatalf("GetBabyByID: %v", err)
+	}
+	if got.GestationalAgeWeeks == nil || *got.GestationalAgeWeeks != 32 {
+		t.Errorf("DB: expected gestational_age_weeks=32, got %v", got.GestationalAgeWeeks)
+	}
+}
+
+func TestCreateBabyHandler_OmittedGestationalAge_DefaultsNull(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+
+	body := `{"name":"Term","sex":"male","date_of_birth":"2026-01-10"}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateBabyHandler(db))))
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if _, present := resp["gestational_age_weeks"]; present {
+		t.Errorf("expected gestational_age_weeks omitted, got %v", resp["gestational_age_weeks"])
+	}
+}
+
+func TestCreateBabyHandler_InvalidGestationalAge(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"weeks too low", `{"name":"X","sex":"female","date_of_birth":"2026-01-10","gestational_age_weeks":15}`},
+		{"weeks too high", `{"name":"X","sex":"female","date_of_birth":"2026-01-10","gestational_age_weeks":45}`},
+		{"days too high", `{"name":"X","sex":"female","date_of_birth":"2026-01-10","gestational_age_weeks":30,"gestational_age_days":7}`},
+		{"days negative", `{"name":"X","sex":"female","date_of_birth":"2026-01-10","gestational_age_weeks":30,"gestational_age_days":-1}`},
+		{"days without weeks", `{"name":"X","sex":"female","date_of_birth":"2026-01-10","gestational_age_days":3}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies")
+			req.Body = io.NopCloser(bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			authMw := middleware.Auth(db, testCookieName)
+			csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+			h := authMw(csrfMw(http.HandlerFunc(handler.CreateBabyHandler(db))))
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("expected 400 for %s, got %d. Body: %s", tc.name, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestUpdateBabyHandler_SetsAndClearsGestationalAge(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UpdateBabyHandler(db))))
+
+	// Set gestational age.
+	body := `{"name":"` + baby.Name + `","sex":"` + baby.Sex + `","date_of_birth":"` + baby.DateOfBirth.Format(model.DateFormat) + `","gestational_age_weeks":34,"gestational_age_days":2}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPut, "/api/babies/"+baby.ID)
+	req.SetPathValue("id", baby.ID)
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set: expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	var setResp struct {
+		GestationalAgeWeeks *int `json:"gestational_age_weeks"`
+		GestationalAgeDays  *int `json:"gestational_age_days"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &setResp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if setResp.GestationalAgeWeeks == nil || *setResp.GestationalAgeWeeks != 34 {
+		t.Errorf("expected weeks=34, got %v", setResp.GestationalAgeWeeks)
+	}
+	if setResp.GestationalAgeDays == nil || *setResp.GestationalAgeDays != 2 {
+		t.Errorf("expected days=2, got %v", setResp.GestationalAgeDays)
+	}
+
+	// Clear by sending null explicitly.
+	body = `{"name":"` + baby.Name + `","sex":"` + baby.Sex + `","date_of_birth":"` + baby.DateOfBirth.Format(model.DateFormat) + `","gestational_age_weeks":null,"gestational_age_days":null}`
+	req = testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPut, "/api/babies/"+baby.ID)
+	req.SetPathValue("id", baby.ID)
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("clear: expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	got, err := store.GetBabyByID(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetBabyByID: %v", err)
+	}
+	if got.GestationalAgeWeeks != nil || got.GestationalAgeDays != nil {
+		t.Errorf("expected cleared, got weeks=%v days=%v",
+			got.GestationalAgeWeeks, got.GestationalAgeDays)
+	}
+}
+
+func TestUpdateBabyHandler_OmittedGestational_PreservesValue(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	weeks := 31
+	days := 5
+	if err := store.SetBabyGestationalAge(db, baby.ID, &weeks, &days); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// PUT with no gestational fields → must preserve, not clear.
+	body := `{"name":"` + baby.Name + `","sex":"` + baby.Sex + `","date_of_birth":"` + baby.DateOfBirth.Format(model.DateFormat) + `"}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPut, "/api/babies/"+baby.ID)
+	req.SetPathValue("id", baby.ID)
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UpdateBabyHandler(db))))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+	got, err := store.GetBabyByID(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetBabyByID: %v", err)
+	}
+	if got.GestationalAgeWeeks == nil || *got.GestationalAgeWeeks != 31 {
+		t.Errorf("expected weeks preserved=31, got %v", got.GestationalAgeWeeks)
+	}
+	if got.GestationalAgeDays == nil || *got.GestationalAgeDays != 5 {
+		t.Errorf("expected days preserved=5, got %v", got.GestationalAgeDays)
+	}
+}

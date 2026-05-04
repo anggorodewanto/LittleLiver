@@ -10,6 +10,8 @@ export interface Baby {
 	kasai_date: string | null;
 	default_cal_per_feed?: number;
 	notes?: string;
+	gestational_age_weeks?: number | null;
+	gestational_age_days?: number | null;
 }
 
 export interface CreateBabyInput {
@@ -18,6 +20,8 @@ export interface CreateBabyInput {
 	sex: 'male' | 'female';
 	diagnosis_date?: string;
 	kasai_date?: string;
+	gestational_age_weeks?: number | null;
+	gestational_age_days?: number | null;
 }
 
 interface BabiesResponse {
@@ -130,6 +134,8 @@ export interface UpdateBabyInput {
 	kasai_date?: string | null;
 	default_cal_per_feed?: number;
 	notes?: string | null;
+	gestational_age_weeks?: number | null;
+	gestational_age_days?: number | null;
 }
 
 interface RecalculateResponse {

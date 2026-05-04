@@ -72,7 +72,9 @@ describe('FirstLogin', () => {
 			date_of_birth: '2025-06-01',
 			sex: 'female',
 			diagnosis_date: undefined,
-			kasai_date: undefined
+			kasai_date: undefined,
+			gestational_age_weeks: null,
+			gestational_age_days: null
 		});
 	});
 

@@ -591,3 +591,102 @@ func TestGetBabyByID_WithOptionalFields(t *testing.T) {
 	}
 	_ = time.Now() // reference time import
 }
+
+func TestSetBabyGestationalAge_SetsAndClears(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	if baby.GestationalAgeWeeks != nil || baby.GestationalAgeDays != nil {
+		t.Errorf("expected nil gestational age on new baby, got weeks=%v days=%v",
+			baby.GestationalAgeWeeks, baby.GestationalAgeDays)
+	}
+
+	weeks := 32
+	days := 4
+	if err := SetBabyGestationalAge(db, baby.ID, &weeks, &days); err != nil {
+		t.Fatalf("SetBabyGestationalAge failed: %v", err)
+	}
+
+	got, err := GetBabyByID(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetBabyByID failed: %v", err)
+	}
+	if got.GestationalAgeWeeks == nil || *got.GestationalAgeWeeks != 32 {
+		t.Errorf("expected gestational_age_weeks=32, got %v", got.GestationalAgeWeeks)
+	}
+	if got.GestationalAgeDays == nil || *got.GestationalAgeDays != 4 {
+		t.Errorf("expected gestational_age_days=4, got %v", got.GestationalAgeDays)
+	}
+
+	if err := SetBabyGestationalAge(db, baby.ID, nil, nil); err != nil {
+		t.Fatalf("SetBabyGestationalAge clear failed: %v", err)
+	}
+	got, err = GetBabyByID(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetBabyByID failed: %v", err)
+	}
+	if got.GestationalAgeWeeks != nil || got.GestationalAgeDays != nil {
+		t.Errorf("expected cleared gestational age, got weeks=%v days=%v",
+			got.GestationalAgeWeeks, got.GestationalAgeDays)
+	}
+}
+
+func TestSetBabyGestationalAge_NotFound(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	weeks := 32
+	err := SetBabyGestationalAge(db, "nonexistent", &weeks, nil)
+	if err == nil {
+		t.Fatal("expected error for nonexistent baby, got nil")
+	}
+}
+
+func TestUpdateBaby_PreservesGestationalAge(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google1", "a@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	weeks := 30
+	days := 2
+	if err := SetBabyGestationalAge(db, baby.ID, &weeks, &days); err != nil {
+		t.Fatalf("SetBabyGestationalAge failed: %v", err)
+	}
+
+	if _, err := UpdateBaby(db, baby.ID, "Renamed", "female", "2025-06-15", nil, nil, nil, nil); err != nil {
+		t.Fatalf("UpdateBaby failed: %v", err)
+	}
+
+	got, err := GetBabyByID(db, baby.ID)
+	if err != nil {
+		t.Fatalf("GetBabyByID failed: %v", err)
+	}
+	if got.GestationalAgeWeeks == nil || *got.GestationalAgeWeeks != 30 {
+		t.Errorf("expected weeks preserved as 30, got %v", got.GestationalAgeWeeks)
+	}
+	if got.GestationalAgeDays == nil || *got.GestationalAgeDays != 2 {
+		t.Errorf("expected days preserved as 2, got %v", got.GestationalAgeDays)
+	}
+}

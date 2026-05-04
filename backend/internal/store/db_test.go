@@ -184,7 +184,7 @@ func TestCoreSchema_BabiesColumns(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	expected := []string{"id", "name", "sex", "date_of_birth", "diagnosis_date", "kasai_date", "default_cal_per_feed", "notes", "created_at"}
+	expected := []string{"id", "name", "sex", "date_of_birth", "diagnosis_date", "kasai_date", "default_cal_per_feed", "notes", "gestational_age_weeks", "gestational_age_days", "created_at"}
 	assertColumns(t, db, "babies", expected)
 }
 
