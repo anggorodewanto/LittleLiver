@@ -17,6 +17,8 @@
 	let kasaiDate = $state('');
 	let defaultCalPerFeed = $state('67');
 	let notes = $state('');
+	let gestationalWeeks = $state('');
+	let gestationalDays = $state('');
 	let recalculate = $state(false);
 	let validationError = $state('');
 
@@ -32,6 +34,8 @@
 			kasaiDate = baby.kasai_date ?? '';
 			defaultCalPerFeed = String(baby.default_cal_per_feed ?? 67);
 			notes = baby.notes ?? '';
+			gestationalWeeks = baby.gestational_age_weeks != null ? String(baby.gestational_age_weeks) : '';
+			gestationalDays = baby.gestational_age_days != null ? String(baby.gestational_age_days) : '';
 			recalculate = false;
 			validationError = '';
 		}
@@ -49,6 +53,31 @@
 			return;
 		}
 
+		const weeksTrim = String(gestationalWeeks ?? '').trim();
+		const daysTrim = String(gestationalDays ?? '').trim();
+		let weeksValue: number | null = null;
+		let daysValue: number | null = null;
+		if (weeksTrim !== '') {
+			const w = Number(weeksTrim);
+			if (!Number.isInteger(w) || w < 20 || w > 44) {
+				validationError = 'Gestational weeks must be a whole number between 20 and 44';
+				return;
+			}
+			weeksValue = w;
+		}
+		if (daysTrim !== '') {
+			const d = Number(daysTrim);
+			if (!Number.isInteger(d) || d < 0 || d > 6) {
+				validationError = 'Gestational days must be a whole number between 0 and 6';
+				return;
+			}
+			daysValue = d;
+		}
+		if (daysValue !== null && weeksValue === null) {
+			validationError = 'Set gestational weeks before days';
+			return;
+		}
+
 		validationError = '';
 		const data: UpdateBabyInput = {
 			name: name.trim(),
@@ -57,7 +86,9 @@
 			diagnosis_date: diagnosisDate || null,
 			kasai_date: kasaiDate || null,
 			default_cal_per_feed: parseFloat(defaultCalPerFeed),
-			notes: notes.trim() || null
+			notes: notes.trim() || null,
+			gestational_age_weeks: weeksValue,
+			gestational_age_days: weeksValue === null ? null : daysValue ?? 0
 		};
 
 		onsave(data, calChanged && recalculate);
@@ -98,6 +129,27 @@
 		<input id="settings-cal" type="number" step="any" bind:value={defaultCalPerFeed} />
 	</div>
 
+	<fieldset>
+		<legend>Gestational age at birth (preterm)</legend>
+		<p class="hint">Leave blank for full-term. Enables corrected-age display on the dashboard.</p>
+		<div class="gest-row">
+			<label for="settings-gest-weeks">Weeks</label>
+			<input
+				id="settings-gest-weeks"
+				type="number"
+				step="1"
+				bind:value={gestationalWeeks}
+			/>
+			<label for="settings-gest-days">Days</label>
+			<input
+				id="settings-gest-days"
+				type="number"
+				step="1"
+				bind:value={gestationalDays}
+			/>
+		</div>
+	</fieldset>
+
 	<div>
 		<label for="settings-notes">Notes</label>
 		<textarea id="settings-notes" bind:value={notes}></textarea>
@@ -124,3 +176,30 @@
 		{submitting ? 'Saving...' : 'Save Settings'}
 	</button>
 </form>
+
+<style>
+	fieldset {
+		border: 1px solid var(--color-border, #ddd);
+		border-radius: var(--radius-md, 8px);
+		padding: var(--space-2, 8px) var(--space-3, 12px);
+		margin: var(--space-3, 12px) 0;
+	}
+	legend {
+		padding: 0 var(--space-1, 4px);
+		font-weight: 600;
+	}
+	.hint {
+		margin: 0 0 var(--space-2, 8px);
+		font-size: var(--font-size-xs, 0.8rem);
+		color: var(--color-text-muted, #666);
+	}
+	.gest-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2, 8px);
+		align-items: center;
+	}
+	.gest-row input[type='number'] {
+		width: 5rem;
+	}
+</style>

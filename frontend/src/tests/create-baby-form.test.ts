@@ -82,7 +82,9 @@ describe('CreateBabyForm', () => {
 			date_of_birth: '2025-06-01',
 			sex: 'female',
 			diagnosis_date: undefined,
-			kasai_date: undefined
+			kasai_date: undefined,
+			gestational_age_weeks: null,
+			gestational_age_days: null
 		});
 	});
 
@@ -107,8 +109,45 @@ describe('CreateBabyForm', () => {
 			date_of_birth: '2025-09-01',
 			sex: 'male',
 			diagnosis_date: '2025-09-15',
-			kasai_date: '2025-09-20'
+			kasai_date: '2025-09-20',
+			gestational_age_weeks: null,
+			gestational_age_days: null
 		});
+	});
+
+	it('submits gestational age when filled', async () => {
+		render(CreateBabyForm, { props: { oncreate } });
+
+		await fireEvent.input(screen.getByLabelText(/name/i), { target: { value: 'Pre' } });
+		await fireEvent.input(screen.getByLabelText(/date of birth/i), {
+			target: { value: '2026-01-10' }
+		});
+		await fireEvent.change(screen.getByLabelText(/sex/i), { target: { value: 'female' } });
+		await fireEvent.input(screen.getByLabelText(/^weeks$/i), { target: { value: '32' } });
+		await fireEvent.input(screen.getByLabelText(/^days$/i), { target: { value: '4' } });
+		await fireEvent.click(screen.getByRole('button', { name: /create baby/i }));
+
+		expect(oncreate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				gestational_age_weeks: 32,
+				gestational_age_days: 4
+			})
+		);
+	});
+
+	it('rejects out-of-range gestational weeks on create', async () => {
+		render(CreateBabyForm, { props: { oncreate } });
+
+		await fireEvent.input(screen.getByLabelText(/name/i), { target: { value: 'Pre' } });
+		await fireEvent.input(screen.getByLabelText(/date of birth/i), {
+			target: { value: '2026-01-10' }
+		});
+		await fireEvent.change(screen.getByLabelText(/sex/i), { target: { value: 'female' } });
+		await fireEvent.input(screen.getByLabelText(/^weeks$/i), { target: { value: '50' } });
+		await fireEvent.click(screen.getByRole('button', { name: /create baby/i }));
+
+		expect(screen.getByText(/gestational weeks/i)).toBeInTheDocument();
+		expect(oncreate).not.toHaveBeenCalled();
 	});
 
 	it('disables submit button when submitting prop is true', () => {

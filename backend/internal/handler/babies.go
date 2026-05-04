@@ -13,15 +13,39 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
+// optionalInt distinguishes "field omitted" from "field present, value null".
+// Field absent → set=false, value=nil. JSON null → set=true, value=nil.
+// JSON integer → set=true, value=&n.
+type optionalInt struct {
+	set   bool
+	value *int
+}
+
+func (o *optionalInt) UnmarshalJSON(data []byte) error {
+	o.set = true
+	if string(data) == "null" {
+		o.value = nil
+		return nil
+	}
+	var v int
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	o.value = &v
+	return nil
+}
+
 // babyRequest is the JSON request body for creating/updating a baby.
 type babyRequest struct {
-	Name              string   `json:"name"`
-	Sex               string   `json:"sex"`
-	DateOfBirth       string   `json:"date_of_birth"`
-	DiagnosisDate     *string  `json:"diagnosis_date,omitempty"`
-	KasaiDate         *string  `json:"kasai_date,omitempty"`
-	DefaultCalPerFeed *float64 `json:"default_cal_per_feed,omitempty"`
-	Notes             *string  `json:"notes,omitempty"`
+	Name                string      `json:"name"`
+	Sex                 string      `json:"sex"`
+	DateOfBirth         string      `json:"date_of_birth"`
+	DiagnosisDate       *string     `json:"diagnosis_date,omitempty"`
+	KasaiDate           *string     `json:"kasai_date,omitempty"`
+	DefaultCalPerFeed   *float64    `json:"default_cal_per_feed,omitempty"`
+	Notes               *string     `json:"notes,omitempty"`
+	GestationalAgeWeeks optionalInt `json:"gestational_age_weeks"`
+	GestationalAgeDays  optionalInt `json:"gestational_age_days"`
 }
 
 // validate checks required fields, sex validity, and date parsing.
@@ -46,31 +70,69 @@ func (req *babyRequest) validate() (string, bool) {
 			return "kasai_date must be in YYYY-MM-DD format", false
 		}
 	}
+	weeksProvided := req.GestationalAgeWeeks.set && req.GestationalAgeWeeks.value != nil
+	daysProvided := req.GestationalAgeDays.set && req.GestationalAgeDays.value != nil
+	if daysProvided && !weeksProvided {
+		return "gestational_age_days requires gestational_age_weeks", false
+	}
+	if weeksProvided {
+		w := *req.GestationalAgeWeeks.value
+		if w < 20 || w > 44 {
+			return "gestational_age_weeks must be between 20 and 44", false
+		}
+	}
+	if daysProvided {
+		d := *req.GestationalAgeDays.value
+		if d < 0 || d > 6 {
+			return "gestational_age_days must be between 0 and 6", false
+		}
+	}
 	return "", true
+}
+
+// resolveGestational returns (weeks, days, apply). apply is true when at least
+// one of the fields was present in the request body, in which case the caller
+// should persist both values via store.SetBabyGestationalAge. When weeks is
+// supplied without days, days defaults to 0.
+func (req *babyRequest) resolveGestational() (weeks, days *int, apply bool) {
+	if !req.GestationalAgeWeeks.set && !req.GestationalAgeDays.set {
+		return nil, nil, false
+	}
+	weeks = req.GestationalAgeWeeks.value
+	days = req.GestationalAgeDays.value
+	if weeks != nil && days == nil {
+		zero := 0
+		days = &zero
+	}
+	return weeks, days, true
 }
 
 // babyResponse is the JSON response for a baby.
 type babyResponse struct {
-	ID                string  `json:"id"`
-	Name              string  `json:"name"`
-	Sex               string  `json:"sex"`
-	DateOfBirth       string  `json:"date_of_birth"`
-	DiagnosisDate     *string `json:"diagnosis_date,omitempty"`
-	KasaiDate         *string `json:"kasai_date,omitempty"`
-	DefaultCalPerFeed float64 `json:"default_cal_per_feed"`
-	Notes             *string `json:"notes,omitempty"`
-	CreatedAt         string  `json:"created_at"`
+	ID                  string  `json:"id"`
+	Name                string  `json:"name"`
+	Sex                 string  `json:"sex"`
+	DateOfBirth         string  `json:"date_of_birth"`
+	DiagnosisDate       *string `json:"diagnosis_date,omitempty"`
+	KasaiDate           *string `json:"kasai_date,omitempty"`
+	DefaultCalPerFeed   float64 `json:"default_cal_per_feed"`
+	Notes               *string `json:"notes,omitempty"`
+	GestationalAgeWeeks *int    `json:"gestational_age_weeks,omitempty"`
+	GestationalAgeDays  *int    `json:"gestational_age_days,omitempty"`
+	CreatedAt           string  `json:"created_at"`
 }
 
 func toBabyResponse(b *model.Baby) babyResponse {
 	resp := babyResponse{
-		ID:                b.ID,
-		Name:              b.Name,
-		Sex:               b.Sex,
-		DateOfBirth:       b.DateOfBirth.Format(model.DateFormat),
-		DefaultCalPerFeed: b.DefaultCalPerFeed,
-		Notes:             b.Notes,
-		CreatedAt:         b.CreatedAt.Format(model.DateTimeFormat),
+		ID:                  b.ID,
+		Name:                b.Name,
+		Sex:                 b.Sex,
+		DateOfBirth:         b.DateOfBirth.Format(model.DateFormat),
+		DefaultCalPerFeed:   b.DefaultCalPerFeed,
+		Notes:               b.Notes,
+		GestationalAgeWeeks: b.GestationalAgeWeeks,
+		GestationalAgeDays:  b.GestationalAgeDays,
+		CreatedAt:           b.CreatedAt.Format(model.DateTimeFormat),
 	}
 	if b.DiagnosisDate != nil {
 		s := b.DiagnosisDate.Format(model.DateFormat)
@@ -159,6 +221,21 @@ func CreateBabyHandler(db *sql.DB) http.HandlerFunc {
 			log.Printf("create baby: %v", err)
 			http.Error(w, "failed to create baby", http.StatusInternalServerError)
 			return
+		}
+
+		if weeks, days, apply := req.resolveGestational(); apply {
+			if err := store.SetBabyGestationalAge(db, baby.ID, weeks, days); err != nil {
+				log.Printf("set gestational age on create: %v", err)
+				http.Error(w, "failed to create baby", http.StatusInternalServerError)
+				return
+			}
+			refreshed, err := store.GetBabyByID(db, baby.ID)
+			if err != nil {
+				log.Printf("reload baby after gestational set: %v", err)
+				http.Error(w, "failed to create baby", http.StatusInternalServerError)
+				return
+			}
+			baby = refreshed
 		}
 
 		writeJSON(w, http.StatusCreated, toBabyResponse(baby))
@@ -274,6 +351,10 @@ func UpdateBabyHandler(db *sql.DB) http.HandlerFunc {
 				http.Error(w, "failed to update baby", http.StatusInternalServerError)
 				return
 			}
+			updated, ok := applyGestationalUpdate(w, db, updated, &req)
+			if !ok {
+				return
+			}
 			writeJSON(w, http.StatusOK, toBabyResponse(updated))
 			return
 		}
@@ -285,10 +366,36 @@ func UpdateBabyHandler(db *sql.DB) http.HandlerFunc {
 			http.Error(w, "failed to update baby", http.StatusInternalServerError)
 			return
 		}
+		updated, ok = applyGestationalUpdate(w, db, updated, &req)
+		if !ok {
+			return
+		}
 
 		writeJSON(w, http.StatusOK, updateBabyEnvelope{
 			Baby:              toBabyResponse(updated),
 			RecalculatedCount: count,
 		})
 	}
+}
+
+// applyGestationalUpdate persists gestational age fields when present in the
+// request and returns the (possibly reloaded) baby. Writes a 500 and returns
+// ok=false if any DB call fails.
+func applyGestationalUpdate(w http.ResponseWriter, db *sql.DB, baby *model.Baby, req *babyRequest) (*model.Baby, bool) {
+	weeks, days, apply := req.resolveGestational()
+	if !apply {
+		return baby, true
+	}
+	if err := store.SetBabyGestationalAge(db, baby.ID, weeks, days); err != nil {
+		log.Printf("set gestational age on update: %v", err)
+		http.Error(w, "failed to update baby", http.StatusInternalServerError)
+		return nil, false
+	}
+	refreshed, err := store.GetBabyByID(db, baby.ID)
+	if err != nil {
+		log.Printf("reload baby after gestational set: %v", err)
+		http.Error(w, "failed to update baby", http.StatusInternalServerError)
+		return nil, false
+	}
+	return refreshed, true
 }

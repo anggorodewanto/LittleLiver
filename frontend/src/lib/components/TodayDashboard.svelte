@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { apiClient } from '$lib/api';
 	import { stoolStatusColor } from '$lib/stool-colors';
+	import { chronologicalAge, correctedAge, formatAge } from '$lib/age';
 	import type { MetricType } from './QuickLogButtons.svelte';
 	import type { Baby } from '$lib/stores/baby';
 	import QuickLogButtons from './QuickLogButtons.svelte';
@@ -232,18 +233,32 @@
 	}
 
 	function computeAge(dobStr: string, nowMs: number): string {
-		const dob = new Date(dobStr + 'T00:00:00');
-		const today = new Date(nowMs);
-		today.setHours(0, 0, 0, 0);
-
-		let months = (today.getFullYear() - dob.getFullYear()) * 12 + (today.getMonth() - dob.getMonth());
-		let days = today.getDate() - dob.getDate();
-		if (days < 0) {
-			months--;
-			const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-			days += prevMonth.getDate();
-		}
+		const { months, days } = chronologicalAge(dobStr, nowMs);
 		return `${months} mo ${days} d`;
+	}
+
+	function computeCorrectedAge(
+		dobStr: string,
+		weeks: number | null | undefined,
+		days: number | null | undefined,
+		nowMs: number
+	): string | null {
+		const age = correctedAge(dobStr, weeks ?? null, days ?? null, nowMs);
+		if (!age) {
+			return null;
+		}
+		return formatAge(age);
+	}
+
+	function formatGestationalAge(
+		weeks: number | null | undefined,
+		days: number | null | undefined
+	): string {
+		if (weeks == null) {
+			return '';
+		}
+		const d = days ?? 0;
+		return `${weeks}w ${d}d`;
 	}
 
 	function daysSince(dateStr: string, nowMs: number): number {
@@ -329,8 +344,22 @@
 		</div>
 		<div class="glance-item">
 			<div class="glance-value">{computeAge(baby.date_of_birth, now)}</div>
-			<div class="glance-label">Age</div>
+			<div class="glance-label">{baby.gestational_age_weeks != null ? 'Chrono. Age' : 'Age'}</div>
 		</div>
+		{#if computeCorrectedAge(baby.date_of_birth, baby.gestational_age_weeks, baby.gestational_age_days, now)}
+			<div class="glance-item">
+				<div class="glance-value">
+					{computeCorrectedAge(baby.date_of_birth, baby.gestational_age_weeks, baby.gestational_age_days, now)}
+				</div>
+				<div class="glance-label">Corrected Age</div>
+			</div>
+		{/if}
+		{#if baby.gestational_age_weeks != null}
+			<div class="glance-item">
+				<div class="glance-value">{formatGestationalAge(baby.gestational_age_weeks, baby.gestational_age_days)}</div>
+				<div class="glance-label">Gestation</div>
+			</div>
+		{/if}
 		{#if baby.kasai_date}
 			<div class="glance-item">
 				<div class="glance-value">{daysSince(baby.kasai_date, now)} days</div>

@@ -850,6 +850,74 @@ describe('TodayDashboard', () => {
 		expect(screen.queryByText('Diagnosed')).not.toBeInTheDocument();
 	});
 
+	// --- Corrected age (preterm) ---
+
+	it('does not show Corrected Age or Gestation when gestational_age_weeks is missing', async () => {
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		await screen.findByText('6');
+		expect(screen.queryByText('Corrected Age')).not.toBeInTheDocument();
+		expect(screen.queryByText('Gestation')).not.toBeInTheDocument();
+		expect(screen.getByText('Age')).toBeInTheDocument();
+	});
+
+	it('shows Corrected Age and Gestation for preterm babies', async () => {
+		vi.useFakeTimers({ now: new Date('2026-05-09T12:00:00Z') });
+
+		const pretermBaby: Baby = {
+			...mockBaby,
+			date_of_birth: '2026-01-10',
+			gestational_age_weeks: 32,
+			gestational_age_days: 0
+		};
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: pretermBaby } });
+
+		await screen.findByText('6');
+		// Chronological: 2026-01-10 → 2026-05-09 = 3 months 30 days... let me recompute
+		// Jan 10 → Apr 10 = 3 months. Apr 10 → May 9 = 29 days. So 3 mo 29 d.
+		expect(screen.getByText('3 mo 29 d')).toBeInTheDocument();
+		expect(screen.getByText('Chrono. Age')).toBeInTheDocument();
+		// Corrected: 32w 0d → 8 weeks (56 days) early. Corrected DOB = 2026-03-07.
+		// 2026-03-07 → 2026-05-09 = 2 months 2 days.
+		expect(screen.getByText('2 mo 2 d')).toBeInTheDocument();
+		expect(screen.getByText('Corrected Age')).toBeInTheDocument();
+		expect(screen.getByText('32w 0d')).toBeInTheDocument();
+		expect(screen.getByText('Gestation')).toBeInTheDocument();
+
+		vi.useRealTimers();
+	});
+
+	it('does not show Corrected Age for full-term babies even when gestational age is set', async () => {
+		const fullTermBaby: Baby = {
+			...mockBaby,
+			gestational_age_weeks: 40,
+			gestational_age_days: 0
+		};
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: fullTermBaby } });
+
+		await screen.findByText('6');
+		expect(screen.queryByText('Corrected Age')).not.toBeInTheDocument();
+		expect(screen.getByText('Gestation')).toBeInTheDocument();
+		expect(screen.getByText('40w 0d')).toBeInTheDocument();
+	});
+
+	it('shows "not yet at term" when corrected age is before term', async () => {
+		vi.useFakeTimers({ now: new Date('2026-02-15T12:00:00Z') });
+
+		const veryPreterm: Baby = {
+			...mockBaby,
+			date_of_birth: '2026-01-10',
+			gestational_age_weeks: 32,
+			gestational_age_days: 0
+		};
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: veryPreterm } });
+
+		await screen.findByText('6');
+		expect(screen.getByText('not yet at term')).toBeInTheDocument();
+
+		vi.useRealTimers();
+	});
+
 	it('renders Low Stock alert with medication name and remaining doses', async () => {
 		mockGet.mockResolvedValue({
 			...mockDashboardResponse,

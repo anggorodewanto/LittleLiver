@@ -94,4 +94,73 @@ describe('BabySettingsForm', () => {
 
 		expect(screen.getByText('Update failed')).toBeInTheDocument();
 	});
+
+	it('renders gestational age inputs', () => {
+		render(BabySettingsForm, { props: { baby, onsave } });
+
+		expect(screen.getByLabelText(/^weeks$/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/^days$/i)).toBeInTheDocument();
+	});
+
+	it('pre-fills gestational age inputs from baby', () => {
+		render(BabySettingsForm, {
+			props: {
+				baby: { ...baby, gestational_age_weeks: 32, gestational_age_days: 4 },
+				onsave
+			}
+		});
+
+		expect((screen.getByLabelText(/^weeks$/i) as HTMLInputElement).value).toBe('32');
+		expect((screen.getByLabelText(/^days$/i) as HTMLInputElement).value).toBe('4');
+	});
+
+	it('submits gestational age when filled', async () => {
+		render(BabySettingsForm, { props: { baby, onsave } });
+
+		await fireEvent.input(screen.getByLabelText(/^weeks$/i), { target: { value: '34' } });
+		await fireEvent.input(screen.getByLabelText(/^days$/i), { target: { value: '2' } });
+		await fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+		expect(onsave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				gestational_age_weeks: 34,
+				gestational_age_days: 2
+			}),
+			false
+		);
+	});
+
+	it('submits null gestational age when blank', async () => {
+		render(BabySettingsForm, { props: { baby, onsave } });
+
+		await fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+		expect(onsave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				gestational_age_weeks: null,
+				gestational_age_days: null
+			}),
+			false
+		);
+	});
+
+	it('rejects out-of-range gestational weeks', async () => {
+		render(BabySettingsForm, { props: { baby, onsave } });
+
+		await fireEvent.input(screen.getByLabelText(/^weeks$/i), { target: { value: '50' } });
+		await fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+		expect(screen.getByText(/gestational weeks/i)).toBeInTheDocument();
+		expect(onsave).not.toHaveBeenCalled();
+	});
+
+	it('rejects gestational days without weeks', async () => {
+		render(BabySettingsForm, { props: { baby, onsave } });
+
+		await fireEvent.input(screen.getByLabelText(/^days$/i), { target: { value: '3' } });
+		await fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+		expect(screen.getByText(/weeks before days/i)).toBeInTheDocument();
+		expect(onsave).not.toHaveBeenCalled();
+	});
 });

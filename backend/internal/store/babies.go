@@ -12,16 +12,22 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
+// babyColumns is the canonical column list for SELECTing a baby row. Keep
+// scanBaby in sync with this list and its order.
+const babyColumns = `id, name, sex, date_of_birth, diagnosis_date, kasai_date,
+	default_cal_per_feed, notes, gestational_age_weeks, gestational_age_days, created_at`
+
 // scanBaby scans a single baby row from the given scanner and parses its
 // time-related fields.
 func scanBaby(s scanner) (*model.Baby, error) {
 	var b model.Baby
 	var dobStr string
 	var diagStr, kasaiStr, notesStr sql.NullString
+	var gestWeeks, gestDays sql.NullInt64
 	var createdStr string
 
 	err := s.Scan(&b.ID, &b.Name, &b.Sex, &dobStr, &diagStr, &kasaiStr,
-		&b.DefaultCalPerFeed, &notesStr, &createdStr)
+		&b.DefaultCalPerFeed, &notesStr, &gestWeeks, &gestDays, &createdStr)
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +52,14 @@ func scanBaby(s scanner) (*model.Baby, error) {
 	}
 	if notesStr.Valid {
 		b.Notes = &notesStr.String
+	}
+	if gestWeeks.Valid {
+		v := int(gestWeeks.Int64)
+		b.GestationalAgeWeeks = &v
+	}
+	if gestDays.Valid {
+		v := int(gestDays.Int64)
+		b.GestationalAgeDays = &v
 	}
 	b.CreatedAt, err = ParseTime(createdStr)
 	if err != nil {
@@ -94,9 +108,7 @@ func CreateBaby(db *sql.DB, creatorID, name, sex, dob string, diagnosisDate, kas
 // Returns sql.ErrNoRows if the baby does not exist.
 func GetBabyByID(db *sql.DB, id string) (*model.Baby, error) {
 	row := db.QueryRow(
-		`SELECT id, name, sex, date_of_birth, diagnosis_date, kasai_date,
-		        default_cal_per_feed, notes, created_at
-		 FROM babies WHERE id = ?`, id,
+		`SELECT `+babyColumns+` FROM babies WHERE id = ?`, id,
 	)
 	return scanBaby(row)
 }
@@ -244,7 +256,7 @@ func UnlinkParent(db *sql.DB, babyID, userID string) error {
 func GetBabiesByUserID(db *sql.DB, userID string) ([]model.Baby, error) {
 	rows, err := db.Query(
 		`SELECT b.id, b.name, b.sex, b.date_of_birth, b.diagnosis_date, b.kasai_date,
-		        b.default_cal_per_feed, b.notes, b.created_at
+		        b.default_cal_per_feed, b.notes, b.gestational_age_weeks, b.gestational_age_days, b.created_at
 		 FROM babies b
 		 JOIN baby_parents bp ON b.id = bp.baby_id
 		 WHERE bp.user_id = ?`, userID,
@@ -266,4 +278,24 @@ func GetBabiesByUserID(db *sql.DB, userID string) ([]model.Baby, error) {
 		return nil, fmt.Errorf("rows iteration: %w", err)
 	}
 	return babies, nil
+}
+
+// SetBabyGestationalAge sets (or clears) the baby's gestational age at birth.
+// Pass nil for both weeks and days to clear. Other baby fields are not touched.
+func SetBabyGestationalAge(db *sql.DB, id string, weeks, days *int) error {
+	res, err := db.Exec(
+		`UPDATE babies SET gestational_age_weeks = ?, gestational_age_days = ? WHERE id = ?`,
+		weeks, days, id,
+	)
+	if err != nil {
+		return fmt.Errorf("set gestational age: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("set gestational age: rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("set gestational age: %w", sql.ErrNoRows)
+	}
+	return nil
 }

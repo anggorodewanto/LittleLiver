@@ -23,15 +23,17 @@ type User struct {
 
 // Baby represents a baby profile being tracked.
 type Baby struct {
-	ID                string     `json:"id"`
-	Name              string     `json:"name"`
-	Sex               string     `json:"sex"`
-	DateOfBirth       time.Time  `json:"date_of_birth"`
-	DiagnosisDate     *time.Time `json:"diagnosis_date,omitempty"`
-	KasaiDate         *time.Time `json:"kasai_date,omitempty"`
-	DefaultCalPerFeed float64    `json:"default_cal_per_feed"`
-	Notes             *string    `json:"notes,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
+	ID                  string     `json:"id"`
+	Name                string     `json:"name"`
+	Sex                 string     `json:"sex"`
+	DateOfBirth         time.Time  `json:"date_of_birth"`
+	DiagnosisDate       *time.Time `json:"diagnosis_date,omitempty"`
+	KasaiDate           *time.Time `json:"kasai_date,omitempty"`
+	DefaultCalPerFeed   float64    `json:"default_cal_per_feed"`
+	Notes               *string    `json:"notes,omitempty"`
+	GestationalAgeWeeks *int       `json:"gestational_age_weeks,omitempty"`
+	GestationalAgeDays  *int       `json:"gestational_age_days,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
 }
 
 // BabyParent represents the link between a baby and a parent user.
