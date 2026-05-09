@@ -23,6 +23,7 @@ var AnonymizeTables = []string{
 	"skin_observations",
 	"bruising",
 	"lab_results",
+	"imaging_studies",
 	"general_notes",
 	"medications",
 	"med_logs",

@@ -177,6 +177,19 @@ func TestDeleteAccountHandler_StoreError_Returns500(t *testing.T) {
 	}
 }
 
+// TestAnonymizeTables_IncludesImagingStudies guards SPEC §2.2 ↔ code parity.
+// imaging_studies has logged_by/updated_by FKs to users(id); without anonymization,
+// account deletion would fail FK on the final user delete once a study exists.
+func TestAnonymizeTables_IncludesImagingStudies(t *testing.T) {
+	t.Parallel()
+	for _, table := range handler.AnonymizeTables {
+		if table == "imaging_studies" {
+			return
+		}
+	}
+	t.Errorf("AnonymizeTables missing %q (SPEC §2.2 lists it). Got: %v", "imaging_studies", handler.AnonymizeTables)
+}
+
 func TestDeleteAccountHandler_InvitesUsedByAnonymized(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)
