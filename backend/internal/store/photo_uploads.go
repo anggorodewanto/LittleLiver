@@ -9,12 +9,21 @@ import (
 )
 
 // CreatePhotoUpload inserts a new photo_uploads row and returns the created record.
+// An empty thumbnailKey is stored as NULL (e.g., for PDFs whose thumbnail
+// generation failed at upload time).
 func CreatePhotoUpload(db *sql.DB, babyID, r2Key, thumbnailKey string) (*model.PhotoUpload, error) {
 	id := model.NewULID()
 
+	var tk any
+	if thumbnailKey == "" {
+		tk = nil
+	} else {
+		tk = thumbnailKey
+	}
+
 	_, err := db.Exec(
 		`INSERT INTO photo_uploads (id, baby_id, r2_key, thumbnail_key) VALUES (?, ?, ?, ?)`,
-		id, babyID, r2Key, thumbnailKey,
+		id, babyID, r2Key, tk,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create photo_upload: %w", err)
@@ -43,15 +52,23 @@ func getPhotoUploadByID(db *sql.DB, id string) (*model.PhotoUpload, error) {
 // MaxPhotosPerMetric is the maximum number of photos that can be linked to a single metric entry.
 const MaxPhotosPerMetric = 4
 
+// MaxPhotosPerImagingStudy is the maximum number of files (images + PDFs) per imaging study.
+const MaxPhotosPerImagingStudy = 10
+
 // ValidateAndLinkPhotos validates that the given R2 keys exist in photo_uploads
 // for the specified baby and sets linked_at on each. Returns an error if any key
 // is invalid, belongs to a different baby, or exceeds the 4-photo limit.
 func ValidateAndLinkPhotos(db *sql.DB, babyID string, keys []string) error {
+	return ValidateAndLinkPhotosWithMax(db, babyID, keys, MaxPhotosPerMetric)
+}
+
+// ValidateAndLinkPhotosWithMax is like ValidateAndLinkPhotos but takes a custom max-count limit.
+func ValidateAndLinkPhotosWithMax(db *sql.DB, babyID string, keys []string, max int) error {
 	if len(keys) == 0 {
 		return nil
 	}
-	if len(keys) > MaxPhotosPerMetric {
-		return fmt.Errorf("exceeds maximum of %d photos per entry", MaxPhotosPerMetric)
+	if len(keys) > max {
+		return fmt.Errorf("exceeds maximum of %d photos per entry", max)
 	}
 
 	tx, err := db.Begin()

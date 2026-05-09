@@ -501,6 +501,82 @@ func TestGeneratePDF_WithPhotos_NoStorage(t *testing.T) {
 	}
 }
 
+func TestGeneratePDF_WithImagingStudies(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
+	objStore := storage.NewMemoryStore()
+
+	// Seed a photo_uploads row + thumbnail in storage
+	thumb := createTestPNG(t)
+	r2Key := "photos/study1.jpg"
+	thumbKey := "photos/thumb_study1.jpg"
+	_ = objStore.Put(t.Context(), thumbKey, bytes.NewReader(thumb), "image/png")
+	if _, err := db.Exec(
+		`INSERT INTO photo_uploads (id, baby_id, r2_key, thumbnail_key, linked_at, uploaded_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		"pu-img-1", baby.ID, r2Key, thumbKey,
+	); err != nil {
+		t.Fatalf("seed photo_uploads: %v", err)
+	}
+
+	// Seed an imaging_studies row in the date range
+	if _, err := db.Exec(
+		`INSERT INTO imaging_studies (id, baby_id, logged_by, timestamp, study_date, study_type, notes, photo_keys)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		"is-1", baby.ID, user.ID, "2025-08-01T12:00:00Z", "2025-08-01", "Ultrasound", "Liver normal, no lesions", `["photos/study1.jpg"]`,
+	); err != nil {
+		t.Fatalf("seed imaging_studies: %v", err)
+	}
+
+	var buf bytes.Buffer
+	err := report.Generate(db, objStore, baby, "2025-08-01", "2025-08-01", &buf, nil)
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+	pdfStr := string(buf.Bytes())
+	if !containsText(pdfStr, "Imaging Studies") {
+		t.Error("PDF should contain 'Imaging Studies' section when an imaging study exists")
+	}
+}
+
+func TestGeneratePDF_WithImagingStudy_NoThumbnail(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
+	objStore := storage.NewMemoryStore()
+
+	// Seed photo_uploads with NULL thumbnail_key (e.g., PDF rasterize failed)
+	if _, err := db.Exec(
+		`INSERT INTO photo_uploads (id, baby_id, r2_key, thumbnail_key, linked_at, uploaded_at) VALUES (?, ?, ?, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		"pu-img-2", baby.ID, "photos/study2.pdf",
+	); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if _, err := db.Exec(
+		`INSERT INTO imaging_studies (id, baby_id, logged_by, timestamp, study_date, study_type, notes, photo_keys)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		"is-2", baby.ID, user.ID, "2025-08-01T12:00:00Z", "2025-08-01", "CT", "PDF report", `["photos/study2.pdf"]`,
+	); err != nil {
+		t.Fatalf("seed imaging: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := report.Generate(db, objStore, baby, "2025-08-01", "2025-08-01", &buf, nil); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	pdfStr := string(buf.Bytes())
+	if !containsText(pdfStr, "Imaging Studies") {
+		t.Error("PDF should contain 'Imaging Studies' even with no thumbnail")
+	}
+}
+
 func TestGeneratePDF_FullReport_ValidPDF(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)

@@ -61,7 +61,12 @@ describe('LabResultsView', () => {
 		resetChartMocks();
 		vi.clearAllMocks();
 		mockGet = apiClient.get as ReturnType<typeof vi.fn>;
-		mockGet.mockResolvedValue({ data: mockResults, next_cursor: null });
+		mockGet.mockImplementation((path: string) => {
+			if (path.includes('/imaging-studies')) {
+				return Promise.resolve({ data: [], next_cursor: null });
+			}
+			return Promise.resolve({ data: mockResults, next_cursor: null });
+		});
 	});
 
 	it('renders the date range selector', async () => {

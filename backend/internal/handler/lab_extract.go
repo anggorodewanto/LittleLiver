@@ -27,9 +27,14 @@ type labExtractResponse struct {
 	ReportDate string                       `json:"report_date,omitempty"`
 }
 
-// ExtractRateLimiter tracks per-user extraction request counts (10/hour).
+// DefaultExtractRateLimit is the per-user, per-hour cap shared by all extract endpoints.
+const DefaultExtractRateLimit = 50
+
+// ExtractRateLimiter tracks per-user extraction request counts.
+// Shared across /labs/extract and /imaging-studies/extract.
 type ExtractRateLimiter struct {
 	mu      sync.Mutex
+	cap     int
 	buckets map[string]*extractBucket
 }
 
@@ -38,9 +43,15 @@ type extractBucket struct {
 	windowStart time.Time
 }
 
-// NewExtractRateLimiter creates a rate limiter for lab extraction (10 req/hour/user).
+// NewExtractRateLimiter creates a rate limiter with the default cap (50 req/hr/user).
 func NewExtractRateLimiter() *ExtractRateLimiter {
+	return NewExtractRateLimiterWithCap(DefaultExtractRateLimit)
+}
+
+// NewExtractRateLimiterWithCap creates a rate limiter with a custom cap.
+func NewExtractRateLimiterWithCap(cap int) *ExtractRateLimiter {
 	return &ExtractRateLimiter{
+		cap:     cap,
 		buckets: make(map[string]*extractBucket),
 	}
 }
@@ -54,21 +65,26 @@ func (rl *ExtractRateLimiter) allow(userID string) (bool, int) {
 	b, ok := rl.buckets[userID]
 	if !ok {
 		rl.buckets[userID] = &extractBucket{count: 1, windowStart: now}
-		return true, 9
+		return true, rl.cap - 1
 	}
 
 	if now.Sub(b.windowStart) >= time.Hour {
 		b.count = 1
 		b.windowStart = now
-		return true, 9
+		return true, rl.cap - 1
 	}
 
-	if b.count >= 10 {
+	if b.count >= rl.cap {
 		return false, 0
 	}
 
 	b.count++
-	return true, 10 - b.count
+	return true, rl.cap - b.count
+}
+
+// Allow is the exported variant for use by sibling extract handlers.
+func (rl *ExtractRateLimiter) Allow(userID string) (bool, int) {
+	return rl.allow(userID)
 }
 
 // buildLabHints fetches the baby's distinct previously-logged tests and converts

@@ -21,6 +21,7 @@
 	import HeadCircumferenceForm from '$lib/components/HeadCircumferenceForm.svelte';
 	import UpperArmCircumferenceForm from '$lib/components/UpperArmCircumferenceForm.svelte';
 	import LabImportFlow from '$lib/components/LabImportFlow.svelte';
+	import ImagingStudyForm from '$lib/components/ImagingStudyForm.svelte';
 
 	const METRIC_CONFIG: Record<string, { label: string; endpoint: string; hasPhoto: boolean; multiPhoto?: boolean }> = {
 		feeding: { label: 'Feeding', endpoint: 'feedings', hasPhoto: false },
@@ -32,6 +33,7 @@
 		skin: { label: 'Skin', endpoint: 'skin', hasPhoto: true, multiPhoto: true },
 		bruising: { label: 'Bruising', endpoint: 'bruising', hasPhoto: true, multiPhoto: true },
 		lab: { label: 'Lab', endpoint: 'labs', hasPhoto: false },
+		imaging: { label: 'Imaging Study', endpoint: 'imaging-studies', hasPhoto: true, multiPhoto: true },
 		notes: { label: 'Note', endpoint: 'notes', hasPhoto: true, multiPhoto: true },
 		medication: { label: 'Medication', endpoint: 'medications', hasPhoto: false },
 		med: { label: 'Dose', endpoint: 'med-logs', hasPhoto: false },
@@ -48,6 +50,7 @@
 	function backHref(metricKey: string): string {
 		if (metricKey === 'medication') return '/medications';
 		if (metricKey === 'lab') return '/labs';
+		if (metricKey === 'imaging') return '/labs';
 		return '/logs';
 	}
 
@@ -213,6 +216,8 @@
 			{/if}
 			<LabForm onsubmit={handleSubmit} initialData={editData} babyId={baby.id} {submitting} {error} />
 		{/if}
+	{:else if metric === 'imaging'}
+		<ImagingStudyForm babyId={baby.id} onsubmit={handleSubmit} {submitting} {error} />
 	{:else if metric === 'notes'}
 		<NotesForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} onphotoremove={handlePhotoRemove} {submitting} {error} {uploading} {photoKeys} {existingPhotos} />
 	{:else if metric === 'medication'}

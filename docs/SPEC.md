@@ -23,7 +23,7 @@ A personal-use web application for parents to track daily health metrics of an i
 - Any linked parent can generate invite codes. All invite codes have a **fixed 24-hour expiration**. Generating a new invite code **hard-deletes ALL prior codes** for that baby (used, expired, or unused) — only one active invite code per baby at a time. On code collision (uniqueness violation), retry with a new random code up to **5 times**. A cron job periodically deletes ALL invite codes older than 24 hours (both used and unused) across all babies, keeping active code count low and collision risk negligible. The server checks `used_at IS NOT NULL` as a rejection condition but returns the same generic "invalid or expired code" error for all failure cases.
 - If an already-linked parent redeems an invite code for a baby they are already linked to, show a friendly "You're already linked to this baby" message (no error).
 - **Self-unlink:** A parent can unlink themselves from a baby (but not other parents) via `DELETE /api/babies/:id/parents/me`. If the last remaining parent unlinks, the baby and all associated data are deleted. The endpoint always returns **204 No Content** regardless of whether the baby was also deleted. The frontend detects baby deletion by attempting to fetch baby data and receiving 404, then navigates to the baby list/creation screen.
-- **Account deletion:** `DELETE /api/users/me` deletes the requesting user's account. Deletion order: (1) identify babies where the user is the last remaining parent; (2) delete those babies (triggering `ON DELETE CASCADE` for all associated data); (3) delete all invites created by the user (`invites.created_by`); (4) anonymize `logged_by`/`updated_by` to `'deleted_user'` across all metric tables (including `head_circumferences`, `upper_arm_circumferences`), anonymize `medications.logged_by`/`medications.updated_by` to `'deleted_user'`, and anonymize `invites.used_by` to `'deleted_user'` where it references the deleted user (anonymization, not CASCADE); (5) delete the user record (`ON DELETE CASCADE` cleans up remaining `baby_parents`, `sessions`, and `push_subscriptions`). Returns **204 No Content**.
+- **Account deletion:** `DELETE /api/users/me` deletes the requesting user's account. Deletion order: (1) identify babies where the user is the last remaining parent; (2) delete those babies (triggering `ON DELETE CASCADE` for all associated data); (3) delete all invites created by the user (`invites.created_by`); (4) anonymize `logged_by`/`updated_by` to `'deleted_user'` across all metric tables (including `head_circumferences`, `upper_arm_circumferences`, `imaging_studies`), anonymize `medications.logged_by`/`medications.updated_by` to `'deleted_user'`, and anonymize `invites.used_by` to `'deleted_user'` where it references the deleted user (anonymization, not CASCADE); (5) delete the user record (`ON DELETE CASCADE` cleans up remaining `baby_parents`, `sessions`, and `push_subscriptions`). Returns **204 No Content**.
 - **First login (no existing links):** The user sees only two options — "Create Baby" or "Enter Invite Code." There is no other entry path.
 
 ### 2.3 Multi-Baby Support
@@ -338,7 +338,7 @@ PUT    /api/babies/:id/feedings/:entryId     → Edit entry
 DELETE /api/babies/:id/feedings/:entryId     → Hard-delete entry
 ```
 
-Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/labs`, `/notes`, `/fluid-log`, `/head-circumferences`, `/upper-arm-circumferences`
+Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/temperatures`, `/skin`, `/bruising`, `/labs`, `/notes`, `/fluid-log`, `/head-circumferences`, `/upper-arm-circumferences`, `/imaging-studies`
 
 **Lab test suggestions:** `GET /api/babies/:id/labs/tests` returns a list of suggested lab test names for autocomplete in the UI. This is a read-only convenience endpoint requiring baby access authorization.
 
@@ -361,14 +361,14 @@ Metric endpoints: `/feedings`, `/urine`, `/stools`, `/weights`, `/abdomen`, `/te
 POST   /api/babies/:id/upload      → Upload photo (baby-level auth check) → returns R2 key
 ```
 
-**Photo upload constraints:** Max raw upload size: **25 MB**. Accepted MIME types: **JPEG, PNG, HEIC**. The server **always re-encodes** uploaded images via ImageMagick: the stored "original" is downscaled to fit within **2000×2000** (longest side, no upscale) and re-encoded as **JPEG quality 85**, regardless of input format. The server then generates a **~300px-wide JPEG/PNG thumbnail** from the resized image (also via ImageMagick) and stores it alongside the original in R2 with a `thumb_` prefix (e.g., original key `photos/abc123.jpg` → thumbnail key `photos/thumb_abc123.jpg`). Thumbnails are used in dashboard display and PDF report embedding. The `photo_uploads` table includes a `thumbnail_key TEXT` column to store the thumbnail's R2 key. Memory peaks live inside short-lived ImageMagick subprocesses, not the Go heap, to keep the 512 MB Fly VM safe.
+**Photo upload constraints:** Max raw upload size: **25 MB** for images, **20 MB** for PDFs. Accepted MIME types: **JPEG, PNG, HEIC, application/pdf**. The server **always re-encodes** uploaded *images* via ImageMagick: the stored "original" is downscaled to fit within **2000×2000** (longest side, no upscale) and re-encoded as **JPEG quality 85**, regardless of input format. The server then generates a **~300px-wide JPEG/PNG thumbnail** from the resized image (also via ImageMagick) and stores it alongside the original in R2 with a `thumb_` prefix (e.g., original key `photos/abc123.jpg` → thumbnail key `photos/thumb_abc123.jpg`). **PDFs** (radiology reports for imaging studies) are stored **as-is** without re-encoding; the server rasterizes the **first page only** to a 300px JPEG thumbnail via **ImageMagick + Ghostscript** subprocess (key suffix `.jpg`, e.g., `photos/abc123.pdf` → `photos/thumb_abc123.jpg`). PDF thumbnail rasterization is best-effort: a malformed PDF still uploads successfully but stores `NULL` in `thumbnail_key`, and downstream consumers fall back to a generic PDF icon. Thumbnails are used in dashboard display and PDF report embedding. The `photo_uploads` table includes a `thumbnail_key TEXT` column to store the thumbnail's R2 key (nullable). Memory peaks live inside short-lived ImageMagick/Ghostscript subprocesses, not the Go heap, to keep the 512 MB Fly VM safe.
 
 **Photo upload flow:**
 1. Client uploads the photo via `POST /api/babies/:id/upload`. The server validates size/type, stores the original and generated thumbnail in R2, creates a `photo_uploads` row (with both `r2_key` and `thumbnail_key`), and returns the **R2 key** in the response.
 2. Client includes the R2 key(s) in the metric entry creation or update request body, in the `photo_keys` JSON array field.
 3. Server validates that each R2 key in `photo_keys` exists in the `photo_uploads` table with a matching `baby_id`. If valid, the server sets `linked_at` on the corresponding `photo_uploads` rows.
 
-**Photo support scope:** Only the following metric types support photos (`photo_keys` column): `stools`, `abdomen_observations`, `skin_observations`, `bruising`, and `general_notes`. Photos are explicitly NOT supported for: `feedings`, `weights`, `temperatures`, `urine`, `lab_results`, `med_logs`. **Photo limit:** Uniform maximum of **4 photos per metric entry** across all types that support photos. The server enforces this limit on both create and update — requests exceeding 4 photo keys are rejected with a validation error.
+**Photo support scope:** The following metric types support photos (`photo_keys` column): `stools`, `abdomen_observations`, `skin_observations`, `bruising`, `general_notes`, and `imaging_studies` (images + PDFs). Photos are explicitly NOT supported for: `feedings`, `weights`, `temperatures`, `urine`, `lab_results`, `med_logs`. **Photo limit:** Maximum **4 photos per metric entry** across most types; **`imaging_studies` allows up to 10 files** per entry (mix of images and PDFs) since multi-page radiology reports often span several files. The server enforces these limits on both create and update — requests exceeding the cap are rejected with a validation error.
 
 **Signed URLs on read:** When metric entries containing `photo_keys` are returned by the API (list or detail), the server replaces each R2 key with a **signed URL** (TTL: 1 hour). No separate photo URL endpoint is needed — clients always receive ready-to-use URLs.
 
@@ -483,7 +483,21 @@ When `existing_match` is non-null, the frontend marks that row as a **probable d
 
 **Error handling:** If Claude cannot extract any results (e.g., image is not a lab report, too blurry), the server returns `200` with an empty `extracted` array and a `notes` field explaining the issue. Network/API errors return `502`.
 
-**Cost & rate limiting:** Each extraction costs ~$0.01–0.05 depending on image count/size. The endpoint is rate-limited to **10 requests per hour per user** to prevent abuse. The Anthropic API key is stored as a fly.io secret (`ANTHROPIC_API_KEY`).
+**Cost & rate limiting:** Each extraction costs ~$0.01–0.05 depending on image count/size. Both `/labs/extract` and `/imaging-studies/extract` share a single rate-limit bucket of **50 requests per hour per user** to prevent abuse. The Anthropic API key is stored as a fly.io secret (`ANTHROPIC_API_KEY`).
+
+### 5.6.1 Imaging Study Extraction (AI Vision)
+
+```
+POST   /api/babies/:id/imaging-studies/extract  → Suggest study_type, study_date, findings from uploaded radiology image(s)/PDF
+```
+
+**Purpose:** Parents uploading non-numeric lab artifacts (CT, Ultrasound, MRI, X-ray, radiology PDFs) can have Claude Vision pre-fill `study_type`, `study_date`, and free-text findings. Read-only — never writes the database.
+
+**Input:** `{ "photo_keys": ["photos/abc.jpg", "photos/xyz.pdf"] }`. Up to **10 keys** per request (matching `/labs/extract`). PDF keys are sent to Vision as the first-page JPEG thumbnail (rasterized at upload time); raw PDF bytes are never sent.
+
+**Response:** `200 OK` with `{ "suggested": { "study_type": "...", "study_date": "YYYY-MM-DD", "findings": "...", "notes": "..." } }`. Any field may be empty when the model couldn't determine it. `429` on rate-limit (shared 50/hr/user with `/labs/extract`). `502` on Vision API errors.
+
+**Frontend flow:** form auto-runs extraction immediately after all uploads complete; pre-fills the visible fields with a "verify auto-fill" highlight; user-typed values always win over the model's suggestions. Extraction failure shows a brief toast "couldn't analyze, fill manually" and the form remains usable.
 
 ### 5.7 WHO Growth Data
 ```
@@ -630,7 +644,8 @@ Uses the same `GET /api/babies/:id/dashboard?from=&to=` endpoint with the desire
 6. **Feeding summary** — average daily volume/calories
 7. **Medication adherence** — adherence = (given logs / total logs including skipped) for all medication types. No inferred expected doses — just the ratio of logged-as-given vs total logged entries
 8. **Notable observations** — any flagged notes, bruising entries, photos (thumbnails)
-9. **Photo appendix** — all stool/skin photos within the report date range in chronological order
+9. **Imaging studies** — each imaging study within the report date range listed with `study_date`, `study_type`, free-text `notes`, and a 300px thumbnail (first-page rasterization for PDFs; existing 300px JPEG for images). Studies with a malformed PDF (no thumbnail available) render as a text-only line with a "PDF — no preview" tag.
+10. **Photo appendix** — all stool/skin/imaging photos within the report date range in chronological order
 
 ---
 
@@ -871,6 +886,26 @@ CREATE TABLE general_notes (
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Imaging studies (CT, Ultrasound, MRI, radiology PDFs). Distinct from lab_results
+-- because the artifact is the image/PDF itself, not a numeric value.
+-- timestamp = study_date 12:00 in user's X-Timezone, set at create time. On PUT,
+-- if study_date changes, timestamp is recomputed using the PUT request's X-Timezone.
+CREATE TABLE imaging_studies (
+    id          TEXT PRIMARY KEY,
+    baby_id     TEXT REFERENCES babies(id) ON DELETE CASCADE NOT NULL,
+    logged_by   TEXT REFERENCES users(id) NOT NULL,
+    updated_by  TEXT REFERENCES users(id),
+    timestamp   DATETIME NOT NULL,
+    study_date  TEXT NOT NULL,      -- naive YYYY-MM-DD
+    study_type  TEXT NOT NULL,      -- "CT" | "Ultrasound" | "MRI" | free text
+    notes       TEXT,               -- free-text findings (Vision auto-fills, user edits)
+    photo_keys  TEXT NOT NULL,      -- JSON array of R2 keys; 1-10 entries (mix of images + PDFs)
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_imaging_studies_baby_timestamp ON imaging_studies (baby_id, timestamp);
 
 -- photo_uploads.baby_id uses ON DELETE SET NULL (not CASCADE). A single cleanup
 -- cron job handles both orphan and cascade cleanup — see §5.4.

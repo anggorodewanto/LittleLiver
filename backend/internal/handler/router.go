@@ -125,11 +125,19 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("GET /api/babies/{id}/labs/tests", rateMw(authMw(http.HandlerFunc(ListLabTestSuggestionsHandler(cfg.db)))))
 			mux.Handle("POST /api/babies/{id}/labs/batch", rateMw(authMw(csrfMw(http.HandlerFunc(BatchCreateLabResultHandler(cfg.db))))))
 
-			// Lab extraction endpoint (Claude Vision API) — separate rate limit: 10 req/hour/user
+			// Imaging studies CRUD (CT/Ultrasound/MRI/PDF radiology artifacts)
+			registerMetricCRUD(mux, "/api/babies/{id}/imaging-studies", rateMw, authMw, csrfMw,
+				CreateImagingStudyHandler(cfg.db, cfg.objStore), ListImagingStudiesHandler(cfg.db, cfg.objStore),
+				GetImagingStudyHandler(cfg.db, cfg.objStore), UpdateImagingStudyHandler(cfg.db, cfg.objStore), DeleteImagingStudyHandler(cfg.db))
+
+			// Lab extraction endpoint (Claude Vision API) — shared rate limit (50 req/hour/user)
+			// across both /labs/extract and /imaging-studies/extract.
 			if cfg.extractSvc != nil {
 				extractRL := NewExtractRateLimiter()
 				mux.Handle("POST /api/babies/{id}/labs/extract", rateMw(authMw(csrfMw(http.HandlerFunc(
 					LabExtractHandlerWithRateLimit(cfg.db, cfg.objStore, cfg.extractSvc, extractRL))))))
+				mux.Handle("POST /api/babies/{id}/imaging-studies/extract", rateMw(authMw(csrfMw(http.HandlerFunc(
+					ImagingExtractHandlerWithRateLimit(cfg.db, cfg.objStore, cfg.extractSvc, extractRL))))))
 			}
 			registerMetricCRUD(mux, "/api/babies/{id}/notes", rateMw, authMw, csrfMw,
 				CreateGeneralNoteHandler(cfg.db, cfg.objStore), ListGeneralNotesHandler(cfg.db, cfg.objStore),

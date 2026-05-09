@@ -150,20 +150,23 @@ func TestLabExtractRateLimitPersistsAcrossFlow(t *testing.T) {
 	cannedResp := `{"extracted": [{"test_name": "ALT", "value": "45", "unit": "U/L", "normal_range": "7-56", "confidence": "high"}], "notes": ""}`
 	client := &mockClaudeClient{response: cannedResp}
 	svc := labextract.NewService(client)
-	rl := handler.NewExtractRateLimiter()
+	// Use a small cap (3) for fast deterministic test; production cap (50) is
+	// shared with /imaging-studies/extract.
+	const cap = 3
+	rl := handler.NewExtractRateLimiterWithCap(cap)
 	h := handler.LabExtractHandlerWithRateLimit(f.db, f.objStore, svc, rl)
 
 	mux := makeRateLimitedExtractMux(t, f, h)
 
 	// Seed a photo for each request
-	keys := make([]string, 11)
+	keys := make([]string, cap+1)
 	for i := range keys {
 		keys[i] = "photo-" + model.NewULID()
 		seedR2Photo(t, f.db, f.objStore, f.baby.ID, keys[i])
 	}
 
-	// Make 10 successful extraction requests
-	for i := 0; i < 10; i++ {
+	// Make `cap` successful extraction requests
+	for i := 0; i < cap; i++ {
 		req := makeExtractReq(t, f, []string{keys[i]})
 		rr := httptest.NewRecorder()
 		mux.ServeHTTP(rr, req)
@@ -172,12 +175,12 @@ func TestLabExtractRateLimitPersistsAcrossFlow(t *testing.T) {
 		}
 	}
 
-	// 11th request should be rate limited (429)
-	req := makeExtractReq(t, f, []string{keys[10]})
+	// Next request should be rate limited (429)
+	req := makeExtractReq(t, f, []string{keys[cap]})
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	if rr.Code != http.StatusTooManyRequests {
-		t.Errorf("11th request: expected 429, got %d", rr.Code)
+		t.Errorf("over-cap request: expected 429, got %d", rr.Code)
 	}
 
 	// Verify non-extract endpoints still work (saving labs is not rate limited by extract RL)
