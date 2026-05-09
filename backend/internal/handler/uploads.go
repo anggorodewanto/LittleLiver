@@ -5,9 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"image"
-	"image/jpeg"
-	"image/png"
 	"io"
 	"log"
 	"net/http"
@@ -135,7 +132,7 @@ func UploadPhotoHandler(db *sql.DB, objStore storage.ObjectStore, heicConv ...HE
 		}
 
 		// Generate and upload thumbnail
-		thumbData, thumbMIME, err := generateThumbnail(fileData, mimeType)
+		thumbData, thumbMIME, err := imagemagickThumbnail(ctx, fileData, mimeType)
 		if err != nil {
 			log.Printf("generate thumbnail: %v", err)
 			http.Error(w, "failed to generate thumbnail", http.StatusInternalServerError)
@@ -184,64 +181,28 @@ func stringOrEmpty(s *string) string {
 	return *s
 }
 
-// generateThumbnail creates a ~300px wide thumbnail from image data.
-// If the image is already <= 300px wide, it returns the original data unchanged.
-func generateThumbnail(data []byte, mimeType string) ([]byte, string, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, "", fmt.Errorf("decode image: %w", err)
+// imagemagickThumbnail produces a ~300px-wide thumbnail by shelling out to
+// ImageMagick. Memory peaks inside the subprocess instead of the Go heap, and
+// `-resize 300x>` skips upscaling for images already smaller than the target.
+func imagemagickThumbnail(ctx context.Context, data []byte, mimeType string) ([]byte, string, error) {
+	outFormat := "jpg"
+	outMIME := "image/jpeg"
+	if mimeType == "image/png" {
+		outFormat = "png"
+		outMIME = "image/png"
 	}
 
-	bounds := img.Bounds()
-	origWidth := bounds.Dx()
-	origHeight := bounds.Dy()
+	cmd := exec.CommandContext(ctx, "convert", "-", "-resize", "300x>", outFormat+":-")
+	cmd.Stdin = bytes.NewReader(data)
 
-	targetWidth := 300
-	if origWidth <= targetWidth {
-		// No resize needed — return original data
-		return data, mimeType, nil
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, "", fmt.Errorf("imagemagick thumbnail: %w (stderr: %s)", err, stderr.String())
 	}
-
-	// Calculate new dimensions preserving aspect ratio
-	ratio := float64(targetWidth) / float64(origWidth)
-	newHeight := int(float64(origHeight) * ratio)
-
-	// Simple nearest-neighbor resize using Go stdlib
-	thumb := resizeNearestNeighbor(img, targetWidth, newHeight)
-
-	var buf bytes.Buffer
-	outMIME := mimeType
-
-	switch mimeType {
-	case "image/png":
-		if err := png.Encode(&buf, thumb); err != nil {
-			return nil, "", fmt.Errorf("encode png thumbnail: %w", err)
-		}
-	default:
-		// Default to JPEG
-		outMIME = "image/jpeg"
-		if err := jpeg.Encode(&buf, thumb, &jpeg.Options{Quality: 85}); err != nil {
-			return nil, "", fmt.Errorf("encode jpeg thumbnail: %w", err)
-		}
-	}
-
-	return buf.Bytes(), outMIME, nil
-}
-
-// resizeNearestNeighbor performs nearest-neighbor image resizing using Go stdlib.
-func resizeNearestNeighbor(src image.Image, width, height int) image.Image {
-	bounds := src.Bounds()
-	dst := image.NewRGBA(image.Rect(0, 0, width, height))
-
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			srcX := bounds.Min.X + x*bounds.Dx()/width
-			srcY := bounds.Min.Y + y*bounds.Dy()/height
-			dst.Set(x, y, src.At(srcX, srcY))
-		}
-	}
-
-	return dst
+	return out.Bytes(), outMIME, nil
 }
 
 // convertHEICToJPEGWithCmd shells out to ImageMagick's convert command.
