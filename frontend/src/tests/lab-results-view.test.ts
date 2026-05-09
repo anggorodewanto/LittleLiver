@@ -77,6 +77,22 @@ describe('LabResultsView', () => {
 		});
 	});
 
+	it('renders Add lab link pointing to /log/lab', async () => {
+		render(LabResultsView, { props: { babyId: 'b1' } });
+
+		const link = await screen.findByRole('link', { name: /add lab/i });
+		expect(link).toBeInTheDocument();
+		expect(link).toHaveAttribute('href', '/log/lab');
+	});
+
+	it('renders Add imaging study link pointing to /log/imaging', async () => {
+		render(LabResultsView, { props: { babyId: 'b1' } });
+
+		const link = await screen.findByRole('link', { name: /add imaging study/i });
+		expect(link).toBeInTheDocument();
+		expect(link).toHaveAttribute('href', '/log/imaging');
+	});
+
 	it('fetches lab data on mount', async () => {
 		render(LabResultsView, { props: { babyId: 'b1' } });
 

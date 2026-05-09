@@ -11,11 +11,11 @@ describe('QuickLogButtons', () => {
 		onnavigate = vi.fn();
 	});
 
-	it('renders all 16 log-entry buttons unconditionally (5 primary + 11 extra)', () => {
+	it('renders all 17 log-entry buttons unconditionally (5 primary + 12 extra)', () => {
 		render(QuickLogButtons, { props: { onselect, onnavigate } });
 
 		const buttons = screen.getAllByRole('button');
-		expect(buttons).toHaveLength(16);
+		expect(buttons).toHaveLength(17);
 	});
 
 	it('renders Feed, Wet Diaper, Stool, Temp, and Medication Given buttons', () => {
@@ -76,8 +76,17 @@ describe('QuickLogButtons', () => {
 		expect(screen.getByRole('button', { name: /skin/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /bruising/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /^lab$/i })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /imaging/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /notes/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /manage medications/i })).toBeInTheDocument();
+	});
+
+	it('calls onselect with "imaging" when Imaging is clicked', async () => {
+		render(QuickLogButtons, { props: { onselect, onnavigate } });
+
+		await fireEvent.click(screen.getByRole('button', { name: /imaging/i }));
+
+		expect(onselect).toHaveBeenCalledWith('imaging');
 	});
 
 	it('does not render a More Entries toggle', () => {

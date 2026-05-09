@@ -157,7 +157,8 @@
 
 <div class="lab-results-view">
 	<div class="actions">
-		<a href="/log/imaging" class="add-imaging-btn">+ Add imaging study</a>
+		<a href="/log/lab" class="add-btn">+ Add lab</a>
+		<a href="/log/imaging" class="add-btn">+ Add imaging study</a>
 	</div>
 
 	<DateRangeSelector {selectedRange} onchange={handleRangeChange} />
@@ -199,10 +200,11 @@
 	.actions {
 		display: flex;
 		justify-content: flex-end;
+		gap: var(--space-2);
 		margin-bottom: var(--space-2);
 	}
 
-	.add-imaging-btn {
+	.add-btn {
 		padding: var(--space-1) var(--space-3);
 		background: var(--color-primary, #0d6efd);
 		color: white;
