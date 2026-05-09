@@ -358,7 +358,9 @@ func TestLabExtractHandler_RateLimit(t *testing.T) {
 	cannedResp := `[{"test_name": "ALT", "value": "45", "unit": "U/L", "normal_range": "7-56", "confidence": "high"}]`
 	client := &mockClaudeClient{response: cannedResp}
 	svc := labextract.NewService(client)
-	rl := handler.NewExtractRateLimiter()
+	// Use a small cap (3) so the test is fast and deterministic; the production
+	// cap (50) is exercised by the bucket-counting unit tests.
+	rl := handler.NewExtractRateLimiterWithCap(3)
 	h := handler.LabExtractHandlerWithRateLimit(f.db, f.objStore, svc, rl)
 
 	authMw := middleware.Auth(f.db, testCookieName)
@@ -377,18 +379,18 @@ func TestLabExtractHandler_RateLimit(t *testing.T) {
 		return rr.Code
 	}
 
-	// First 10 should succeed
-	for i := 0; i < 10; i++ {
+	// First 3 should succeed
+	for i := 0; i < 3; i++ {
 		code := makeReq()
 		if code != http.StatusOK {
 			t.Fatalf("request %d: expected 200, got %d", i+1, code)
 		}
 	}
 
-	// 11th should be rate limited
+	// 4th should be rate limited
 	code := makeReq()
 	if code != http.StatusTooManyRequests {
-		t.Errorf("11th request: expected 429, got %d", code)
+		t.Errorf("4th request: expected 429, got %d", code)
 	}
 }
 

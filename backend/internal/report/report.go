@@ -3,6 +3,7 @@ package report
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -36,18 +37,27 @@ func feverThresholdForMethod(method string) float64 {
 
 // reportData holds all queried data for the report.
 type reportData struct {
-	summary     *store.DashboardSummary
-	stools      []store.StoolColorSeriesEntry
-	temps       []store.TemperatureSeriesEntry
-	feedings    []store.FeedingDailyEntry
-	medLogs     []medAdherence
-	notes       []noteEntry
-	bruising    []bruisingEntry
-	activeMeds  []model.Medication
-	weights     []store.WeightSeriesEntry
-	labTrends   map[string][]store.LabTrendEntry
-	whoCurves   []who.PercentileCurve
-	photoThumbs [][]byte // thumbnail image bytes
+	summary        *store.DashboardSummary
+	stools         []store.StoolColorSeriesEntry
+	temps          []store.TemperatureSeriesEntry
+	feedings       []store.FeedingDailyEntry
+	medLogs        []medAdherence
+	notes          []noteEntry
+	bruising       []bruisingEntry
+	activeMeds     []model.Medication
+	weights        []store.WeightSeriesEntry
+	labTrends      map[string][]store.LabTrendEntry
+	whoCurves      []who.PercentileCurve
+	photoThumbs    [][]byte           // thumbnail image bytes
+	imagingStudies []imagingStudyData // imaging-study metadata + thumbnail bytes
+}
+
+// imagingStudyData holds an imaging-study row and its thumbnail bytes for the report.
+type imagingStudyData struct {
+	StudyDate string
+	StudyType string
+	Notes     string
+	Thumbnail []byte // nil if no thumbnail (e.g., malformed PDF or missing thumbnail_key)
 }
 
 // medAdherence holds medication adherence info.
@@ -167,20 +177,119 @@ func queryReportData(db *sql.DB, objStore storage.ObjectStore, baby *model.Baby,
 	// Fetch photo thumbnails from storage
 	photoThumbs := fetchPhotoThumbnails(db, objStore, babyID, from, to, loc)
 
+	// Fetch imaging studies for the date range
+	imagingStudies, err := queryImagingStudies(db, objStore, babyID, from, to, loc)
+	if err != nil {
+		log.Printf("imaging studies: %v", err)
+		// Non-fatal: continue without imaging section.
+	}
+
 	return &reportData{
-		summary:     summary,
-		stools:      stools,
-		temps:       temps,
-		feedings:    feedings,
-		medLogs:     medLogs,
-		notes:       notes,
-		bruising:    bruisingData,
-		activeMeds:  activeMeds,
-		weights:     weights,
-		labTrends:   labTrends,
-		whoCurves:   whoCurves,
-		photoThumbs: photoThumbs,
+		summary:        summary,
+		stools:         stools,
+		temps:          temps,
+		feedings:       feedings,
+		medLogs:        medLogs,
+		notes:          notes,
+		bruising:       bruisingData,
+		activeMeds:     activeMeds,
+		weights:        weights,
+		labTrends:      labTrends,
+		whoCurves:      whoCurves,
+		photoThumbs:    photoThumbs,
+		imagingStudies: imagingStudies,
 	}, nil
+}
+
+// queryImagingStudies fetches imaging studies in the date range with their thumbnail
+// bytes (when available). PDFs without thumbnails return Thumbnail=nil — the renderer
+// falls back to a text-only line.
+func queryImagingStudies(db *sql.DB, objStore storage.ObjectStore, babyID, from, to string, loc *time.Location) ([]imagingStudyData, error) {
+	fromTime, toTime, err := store.ParseDateRangeInLocation(from, to, loc)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.Query(
+		`SELECT study_date, study_type, COALESCE(notes, ''), photo_keys
+		 FROM imaging_studies
+		 WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?
+		 ORDER BY timestamp ASC`,
+		babyID, fromTime, toTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query imaging studies: %w", err)
+	}
+	defer rows.Close()
+
+	type rawStudy struct {
+		StudyDate string
+		StudyType string
+		Notes     string
+		PhotoKeys string
+	}
+	var raw []rawStudy
+	for rows.Next() {
+		var rs rawStudy
+		if err := rows.Scan(&rs.StudyDate, &rs.StudyType, &rs.Notes, &rs.PhotoKeys); err != nil {
+			return nil, fmt.Errorf("scan imaging study: %w", err)
+		}
+		raw = append(raw, rs)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Resolve thumbnail bytes for the first photo of each study (if available).
+	out := make([]imagingStudyData, 0, len(raw))
+	ctx := context.Background()
+	for _, rs := range raw {
+		entry := imagingStudyData{
+			StudyDate: rs.StudyDate,
+			StudyType: rs.StudyType,
+			Notes:     rs.Notes,
+		}
+		if objStore != nil {
+			keys := parseFirstPhotoKey(rs.PhotoKeys)
+			if keys != "" {
+				if thumb := fetchThumbnailForKey(ctx, db, objStore, keys); thumb != nil {
+					entry.Thumbnail = thumb
+				}
+			}
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+// parseFirstPhotoKey returns the first key from a JSON-array photo_keys string, or "".
+func parseFirstPhotoKey(jsonArr string) string {
+	if jsonArr == "" {
+		return ""
+	}
+	var keys []string
+	if err := json.Unmarshal([]byte(jsonArr), &keys); err != nil {
+		return ""
+	}
+	if len(keys) == 0 {
+		return ""
+	}
+	return keys[0]
+}
+
+// fetchThumbnailForKey looks up the thumbnail_key for an r2_key and returns its bytes,
+// or nil on any failure.
+func fetchThumbnailForKey(ctx context.Context, db *sql.DB, objStore storage.ObjectStore, r2Key string) []byte {
+	var thumbnailKey sql.NullString
+	err := db.QueryRow("SELECT thumbnail_key FROM photo_uploads WHERE r2_key = ?", r2Key).Scan(&thumbnailKey)
+	if err != nil || !thumbnailKey.Valid || thumbnailKey.String == "" {
+		return nil
+	}
+	data, err := objStore.Get(ctx, thumbnailKey.String)
+	if err != nil {
+		return nil
+	}
+	return data
 }
 
 // fetchPhotoThumbnails queries linked photo_uploads for the baby in the date range
@@ -400,10 +509,45 @@ func buildPDF(baby *model.Baby, from, to string, data *reportData, now time.Time
 	addWeightChartSection(m, data.weights, data.whoCurves, baby.DateOfBirth.Format(model.DateFormat))
 	addLabTrendsSection(m, data.labTrends)
 
+	// Imaging studies (CT/Ultrasound/MRI/PDF radiology)
+	addImagingStudiesSection(m, data.imagingStudies)
+
 	// Photo appendix
 	addPhotoAppendix(m, data.photoThumbs)
 
 	return m
+}
+
+// addImagingStudiesSection adds an "Imaging Studies" section listing each study
+// with its date, type, notes, and a thumbnail (when available).
+func addImagingStudiesSection(m core.Maroto, studies []imagingStudyData) {
+	if len(studies) == 0 {
+		return
+	}
+
+	m.AddRows(text.NewRow(12, "Imaging Studies", sectionStyle))
+
+	for _, s := range studies {
+		header := s.StudyDate + " — " + s.StudyType
+		var cols []core.Col
+		if len(s.Thumbnail) > 0 {
+			ext := detectImageExtension(s.Thumbnail)
+			cols = append(cols, image.NewFromBytesCol(3, s.Thumbnail, ext, props.Rect{
+				Percent: 90,
+				Center:  true,
+			}))
+			cols = append(cols, text.NewCol(9, header, labelStyle))
+		} else {
+			cols = append(cols, text.NewCol(12, header+" (PDF — no preview)", labelStyle))
+		}
+		m.AddRows(row.New(35).Add(cols...))
+
+		if s.Notes != "" {
+			m.AddRows(text.NewRow(8, s.Notes, valueStyle))
+		}
+	}
+
+	m.AddRows(spacerRow(3))
 }
 
 // embedChartPNG embeds a pre-rendered chart PNG into the PDF with a section title.

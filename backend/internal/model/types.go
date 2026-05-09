@@ -232,6 +232,22 @@ type BruisingObservation struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// ImagingStudy represents a non-numeric lab artifact for a baby (CT, Ultrasound, MRI,
+// radiology PDFs, etc.). Distinct from LabResult, which captures numeric test values.
+type ImagingStudy struct {
+	ID         string    `json:"id"`
+	BabyID     string    `json:"baby_id"`
+	LoggedBy   string    `json:"logged_by"`
+	UpdatedBy  *string   `json:"updated_by,omitempty"`
+	Timestamp  time.Time `json:"timestamp"`
+	StudyDate  string    `json:"study_date"`
+	StudyType  string    `json:"study_type"`
+	Notes      *string   `json:"notes,omitempty"`
+	PhotoKeys  string    `json:"photo_keys"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 // LabResult represents a single lab result entry for a baby (EAV-style).
 type LabResult struct {
 	ID          string    `json:"id"`
