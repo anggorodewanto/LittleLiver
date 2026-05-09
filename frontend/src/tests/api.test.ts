@@ -37,6 +37,17 @@ describe('apiClient', () => {
 		await expect(apiClient.healthCheck()).rejects.toThrow('API error: 500');
 	});
 
+	it('surfaces the server error body when present', async () => {
+		const mockResponse = {
+			ok: false,
+			status: 400,
+			text: () => Promise.resolve('file exceeds 25MB limit\n')
+		};
+		fetchSpy.mockResolvedValue(mockResponse as Response);
+
+		await expect(apiClient.healthCheck()).rejects.toThrow('file exceeds 25MB limit');
+	});
+
 	it('attaches X-Timezone header with current timezone', async () => {
 		const mockResponse = { ok: true, json: () => Promise.resolve({ status: 'ok' }) };
 		fetchSpy.mockResolvedValue(mockResponse as Response);

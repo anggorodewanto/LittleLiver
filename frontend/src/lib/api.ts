@@ -57,7 +57,13 @@ async function buildRequest(path: string, options?: RequestInit): Promise<Respon
 				window.location.href = '/login';
 			}
 		}
-		throw new Error(`API error: ${response.status}`);
+		let bodyText = '';
+		try {
+			bodyText = (await response.text()).trim();
+		} catch {
+			// Body may be unreadable in some test mocks; fall through to status-only message.
+		}
+		throw new Error(bodyText || `API error: ${response.status}`);
 	}
 
 	return response;

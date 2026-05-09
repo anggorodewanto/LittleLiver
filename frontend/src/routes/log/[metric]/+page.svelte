@@ -141,8 +141,10 @@
 		try {
 			const key = await uploadPhoto(baby.id, file);
 			photoKeys = [...photoKeys, key];
-		} catch {
-			error = 'Photo upload failed';
+		} catch (e) {
+			error = e instanceof Error && e.message
+				? `Photo upload failed: ${e.message}`
+				: 'Photo upload failed';
 		} finally {
 			uploading = false;
 		}

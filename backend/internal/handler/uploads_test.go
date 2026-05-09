@@ -101,23 +101,23 @@ func doUploadRequest(t *testing.T, fix *testutil.TestFixture, objStore storage.O
 	return rec
 }
 
-// --- Test: reject files over 5MB ---
-func TestUploadPhoto_RejectsOver5MB(t *testing.T) {
+// --- Test: reject files over the upload cap (25MB) ---
+func TestUploadPhoto_RejectsOverMaxSize(t *testing.T) {
 	t.Parallel()
 	fix, objStore := setupUploadTest(t)
 	defer fix.DB.Close()
 
-	// Create data larger than 5MB
-	bigData := make([]byte, 5*1024*1024+1)
+	// Create data larger than 25MB
+	bigData := make([]byte, 25*1024*1024+1)
 	body, ct := createMultipartFile(t, "file", "big.jpg", bigData)
 
 	rec := doUploadRequest(t, fix, objStore, body, ct)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for >5MB file, got %d. Body: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 400 for >25MB file, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "5MB") {
-		t.Errorf("expected error message to mention 5MB, got: %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "25MB") {
+		t.Errorf("expected error message to mention 25MB, got: %s", rec.Body.String())
 	}
 }
 
@@ -480,7 +480,8 @@ func TestUploadPhoto_HEIC_ConvertedToJPEG(t *testing.T) {
 		t.Errorf("expected .jpg extension after HEIC conversion, got %s", r2Key)
 	}
 
-	// Verify the stored data is the converted JPEG
+	// Verify the stored data is a valid JPEG (it has been re-encoded by the
+	// resize-original step, so it won't byte-match the mock converter output).
 	storedData, ct2, found := objStore.GetWithMeta(r2Key)
 	if !found {
 		t.Fatal("original not found in store after HEIC conversion")
@@ -488,8 +489,8 @@ func TestUploadPhoto_HEIC_ConvertedToJPEG(t *testing.T) {
 	if ct2 != "image/jpeg" {
 		t.Errorf("expected content type image/jpeg, got %s", ct2)
 	}
-	if !bytes.Equal(storedData, mockJPEG) {
-		t.Error("stored data does not match converted JPEG")
+	if _, _, err := image.Decode(bytes.NewReader(storedData)); err != nil {
+		t.Errorf("stored data is not a valid image: %v", err)
 	}
 }
 
@@ -527,5 +528,42 @@ func TestUploadPhoto_HEIC_ConversionFailure(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 for HEIC conversion failure, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// --- Test: large original is auto-downscaled to <=2000px before storage ---
+func TestUploadPhoto_LargeOriginalAutoDownscaled(t *testing.T) {
+	t.Parallel()
+	fix, objStore := setupUploadTest(t)
+	defer fix.DB.Close()
+
+	// 4000x3000 JPEG — over 2000px cap on longest side
+	jpegData := createTestJPEG(t, 4000, 3000)
+	body, ct := createMultipartFile(t, "file", "big.jpg", jpegData)
+
+	rec := doUploadRequest(t, fix, objStore, body, ct)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	r2Key := resp["r2_key"].(string)
+	originalData, _, found := objStore.GetWithMeta(r2Key)
+	if !found {
+		t.Fatal("original not in store")
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(originalData))
+	if err != nil {
+		t.Fatalf("decode stored original: %v", err)
+	}
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	if w > 2000 || h > 2000 {
+		t.Errorf("stored original dims: got %dx%d, want longest side <=2000", w, h)
 	}
 }

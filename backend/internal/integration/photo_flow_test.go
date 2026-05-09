@@ -291,8 +291,8 @@ func TestPhotoFlowLifecycle(t *testing.T) {
 	}
 }
 
-// TestPhotoFlow_5MBLimitRejection verifies that uploads over 5MB are rejected.
-func TestPhotoFlow_5MBLimitRejection(t *testing.T) {
+// TestPhotoFlow_MaxSizeLimitRejection verifies that uploads over 25MB are rejected.
+func TestPhotoFlow_MaxSizeLimitRejection(t *testing.T) {
 	t.Parallel()
 
 	srv, db, _, cleanup := setupPhotoServer(t)
@@ -301,15 +301,15 @@ func TestPhotoFlow_5MBLimitRejection(t *testing.T) {
 	client := newPhotoTestClient(t, srv, db)
 	babyID := createBabyViaAPI(t, client.testClient, "Photo Test Baby")
 
-	// Create data larger than 5MB
-	bigData := make([]byte, 5*1024*1024+1)
+	// Create data larger than the 25MB cap
+	bigData := make([]byte, 25*1024*1024+1)
 	status, resp := client.uploadPhoto(babyID, "big.jpg", bigData)
 	if status != http.StatusBadRequest {
-		t.Fatalf("expected 400 for >5MB file, got %d: %v", status, resp)
+		t.Fatalf("expected 400 for >25MB file, got %d: %v", status, resp)
 	}
 	raw, _ := resp["_raw"].(string)
-	if !strings.Contains(raw, "5MB") {
-		t.Errorf("expected error mentioning 5MB, got: %v", resp)
+	if !strings.Contains(raw, "25MB") {
+		t.Errorf("expected error mentioning 25MB, got: %v", resp)
 	}
 }
 

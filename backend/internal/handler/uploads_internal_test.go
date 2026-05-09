@@ -117,3 +117,64 @@ func TestImagemagickThumbnail_PNGStaysPNG(t *testing.T) {
 		t.Errorf("width: got %d, want ~300", w)
 	}
 }
+
+func TestImagemagickResizeOriginal_DownscalesLargeJPEG(t *testing.T) {
+	src := makeRGBJPEGInternal(t, 4000, 3000)
+
+	out, mime, err := imagemagickResizeOriginal(context.Background(), src, "image/jpeg")
+	if err != nil {
+		t.Fatalf("imagemagickResizeOriginal: %v", err)
+	}
+	if mime != "image/jpeg" {
+		t.Errorf("mime: got %q, want image/jpeg", mime)
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	if w > 2000 || h > 2000 {
+		t.Errorf("dims: got %dx%d, want longest side <=2000", w, h)
+	}
+	if w != 2000 {
+		t.Errorf("width: got %d, want 2000 (4:3 input scaled to 2000x1500)", w)
+	}
+}
+
+func TestImagemagickResizeOriginal_PassesThroughSmallImage(t *testing.T) {
+	src := makeRGBJPEGInternal(t, 800, 600)
+
+	out, _, err := imagemagickResizeOriginal(context.Background(), src, "image/jpeg")
+	if err != nil {
+		t.Fatalf("imagemagickResizeOriginal: %v", err)
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if img.Bounds().Dx() != 800 || img.Bounds().Dy() != 600 {
+		t.Errorf("dims: got %dx%d, want 800x600 unchanged", img.Bounds().Dx(), img.Bounds().Dy())
+	}
+}
+
+func TestImagemagickResizeOriginal_PNGBecomesJPEG(t *testing.T) {
+	src := makeRGBPNGInternal(t, 4000, 3000)
+
+	out, mime, err := imagemagickResizeOriginal(context.Background(), src, "image/png")
+	if err != nil {
+		t.Fatalf("imagemagickResizeOriginal: %v", err)
+	}
+	if mime != "image/jpeg" {
+		t.Errorf("mime: got %q, want image/jpeg (PNG should be re-encoded as JPEG to save space)", mime)
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if img.Bounds().Dx() > 2000 {
+		t.Errorf("width: got %d, want <=2000", img.Bounds().Dx())
+	}
+}
