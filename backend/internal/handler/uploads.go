@@ -17,7 +17,9 @@ import (
 	"github.com/ablankz/LittleLiver/backend/internal/store"
 )
 
-const maxUploadSize = 5 * 1024 * 1024 // 5MB
+const maxUploadSize = 25 * 1024 * 1024 // 25MB — server downscales to ≤2000px before storage
+
+const maxUploadSizeLabel = "25MB"
 
 // allowedMIMETypes maps accepted MIME types to file extensions.
 var allowedMIMETypes = map[string]string{
@@ -60,7 +62,7 @@ func UploadPhotoHandler(db *sql.DB, objStore storage.ObjectStore, heicConv ...HE
 		r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize+1024)
 
 		if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-			http.Error(w, "file exceeds 5MB limit", http.StatusBadRequest)
+			http.Error(w, "file exceeds " + maxUploadSizeLabel + " limit", http.StatusBadRequest)
 			return
 		}
 		defer r.MultipartForm.RemoveAll()
@@ -74,19 +76,19 @@ func UploadPhotoHandler(db *sql.DB, objStore storage.ObjectStore, heicConv ...HE
 
 		// Check file size
 		if header.Size > maxUploadSize {
-			http.Error(w, "file exceeds 5MB limit", http.StatusBadRequest)
+			http.Error(w, "file exceeds " + maxUploadSizeLabel + " limit", http.StatusBadRequest)
 			return
 		}
 
 		// Read file data
 		fileData, err := io.ReadAll(file)
 		if err != nil {
-			http.Error(w, "file exceeds 5MB limit", http.StatusBadRequest)
+			http.Error(w, "file exceeds " + maxUploadSizeLabel + " limit", http.StatusBadRequest)
 			return
 		}
 
 		if len(fileData) > maxUploadSize {
-			http.Error(w, "file exceeds 5MB limit", http.StatusBadRequest)
+			http.Error(w, "file exceeds " + maxUploadSizeLabel + " limit", http.StatusBadRequest)
 			return
 		}
 
@@ -117,6 +119,18 @@ func UploadPhotoHandler(db *sql.DB, objStore storage.ObjectStore, heicConv ...HE
 			mimeType = "image/jpeg"
 		}
 
+		// Downscale the stored "original" to keep storage + memory bounded.
+		// Output is JPEG regardless of input format.
+		ctx := r.Context()
+		resized, resizedMIME, err := imagemagickResizeOriginal(ctx, fileData, mimeType)
+		if err != nil {
+			log.Printf("resize original: %v", err)
+			http.Error(w, "failed to process image", http.StatusInternalServerError)
+			return
+		}
+		fileData = resized
+		mimeType = resizedMIME
+
 		// Generate unique key
 		id := model.NewULID()
 		ext = extensionForMIME(mimeType)
@@ -124,7 +138,6 @@ func UploadPhotoHandler(db *sql.DB, objStore storage.ObjectStore, heicConv ...HE
 		thumbKey := fmt.Sprintf("photos/thumb_%s%s", id, ext)
 
 		// Upload original
-		ctx := r.Context()
 		if err := objStore.Put(ctx, r2Key, bytes.NewReader(fileData), mimeType); err != nil {
 			log.Printf("upload original: %v", err)
 			http.Error(w, "failed to store photo", http.StatusInternalServerError)
@@ -179,6 +192,25 @@ func stringOrEmpty(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// imagemagickResizeOriginal downscales an image to fit within 2000x2000
+// (longest side) and re-encodes it as JPEG to keep the stored "original"
+// small. Memory peaks inside the ImageMagick subprocess, not the Go heap.
+// `-resize 2000x2000>` only shrinks images larger than the bound.
+func imagemagickResizeOriginal(ctx context.Context, data []byte, mimeType string) ([]byte, string, error) {
+	cmd := exec.CommandContext(ctx, "convert", "-", "-resize", "2000x2000>", "-quality", "85", "jpg:-")
+	cmd.Stdin = bytes.NewReader(data)
+
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, "", fmt.Errorf("imagemagick resize: %w (stderr: %s)", err, stderr.String())
+	}
+	_ = mimeType
+	return out.Bytes(), "image/jpeg", nil
 }
 
 // imagemagickThumbnail produces a ~300px-wide thumbnail by shelling out to
