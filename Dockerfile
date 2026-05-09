@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM node:20-slim AS frontend
+FROM node:22-slim AS frontend
 WORKDIR /app/frontend
 COPY frontend/ .
 RUN npm ci && npm run build
@@ -13,7 +13,7 @@ RUN CGO_ENABLED=1 go build -o /server ./cmd/server
 
 # Stage 3: Runtime
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates imagemagick ghostscript && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates imagemagick ghostscript sqlite3 && rm -rf /var/lib/apt/lists/*
 # Debian's default ImageMagick policy blocks PDF reads (CVE-2018-16509 hardening).
 # We rasterize PDFs via Ghostscript to generate first-page thumbnails for imaging
 # studies — that flow is trusted (server-controlled input that already passed
