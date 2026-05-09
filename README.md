@@ -66,6 +66,7 @@ LittleLiver is a personal-use web app for parents to track daily health metrics 
 ### Photo Management
 - Cloudflare R2 storage with signed URLs
 - HEIC to JPEG auto-conversion
+- Server-side auto-downscale to ≤2000px JPEG (q=85); raw uploads up to 25 MB
 - Attach photos to stools, abdomen, skin, bruising, and notes
 - Take-photo camera capture and gallery upload from log forms
 - Full-screen lightbox with prev/next navigation when viewing logged photos
