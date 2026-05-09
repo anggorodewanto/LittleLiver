@@ -23,3 +23,8 @@ primary_region = "sin"
   DATABASE_PATH = "/data/littleliver.db"
   MIGRATIONS_DIR = "/migrations"
   STATIC_DIR = "/static"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
