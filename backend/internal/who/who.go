@@ -1,8 +1,8 @@
 // Package who provides WHO Child Growth Standards percentile calculations.
 //
-// It embeds WHO LMS tables (0-24 months, male + female) for weight-for-age
-// and head-circumference-for-age, and provides functions to compute z-scores,
-// percentiles, and percentile curves for charting.
+// It embeds WHO LMS tables (0-24 months, male + female) for weight-for-age,
+// head-circumference-for-age, and length-for-age, and provides functions to
+// compute z-scores, percentiles, and percentile curves for charting.
 package who
 
 import (
@@ -26,6 +26,12 @@ var hcfaBoysCSV embed.FS
 
 //go:embed data/hcfa_girls_lms.csv
 var hcfaGirlsCSV embed.FS
+
+//go:embed data/lfa_boys_lms.csv
+var lfaBoysCSV embed.FS
+
+//go:embed data/lfa_girls_lms.csv
+var lfaGirlsCSV embed.FS
 
 // lmsEntry holds the L, M, S parameters for a single age in days.
 type lmsEntry struct {
@@ -51,7 +57,7 @@ type PercentileCurve struct {
 var StandardPercentiles = []float64{3, 15, 50, 85, 97}
 
 // ValidMetrics lists the supported metric types.
-var ValidMetrics = []string{"weight", "head_circumference"}
+var ValidMetrics = []string{"weight", "head_circumference", "height"}
 
 // Package-level LMS tables, indexed by day (0-730).
 var (
@@ -61,6 +67,9 @@ var (
 	// Head-circumference-for-age
 	hcfaMaleLMS   []lmsEntry
 	hcfaFemaleLMS []lmsEntry
+	// Length-for-age (used for height metric)
+	lfaMaleLMS   []lmsEntry
+	lfaFemaleLMS []lmsEntry
 )
 
 func init() {
@@ -80,6 +89,14 @@ func init() {
 	hcfaFemaleLMS, err = loadLMS(hcfaGirlsCSV, "data/hcfa_girls_lms.csv")
 	if err != nil {
 		panic(fmt.Sprintf("who: failed to load girls head circumference LMS data: %v", err))
+	}
+	lfaMaleLMS, err = loadLMS(lfaBoysCSV, "data/lfa_boys_lms.csv")
+	if err != nil {
+		panic(fmt.Sprintf("who: failed to load boys length LMS data: %v", err))
+	}
+	lfaFemaleLMS, err = loadLMS(lfaGirlsCSV, "data/lfa_girls_lms.csv")
+	if err != nil {
+		panic(fmt.Sprintf("who: failed to load girls length LMS data: %v", err))
 	}
 }
 
@@ -152,8 +169,17 @@ func getLMSForMetric(sex, metric string) ([]lmsEntry, error) {
 		default:
 			return nil, fmt.Errorf("invalid sex %q: must be \"male\" or \"female\"", sex)
 		}
+	case "height":
+		switch sex {
+		case "male":
+			return lfaMaleLMS, nil
+		case "female":
+			return lfaFemaleLMS, nil
+		default:
+			return nil, fmt.Errorf("invalid sex %q: must be \"male\" or \"female\"", sex)
+		}
 	default:
-		return nil, fmt.Errorf("invalid metric %q: must be \"weight\" or \"head_circumference\"", metric)
+		return nil, fmt.Errorf("invalid metric %q: must be \"weight\", \"head_circumference\", or \"height\"", metric)
 	}
 }
 
