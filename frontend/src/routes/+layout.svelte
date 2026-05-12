@@ -6,11 +6,13 @@
 	import { currentUser, fetchCurrentUser } from '$lib/stores/user';
 	import { fetchBabies } from '$lib/stores/baby';
 	import NavHeader from '$lib/components/NavHeader.svelte';
+	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 
 	let { children } = $props();
 	let initialized = $state(false);
 
 	onMount(async () => {
+		document.getElementById('app-splash')?.remove();
 		registerServiceWorker();
 		setupInstallPrompt();
 		try {
@@ -39,7 +41,17 @@
 	<meta name="theme-color" content="#4a9c5e" />
 </svelte:head>
 
-<NavHeader />
-<main class="page-content">
-	{@render children()}
-</main>
+{#if initialized}
+	<NavHeader />
+	<main class="page-content">
+		{@render children()}
+	</main>
+{:else}
+	<main class="page-content">
+		<LoadingSpinner
+			fullscreen
+			slowAfterMs={3000}
+			slowMessage="Waking the server up — this can take a few seconds on first load."
+		/>
+	</main>
+{/if}
