@@ -20,6 +20,7 @@ type summaryCardsResponse struct {
 	WorstStoolColor *int     `json:"worst_stool_color"`
 	LastTemperature *float64 `json:"last_temperature"`
 	LastWeight      *float64 `json:"last_weight"`
+	LastHeight      *float64 `json:"last_height"`
 }
 
 // stoolColorTrendEntry is the JSON response for a stool color trend entry.
@@ -47,6 +48,7 @@ type chartDataSeriesResponse struct {
 	DiaperDaily  []store.DiaperDailyEntry         `json:"diaper_daily"`
 	Temperature  []store.TemperatureSeriesEntry   `json:"temperature"`
 	Weight       []store.WeightSeriesEntry        `json:"weight"`
+	Height       []store.HeightSeriesEntry        `json:"height"`
 	AbdomenGirth []store.AbdomenGirthEntry        `json:"abdomen_girth"`
 	StoolColor            []store.StoolColorSeriesEntry            `json:"stool_color"`
 	HeadCircumference     []store.HeadCircumferenceSeriesEntry     `json:"head_circumference"`
@@ -146,6 +148,13 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		heightSeries, err := store.GetHeightSeries(db, baby.ID, from, to, loc)
+		if err != nil {
+			log.Printf("height series: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
 		abdomenSeries, err := store.GetAbdomenGirthSeries(db, baby.ID, from, to, loc)
 		if err != nil {
 			log.Printf("abdomen girth series: %v", err)
@@ -205,6 +214,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 			WorstStoolColor: summary.WorstStoolColor,
 			LastTemperature: summary.LastTemperature,
 			LastWeight:      summary.LastWeight,
+			LastHeight:      summary.LastHeight,
 		}
 
 		trendResp := make([]stoolColorTrendEntry, 0, len(trend))
@@ -245,6 +255,7 @@ func DashboardHandler(db *sql.DB) http.HandlerFunc {
 				DiaperDaily:  diaperDaily,
 				Temperature:  tempSeries,
 				Weight:       weightSeries,
+				Height:       heightSeries,
 				AbdomenGirth: abdomenSeries,
 				StoolColor:            stoolColorSeries,
 				HeadCircumference:     headCircSeries,

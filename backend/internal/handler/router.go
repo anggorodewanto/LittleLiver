@@ -107,6 +107,9 @@ func NewMux(opts ...Option) *http.ServeMux {
 			registerMetricCRUD(mux, "/api/babies/{id}/weights", rateMw, authMw, csrfMw,
 				CreateWeightHandler(cfg.db), ListWeightsHandler(cfg.db),
 				GetWeightHandler(cfg.db), UpdateWeightHandler(cfg.db), DeleteWeightHandler(cfg.db))
+			registerMetricCRUD(mux, "/api/babies/{id}/heights", rateMw, authMw, csrfMw,
+				CreateHeightHandler(cfg.db), ListHeightsHandler(cfg.db),
+				GetHeightHandler(cfg.db), UpdateHeightHandler(cfg.db), DeleteHeightHandler(cfg.db))
 			registerMetricCRUD(mux, "/api/babies/{id}/temperatures", rateMw, authMw, csrfMw,
 				CreateTemperatureHandler(cfg.db), ListTemperaturesHandler(cfg.db),
 				GetTemperatureHandler(cfg.db), UpdateTemperatureHandler(cfg.db), DeleteTemperatureHandler(cfg.db))

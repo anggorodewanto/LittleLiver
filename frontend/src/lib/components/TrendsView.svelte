@@ -7,6 +7,7 @@
 	import DateRangeSelector from './DateRangeSelector.svelte';
 	import StoolColorChart from './StoolColorChart.svelte';
 	import WeightChart from './WeightChart.svelte';
+	import HeightChart from './HeightChart.svelte';
 	import TemperatureChart from './TemperatureChart.svelte';
 	import AbdomenGirthChart from './AbdomenGirthChart.svelte';
 	import FeedingChart from './FeedingChart.svelte';
@@ -25,6 +26,7 @@
 		chart_data_series: {
 			temperature: { timestamp: string; value: number; method: string }[];
 			weight: { timestamp: string; weight_kg: number; measurement_source: string }[];
+			height: { timestamp: string; height_cm: number; measurement_source: string }[];
 			stool_color: { timestamp: string; color_score: number }[];
 			feeding_daily: { date: string; total_volume_ml: number; total_calories: number; feed_count: number; by_type: Record<string, number> }[];
 			diaper_daily: { date: string; wet_count: number; stool_count: number }[];
@@ -155,6 +157,11 @@
 					{percentiles}
 					{dateOfBirth}
 				/>
+			</section>
+
+			<section class="chart-section">
+				<h3>Height</h3>
+				<HeightChart data={dashboard.chart_data_series.height} />
 			</section>
 
 			<section class="chart-section">

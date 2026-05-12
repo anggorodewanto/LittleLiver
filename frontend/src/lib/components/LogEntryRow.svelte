@@ -75,6 +75,9 @@
 		} else if (logType.key === 'weight') {
 			if (entry.weight_kg) parts.push(`${entry.weight_kg} kg`);
 			if (entry.measurement_source) parts.push(capitalize(entry.measurement_source));
+		} else if (logType.key === 'height') {
+			if (entry.height_cm) parts.push(`${entry.height_cm} cm`);
+			if (entry.measurement_source) parts.push(capitalize(entry.measurement_source));
 		} else if (logType.key === 'temperature') {
 			if (entry.value) parts.push(`${entry.value} °C`);
 			if (entry.method) parts.push(capitalize(entry.method));

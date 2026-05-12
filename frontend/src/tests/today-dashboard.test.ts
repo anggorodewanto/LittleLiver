@@ -35,7 +35,8 @@ const mockDashboardResponse = {
 		total_stools: 2,
 		worst_stool_color: 3,
 		last_temperature: 37.2,
-		last_weight: 4.5
+		last_weight: 4.5,
+		last_height: 56.0
 	},
 	stool_color_trend: [
 		{ date: '2026-03-13', color: 'pale', color_rating: 3 },
@@ -193,6 +194,13 @@ describe('TodayDashboard', () => {
 		expect(screen.getByText(/last weight/i)).toBeInTheDocument();
 	});
 
+	it('displays last height', async () => {
+		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
+
+		expect(await screen.findByText(/56/)).toBeInTheDocument();
+		expect(screen.getByText(/last height/i)).toBeInTheDocument();
+	});
+
 	it('displays dashes for null summary values', async () => {
 		mockGet.mockResolvedValue({
 			...mockDashboardResponse,
@@ -203,14 +211,15 @@ describe('TodayDashboard', () => {
 				total_stools: 0,
 				worst_stool_color: null,
 				last_temperature: null,
-				last_weight: null
+				last_weight: null,
+				last_height: null
 			}
 		});
 
 		render(TodayDashboard, { props: { babyId: 'baby-1', baby: mockBaby } });
 
 		const dashes = await screen.findAllByText('—');
-		expect(dashes.length).toBeGreaterThanOrEqual(2);
+		expect(dashes.length).toBeGreaterThanOrEqual(3);
 	});
 
 	// --- Stool Color Trend ---

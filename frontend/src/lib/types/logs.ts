@@ -10,6 +10,7 @@ export const LOG_TYPES: LogTypeConfig[] = [
 	{ key: 'stool', label: 'Stools', endpoint: 'stools', metricParam: 'stool' },
 	{ key: 'urine', label: 'Urine', endpoint: 'urine', metricParam: 'urine' },
 	{ key: 'weight', label: 'Weights', endpoint: 'weights', metricParam: 'weight' },
+	{ key: 'height', label: 'Heights', endpoint: 'heights', metricParam: 'height' },
 	{ key: 'temperature', label: 'Temperatures', endpoint: 'temperatures', metricParam: 'temperature' },
 	{ key: 'abdomen', label: 'Abdomen', endpoint: 'abdomen', metricParam: 'abdomen' },
 	{ key: 'skin', label: 'Skin', endpoint: 'skin', metricParam: 'skin' },

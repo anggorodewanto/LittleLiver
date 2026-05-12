@@ -18,6 +18,7 @@ var AnonymizeTables = []string{
 	"stools",
 	"urine",
 	"weights",
+	"heights",
 	"temperatures",
 	"abdomen_observations",
 	"skin_observations",

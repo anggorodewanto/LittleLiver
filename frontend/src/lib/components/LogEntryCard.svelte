@@ -81,6 +81,9 @@
 		{:else if logType.key === 'weight'}
 			{#if entry.weight_kg}<div class="field">{entry.weight_kg} kg</div>{/if}
 			{#if entry.measurement_source}<div class="field">{capitalize(entry.measurement_source)}</div>{/if}
+		{:else if logType.key === 'height'}
+			{#if entry.height_cm}<div class="field">{entry.height_cm} cm</div>{/if}
+			{#if entry.measurement_source}<div class="field">{capitalize(entry.measurement_source)}</div>{/if}
 		{:else if logType.key === 'temperature'}
 			{#if entry.value}<div class="field">{entry.value} °C</div>{/if}
 			{#if entry.method}<div class="field">{capitalize(entry.method)}</div>{/if}

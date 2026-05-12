@@ -10,6 +10,7 @@
 	import StoolForm from '$lib/components/StoolForm.svelte';
 	import TemperatureForm from '$lib/components/TemperatureForm.svelte';
 	import WeightForm from '$lib/components/WeightForm.svelte';
+	import HeightForm from '$lib/components/HeightForm.svelte';
 	import AbdomenForm from '$lib/components/AbdomenForm.svelte';
 	import SkinForm from '$lib/components/SkinForm.svelte';
 	import BruisingForm from '$lib/components/BruisingForm.svelte';
@@ -29,6 +30,7 @@
 		stool: { label: 'Stool', endpoint: 'stools', hasPhoto: true, multiPhoto: true },
 		temperature: { label: 'Temperature', endpoint: 'temperatures', hasPhoto: false },
 		weight: { label: 'Weight', endpoint: 'weights', hasPhoto: false },
+		height: { label: 'Height', endpoint: 'heights', hasPhoto: false },
 		abdomen: { label: 'Abdomen', endpoint: 'abdomen', hasPhoto: true, multiPhoto: true },
 		skin: { label: 'Skin', endpoint: 'skin', hasPhoto: true, multiPhoto: true },
 		bruising: { label: 'Bruising', endpoint: 'bruising', hasPhoto: true, multiPhoto: true },
@@ -199,6 +201,8 @@
 		<TemperatureForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'weight'}
 		<WeightForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
+	{:else if metric === 'height'}
+		<HeightForm onsubmit={handleSubmit} initialData={editData} {submitting} {error} />
 	{:else if metric === 'abdomen'}
 		<AbdomenForm onsubmit={handleSubmit} initialData={editData} onphotoupload={handlePhotoUpload} onphotoremove={handlePhotoRemove} {submitting} {error} {uploading} {photoKeys} {existingPhotos} />
 	{:else if metric === 'skin'}

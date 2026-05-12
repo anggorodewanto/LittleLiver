@@ -1,5 +1,5 @@
 <script lang="ts">
-	export type MetricType = 'feeding' | 'urine' | 'stool' | 'temperature' | 'med_given' | 'weight' | 'abdomen' | 'skin' | 'bruising' | 'lab' | 'imaging' | 'notes' | 'medication' | 'other_intake' | 'other_output' | 'head_circumference' | 'upper_arm_circumference';
+	export type MetricType = 'feeding' | 'urine' | 'stool' | 'temperature' | 'med_given' | 'weight' | 'height' | 'abdomen' | 'skin' | 'bruising' | 'lab' | 'imaging' | 'notes' | 'medication' | 'other_intake' | 'other_output' | 'head_circumference' | 'upper_arm_circumference';
 
 	interface Props {
 		onselect: (type: MetricType) => void;
@@ -19,6 +19,7 @@
 
 <div class="extra-buttons">
 	<button type="button" onclick={() => onselect('weight')}>Weight</button>
+	<button type="button" onclick={() => onselect('height')}>Height</button>
 	<button type="button" onclick={() => onselect('abdomen')}>Abdomen</button>
 	<button type="button" onclick={() => onselect('skin')}>Skin</button>
 	<button type="button" onclick={() => onselect('bruising')}>Bruising</button>

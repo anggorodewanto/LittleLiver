@@ -44,6 +44,13 @@ type WeightSeriesEntry struct {
 	MeasurementSource *string `json:"measurement_source"`
 }
 
+// HeightSeriesEntry holds an individual height reading.
+type HeightSeriesEntry struct {
+	Timestamp         string  `json:"timestamp"`
+	HeightCm          float64 `json:"height_cm"`
+	MeasurementSource *string `json:"measurement_source"`
+}
+
 // AbdomenGirthEntry holds an individual abdomen girth reading.
 type AbdomenGirthEntry struct {
 	Timestamp string  `json:"timestamp"`
@@ -228,6 +235,43 @@ func GetWeightSeries(db *sql.DB, babyID, from, to string, loc *time.Location) ([
 		var src sql.NullString
 		if err := rows.Scan(&e.Timestamp, &e.WeightKg, &src); err != nil {
 			return nil, fmt.Errorf("scan weight series: %w", err)
+		}
+		e.MeasurementSource = nullStr(src)
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration: %w", err)
+	}
+
+	return emptySliceIfNil(entries), nil
+}
+
+// GetHeightSeries returns individual height readings within the given date range.
+// loc specifies the timezone for date interpretation.
+func GetHeightSeries(db *sql.DB, babyID, from, to string, loc *time.Location) ([]HeightSeriesEntry, error) {
+	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.Query(
+		`SELECT timestamp, height_cm, measurement_source
+		 FROM heights
+		 WHERE baby_id = ? AND timestamp >= ? AND timestamp < ?
+		 ORDER BY timestamp ASC`,
+		babyID, fromTime, toTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query height series: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []HeightSeriesEntry
+	for rows.Next() {
+		var e HeightSeriesEntry
+		var src sql.NullString
+		if err := rows.Scan(&e.Timestamp, &e.HeightCm, &src); err != nil {
+			return nil, fmt.Errorf("scan height series: %w", err)
 		}
 		e.MeasurementSource = nullStr(src)
 		entries = append(entries, e)

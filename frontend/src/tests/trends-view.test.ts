@@ -26,7 +26,8 @@ const mockDashboardResponse = {
 		total_stools: 2,
 		worst_stool_color: 3,
 		last_temperature: 37.2,
-		last_weight: 4.5
+		last_weight: 4.5,
+		last_height: 56.0
 	},
 	stool_color_trend: [],
 	upcoming_meds: [],
@@ -40,6 +41,9 @@ const mockDashboardResponse = {
 		],
 		weight: [
 			{ timestamp: '2026-03-13T10:00:00Z', weight_kg: 4.2, measurement_source: 'home_scale' }
+		],
+		height: [
+			{ timestamp: '2026-03-13T10:00:00Z', height_cm: 56.0, measurement_source: 'home_scale' }
 		],
 		abdomen_girth: [],
 		stool_color: [
@@ -127,9 +131,9 @@ describe('TrendsView', () => {
 		// Wait for data to load
 		await screen.findByText(/stool color/i);
 
-		// Only temperature, weight, and stool_color have data; others show "No data"
+		// temperature, weight, height, and stool_color have data; others show "No data"
 		const canvases = container.querySelectorAll('canvas');
-		expect(canvases.length).toBe(3);
+		expect(canvases.length).toBe(4);
 	});
 
 	it('fetches WHO percentile data alongside dashboard data', async () => {
@@ -144,13 +148,14 @@ describe('TrendsView', () => {
 		);
 	});
 
-	it('shows chart section headings for all nine charts', async () => {
+	it('shows chart section headings for all ten charts', async () => {
 		render(TrendsView, {
 			props: { babyId: 'baby-1', sex: 'female', dateOfBirth: '2026-01-15' }
 		});
 
 		expect(await screen.findByText(/stool color/i)).toBeInTheDocument();
-		expect(screen.getByText(/weight/i)).toBeInTheDocument();
+		expect(screen.getByText(/^Weight$/)).toBeInTheDocument();
+		expect(screen.getByText(/^Height$/)).toBeInTheDocument();
 		expect(screen.getByText(/temperature/i)).toBeInTheDocument();
 		expect(screen.getByText(/abdomen girth/i)).toBeInTheDocument();
 		expect(screen.getByText(/head circumference/i)).toBeInTheDocument();

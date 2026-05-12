@@ -22,6 +22,7 @@
 		worst_stool_color: number | null;
 		last_temperature: number | null;
 		last_weight: number | null;
+		last_height: number | null;
 	}
 
 	interface StoolColorTrendEntry {
@@ -482,6 +483,16 @@
 				{/if}
 			</div>
 			<div class="card-label">Last Weight</div>
+		</div>
+		<div class="card">
+			<div class="card-value">
+				{#if dashboard.summary_cards.last_height !== null}
+					{dashboard.summary_cards.last_height} cm
+				{:else}
+					—
+				{/if}
+			</div>
+			<div class="card-label">Last Height</div>
 		</div>
 	</div>
 

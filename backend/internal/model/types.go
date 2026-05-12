@@ -140,6 +140,20 @@ type Weight struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
+// Height represents a single height (length) measurement for a baby.
+type Height struct {
+	ID                string    `json:"id"`
+	BabyID            string    `json:"baby_id"`
+	LoggedBy          string    `json:"logged_by"`
+	UpdatedBy         *string   `json:"updated_by,omitempty"`
+	Timestamp         time.Time `json:"timestamp"`
+	HeightCm          float64   `json:"height_cm"`
+	MeasurementSource *string   `json:"measurement_source,omitempty"`
+	Notes             *string   `json:"notes,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
 // HeadCircumference represents a single head circumference measurement for a baby.
 type HeadCircumference struct {
 	ID                string    `json:"id"`

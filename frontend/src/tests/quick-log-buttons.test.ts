@@ -11,11 +11,11 @@ describe('QuickLogButtons', () => {
 		onnavigate = vi.fn();
 	});
 
-	it('renders all 17 log-entry buttons unconditionally (5 primary + 12 extra)', () => {
+	it('renders all 18 log-entry buttons unconditionally (5 primary + 13 extra)', () => {
 		render(QuickLogButtons, { props: { onselect, onnavigate } });
 
 		const buttons = screen.getAllByRole('button');
-		expect(buttons).toHaveLength(17);
+		expect(buttons).toHaveLength(18);
 	});
 
 	it('renders Feed, Wet Diaper, Stool, Temp, and Medication Given buttons', () => {
@@ -99,9 +99,17 @@ describe('QuickLogButtons', () => {
 	it('calls onselect with "weight" when Weight is clicked', async () => {
 		render(QuickLogButtons, { props: { onselect, onnavigate } });
 
-		await fireEvent.click(screen.getByRole('button', { name: /weight/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^weight$/i }));
 
 		expect(onselect).toHaveBeenCalledWith('weight');
+	});
+
+	it('calls onselect with "height" when Height is clicked', async () => {
+		render(QuickLogButtons, { props: { onselect, onnavigate } });
+
+		await fireEvent.click(screen.getByRole('button', { name: /^height$/i }));
+
+		expect(onselect).toHaveBeenCalledWith('height');
 	});
 
 	it('calls onnavigate with "/medications" when Manage Medications is clicked', async () => {

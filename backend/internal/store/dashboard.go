@@ -19,6 +19,7 @@ type DashboardSummary struct {
 	WorstStoolColor *int     `json:"worst_stool_color"`
 	LastTemperature *float64 `json:"last_temperature"`
 	LastWeight     *float64 `json:"last_weight"`
+	LastHeight     *float64 `json:"last_height"`
 }
 
 // StoolColorEntry represents a single date+color entry in the stool color trend.
@@ -44,7 +45,7 @@ type UpcomingMed struct {
 
 // GetDashboardSummary returns aggregated summary cards for a baby within the given date range.
 // from and to are in YYYY-MM-DD format. loc specifies the timezone for date interpretation.
-// last_temp and last_weight ignore the date range.
+// last_temp, last_weight, last_height ignore the date range.
 func GetDashboardSummary(db *sql.DB, babyID, from, to string, loc *time.Location) (*DashboardSummary, error) {
 	fromTime, toTime, err := ParseDateRangeInLocation(from, to, loc)
 	if err != nil {
@@ -127,6 +128,19 @@ func GetDashboardSummary(db *sql.DB, babyID, from, to string, loc *time.Location
 		return nil, fmt.Errorf("query last weight: %w", err)
 	}
 	s.LastWeight = nullFloat(lastWeight)
+
+	// Last height (regardless of date range)
+	var lastHeight sql.NullFloat64
+	err = db.QueryRow(
+		`SELECT height_cm FROM heights
+		 WHERE baby_id = ?
+		 ORDER BY timestamp DESC LIMIT 1`,
+		babyID,
+	).Scan(&lastHeight)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("query last height: %w", err)
+	}
+	s.LastHeight = nullFloat(lastHeight)
 
 	return s, nil
 }
