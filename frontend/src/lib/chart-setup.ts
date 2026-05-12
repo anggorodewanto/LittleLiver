@@ -14,6 +14,7 @@ import {
 	Tooltip,
 	SubTitle
 } from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
 
 Chart.register(
 	LineController,
@@ -28,5 +29,6 @@ Chart.register(
 	Filler,
 	Legend,
 	Tooltip,
-	SubTitle
+	SubTitle,
+	zoomPlugin
 );
