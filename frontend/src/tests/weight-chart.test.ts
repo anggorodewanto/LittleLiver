@@ -67,6 +67,36 @@ describe('WeightChart', () => {
 		expect(config.type).toBe('line');
 	});
 
+	it('uses date timestamps as x-axis values for weight data', () => {
+		render(WeightChart, {
+			props: { data: mockWeightData, percentiles: mockPercentiles, dateOfBirth: '2026-01-15' }
+		});
+
+		const config = chartConstructorCalls[0][1] as {
+			data: { datasets: { label: string; data: { x: number; y: number }[] }[] };
+		};
+		const weightDs = config.data.datasets.find((d) => d.label === 'Weight')!;
+		expect(weightDs.data[0].x).toBe(new Date('2026-03-01T10:00:00Z').getTime());
+		expect(weightDs.data[2].x).toBe(new Date('2026-03-15T10:00:00Z').getTime());
+	});
+
+	it('converts percentile age_days to date timestamps via dateOfBirth', () => {
+		const dob = '2026-01-15';
+		render(WeightChart, {
+			props: { data: mockWeightData, percentiles: mockPercentiles, dateOfBirth: dob }
+		});
+
+		const config = chartConstructorCalls[0][1] as {
+			data: { datasets: { label: string; data: { x: number; y: number }[] }[] };
+		};
+		const p50 = config.data.datasets.find((d) => d.label === '50th')!;
+		const dobMs = new Date(dob).getTime();
+		const dayMs = 24 * 60 * 60 * 1000;
+		expect(p50.data[0].x).toBe(dobMs + 0 * dayMs);
+		expect(p50.data[1].x).toBe(dobMs + 30 * dayMs);
+		expect(p50.data[2].x).toBe(dobMs + 60 * dayMs);
+	});
+
 	it('includes WHO percentile band datasets (p3, p15, p50, p85, p97)', () => {
 		render(WeightChart, {
 			props: { data: mockWeightData, percentiles: mockPercentiles, dateOfBirth: '2026-01-15' }

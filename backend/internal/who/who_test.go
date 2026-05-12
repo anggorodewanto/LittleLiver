@@ -418,4 +418,62 @@ func TestDataLoaded(t *testing.T) {
 	if len(hcfaFemaleLMS) != 731 {
 		t.Errorf("hcfaFemaleLMS has %d entries, want 731 (days 0-730)", len(hcfaFemaleLMS))
 	}
+	if len(lfaMaleLMS) != 731 {
+		t.Errorf("lfaMaleLMS has %d entries, want 731 (days 0-730)", len(lfaMaleLMS))
+	}
+	if len(lfaFemaleLMS) != 731 {
+		t.Errorf("lfaFemaleLMS has %d entries, want 731 (days 0-730)", len(lfaFemaleLMS))
+	}
+}
+
+func TestPercentileCurvesForMetric_Height(t *testing.T) {
+	t.Parallel()
+
+	t.Run("male 0 to 365 days returns 5 curves", func(t *testing.T) {
+		t.Parallel()
+		curves, err := PercentileCurvesForMetric("male", "height", 0, 365)
+		if err != nil {
+			t.Fatalf("PercentileCurvesForMetric(height) error: %v", err)
+		}
+		if len(curves) != 5 {
+			t.Fatalf("expected 5 curves, got %d", len(curves))
+		}
+		for i, curve := range curves {
+			if len(curve.Points) != 366 {
+				t.Errorf("curve %d has %d points, want 366", i, len(curve.Points))
+			}
+		}
+		// 50th percentile at day 0 for male should match WHO length-for-age median ~49.8842 cm
+		p50 := curves[2]
+		if math.Abs(p50.Points[0].Value-49.8842) > 0.05 {
+			t.Errorf("50th percentile at day 0 = %f, want ~49.8842", p50.Points[0].Value)
+		}
+	})
+
+	t.Run("female day 0 median ~49.1477 cm", func(t *testing.T) {
+		t.Parallel()
+		curves, err := PercentileCurvesForMetric("female", "height", 0, 30)
+		if err != nil {
+			t.Fatalf("PercentileCurvesForMetric(female,height) error: %v", err)
+		}
+		p50 := curves[2]
+		if math.Abs(p50.Points[0].Value-49.1477) > 0.05 {
+			t.Errorf("50th female percentile at day 0 = %f, want ~49.1477", p50.Points[0].Value)
+		}
+	})
+
+	t.Run("ordered 3rd < 15th < 50th < 85th < 97th", func(t *testing.T) {
+		t.Parallel()
+		curves, _ := PercentileCurvesForMetric("male", "height", 0, 100)
+		for dayIdx := 0; dayIdx < len(curves[0].Points); dayIdx++ {
+			for c := 1; c < len(curves); c++ {
+				if curves[c].Points[dayIdx].Value <= curves[c-1].Points[dayIdx].Value {
+					t.Errorf("at day %d, curve %d value %.3f <= curve %d value %.3f",
+						dayIdx, c, curves[c].Points[dayIdx].Value,
+						c-1, curves[c-1].Points[dayIdx].Value)
+					break
+				}
+			}
+		}
+	})
 }

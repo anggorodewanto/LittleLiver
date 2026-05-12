@@ -2,7 +2,7 @@
 	import type { ChartConfiguration } from 'chart.js';
 	import ChartWrapper from './ChartWrapper.svelte';
 	import type { Percentiles } from '$lib/types/percentiles';
-	import { legendFilter, percentileSubtitle } from '$lib/chart-utils';
+	import { legendFilter, percentileSubtitle, dateTickCallback } from '$lib/chart-utils';
 
 	interface WeightDataPoint {
 		timestamp: string;
@@ -18,10 +18,10 @@
 
 	let { data, percentiles, dateOfBirth }: Props = $props();
 
-	function ageDaysForTimestamp(timestamp: string): number {
-		const birth = new Date(dateOfBirth).getTime();
-		const ts = new Date(timestamp).getTime();
-		return Math.floor((ts - birth) / (24 * 60 * 60 * 1000));
+	const DAY_MS = 24 * 60 * 60 * 1000;
+
+	function dateMsForAgeDays(ageDays: number): number {
+		return new Date(dateOfBirth).getTime() + ageDays * DAY_MS;
 	}
 
 	const PERCENTILE_COLORS: Record<string, string> = {
@@ -44,7 +44,7 @@
 			] as [string, string, { age_days: number; value?: number; weight_kg?: number }[]][]
 		).map(([label, , points]) => ({
 			label,
-			data: points.map((p) => ({ x: p.age_days, y: p.value ?? p.weight_kg ?? 0 })),
+			data: points.map((p) => ({ x: dateMsForAgeDays(p.age_days), y: p.value ?? p.weight_kg ?? 0 })),
 			borderColor: PERCENTILE_COLORS[label],
 			borderDash: [5, 5],
 			borderWidth: 1,
@@ -60,7 +60,7 @@
 				{
 					label: 'Weight',
 					data: data.map((d) => ({
-						x: ageDaysForTimestamp(d.timestamp),
+						x: new Date(d.timestamp).getTime(),
 						y: d.weight_kg
 					})),
 					borderColor: '#3b82f6',
@@ -81,7 +81,8 @@
 			scales: {
 				x: {
 					type: 'linear',
-					title: { display: true, text: 'Age (days)' }
+					title: { display: true, text: 'Date' },
+					ticks: { callback: dateTickCallback }
 				},
 				y: {
 					title: { display: true, text: 'Weight (kg)' }
