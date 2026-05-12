@@ -98,7 +98,11 @@
 				active: raw.active,
 				interval_days: raw.interval_days as number | undefined,
 				starts_from: raw.starts_from as string | undefined,
-				notes: raw.notes as string | undefined
+				notes: raw.notes as string | undefined,
+				dose_amount: raw.dose_amount as number | null | undefined,
+				dose_unit: raw.dose_unit as string | null | undefined,
+				low_stock_threshold: raw.low_stock_threshold as number | null | undefined,
+				expiry_warning_days: raw.expiry_warning_days as number | null | undefined
 			};
 		}
 		if (metricKey === 'med') {

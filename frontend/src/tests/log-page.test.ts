@@ -208,6 +208,43 @@ describe('Log Page', () => {
 		expect(timeInputs[1]).toHaveValue('20:00');
 	});
 
+	it('populates stock fields (dose amount/unit, thresholds) when editing a medication', async () => {
+		activeBaby.set(mockBaby);
+
+		const mockGet = apiClient.get as ReturnType<typeof vi.fn>;
+		mockGet.mockImplementation((url: string) => {
+			if (url.includes('/medications/med-1')) {
+				return Promise.resolve({
+					id: 'med-1',
+					name: 'UDCA (ursodiol)',
+					dose: '5mL',
+					frequency: 'twice_daily',
+					schedule_times: ['08:00', '20:00'],
+					active: true,
+					dose_amount: 5,
+					dose_unit: 'ml',
+					low_stock_threshold: 4,
+					expiry_warning_days: 7
+				});
+			}
+			return Promise.resolve({ medications: [] });
+		});
+
+		pageStore.set({
+			params: { metric: 'medication' },
+			url: new URL('http://localhost/log/medication?edit=med-1')
+		});
+
+		render(LogPage);
+
+		await screen.findByText(/edit medication/i);
+
+		expect((await screen.findByLabelText(/dose amount/i) as HTMLInputElement).value).toBe('5');
+		expect((screen.getByLabelText(/dose unit/i) as HTMLSelectElement).value).toBe('ml');
+		expect((screen.getByLabelText(/low stock/i) as HTMLInputElement).value).toBe('4');
+		expect((screen.getByLabelText(/expiry warning/i) as HTMLInputElement).value).toBe('7');
+	});
+
 	it('shows back link to /medications when editing a medication', async () => {
 		activeBaby.set(mockBaby);
 
