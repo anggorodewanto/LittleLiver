@@ -224,6 +224,53 @@ func TestCreateMedLog_ExplicitContainerOverride(t *testing.T) {
 	}
 }
 
+func TestCreateMedLog_ExplicitSealedContainer_AutoOpens(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+	med := medWithDose(t, db, baby.ID, user.ID, 5, "ml")
+
+	sealed, err := store.CreateMedicationContainer(db, store.CreateContainerParams{
+		MedicationID:    med.ID,
+		BabyID:          baby.ID,
+		Kind:            "bottle",
+		Unit:            "ml",
+		QuantityInitial: 100,
+		CreatedBy:       user.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateMedicationContainer: %v", err)
+	}
+	if sealed.OpenedAt != nil {
+		t.Fatalf("precondition: sealed container should have nil OpenedAt")
+	}
+
+	givenAt := nowUTCStr()
+	ml, err := store.CreateMedLogWithStock(db, store.CreateMedLogParams{
+		BabyID:       baby.ID,
+		MedicationID: med.ID,
+		LoggedBy:     user.ID,
+		GivenAt:      &givenAt,
+		ContainerID:  &sealed.ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateMedLogWithStock: %v", err)
+	}
+	if ml.ContainerID == nil || *ml.ContainerID != sealed.ID {
+		t.Errorf("expected override to %s, got %v", sealed.ID, ml.ContainerID)
+	}
+
+	got, _ := store.GetMedicationContainerByID(db, baby.ID, sealed.ID)
+	if got.OpenedAt == nil {
+		t.Error("expected OpenedAt set after explicit-sealed deduction")
+	}
+	if got.QuantityRemaining != 95 {
+		t.Errorf("QuantityRemaining = %v, want 95", got.QuantityRemaining)
+	}
+}
+
 func TestCreateMedLog_EmptyInventory_LogsWithoutContainer(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)

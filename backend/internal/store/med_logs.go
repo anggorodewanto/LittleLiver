@@ -432,11 +432,12 @@ func selectContainerForDeduction(tx *sql.Tx, babyID, medicationID, doseUnit stri
 	if override != nil {
 		var medID, unit string
 		var depleted bool
+		var openedAt sql.NullString
 		err := tx.QueryRow(
-			`SELECT medication_id, unit, depleted FROM medication_containers
+			`SELECT medication_id, unit, depleted, opened_at FROM medication_containers
 			 WHERE id = ? AND baby_id = ?`,
 			*override, babyID,
-		).Scan(&medID, &unit, &depleted)
+		).Scan(&medID, &unit, &depleted, &openedAt)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return "", fmt.Errorf("container %s not found", *override)
@@ -451,6 +452,17 @@ func selectContainerForDeduction(tx *sql.Tx, babyID, medicationID, doseUnit stri
 		}
 		if unit != doseUnit {
 			return "", fmt.Errorf("container unit %s does not match medication dose unit %s", unit, doseUnit)
+		}
+		if !openedAt.Valid {
+			now := time.Now().UTC().Format(model.DateTimeFormat)
+			if _, err := tx.Exec(
+				`UPDATE medication_containers
+				 SET opened_at = ?, updated_at = CURRENT_TIMESTAMP
+				 WHERE id = ?`,
+				now, *override,
+			); err != nil {
+				return "", fmt.Errorf("auto-open override container: %w", err)
+			}
 		}
 		return *override, nil
 	}
