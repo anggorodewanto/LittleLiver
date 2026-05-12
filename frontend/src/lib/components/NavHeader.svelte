@@ -84,7 +84,7 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		height: var(--nav-height);
+		min-height: var(--nav-height);
 		background: var(--color-surface);
 		border-top: 1px solid var(--color-border);
 		display: flex;
