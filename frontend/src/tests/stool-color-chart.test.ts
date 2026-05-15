@@ -8,6 +8,7 @@ vi.mock('chart.js', () => ({
 }));
 
 import StoolColorChart from '$lib/components/StoolColorChart.svelte';
+import { dateTooltipTitle } from '$lib/chart-utils';
 
 const mockStoolData = [
 	{ timestamp: '2026-03-13T08:00:00Z', color_score: 3 },
@@ -106,5 +107,13 @@ describe('StoolColorChart', () => {
 		};
 		expect(config.options.scales.y.min).toBe(0.5);
 		expect(config.options.scales.y.max).toBe(7.5);
+	});
+
+	it('configures tooltip title callback to format x value as date', () => {
+		render(StoolColorChart, { props: { data: mockStoolData } });
+		const config = chartConstructorCalls[0][1] as {
+			options: { plugins: { tooltip: { callbacks: { title: unknown } } } };
+		};
+		expect(config.options.plugins.tooltip.callbacks.title).toBe(dateTooltipTitle);
 	});
 });

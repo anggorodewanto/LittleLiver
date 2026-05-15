@@ -8,6 +8,7 @@ vi.mock('chart.js', () => ({
 }));
 
 import WeightChart from '$lib/components/WeightChart.svelte';
+import { dateTooltipTitle } from '$lib/chart-utils';
 
 const mockWeightData = [
 	{ timestamp: '2026-03-01T10:00:00Z', weight_kg: 3.5, measurement_source: 'home_scale' },
@@ -143,6 +144,17 @@ describe('WeightChart', () => {
 		unmount();
 
 		expect(mockChartInstance.destroy).toHaveBeenCalled();
+	});
+
+	it('configures tooltip title callback to format x value as date', () => {
+		render(WeightChart, {
+			props: { data: mockWeightData, percentiles: mockPercentiles, dateOfBirth: '2026-01-15' }
+		});
+
+		const config = chartConstructorCalls[0][1] as {
+			options: { plugins: { tooltip: { callbacks: { title: unknown } } } };
+		};
+		expect(config.options.plugins.tooltip.callbacks.title).toBe(dateTooltipTitle);
 	});
 
 	it('shows "No data available" when data is empty', () => {

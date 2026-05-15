@@ -8,6 +8,7 @@ vi.mock('chart.js', () => ({
 }));
 
 import LabTrendsChart from '$lib/components/LabTrendsChart.svelte';
+import { dateTooltipTitle } from '$lib/chart-utils';
 
 const mockLabData: Record<string, { timestamp: string; test_name: string; value: string; unit: string }[]> = {
 	total_bilirubin: [
@@ -199,4 +200,11 @@ describe('LabTrendsChart', () => {
 		expect(ds!.data.map((p) => p.y)).toEqual([3.2, 2.5, 1.8]);
 	});
 
+	it('configures tooltip title callback to format x value as date', () => {
+		render(LabTrendsChart, { props: { data: mockLabData } });
+		const config = chartConstructorCalls[0][1] as {
+			options: { plugins: { tooltip: { callbacks: { title: unknown } } } };
+		};
+		expect(config.options.plugins.tooltip.callbacks.title).toBe(dateTooltipTitle);
+	});
 });

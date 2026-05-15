@@ -8,6 +8,7 @@ vi.mock('chart.js', () => ({
 }));
 
 import HeadCircumferenceChart from '$lib/components/HeadCircumferenceChart.svelte';
+import { dateTooltipTitle } from '$lib/chart-utils';
 
 const mockHcData = [
 	{ timestamp: '2026-03-01T10:00:00Z', circumference_cm: 35.0 },
@@ -106,5 +107,15 @@ describe('HeadCircumferenceChart', () => {
 			props: { data: [], percentiles: mockPercentiles, dateOfBirth: '2026-01-15' }
 		});
 		expect(container.textContent).toContain('No data available');
+	});
+
+	it('configures tooltip title callback to format x value as date', () => {
+		render(HeadCircumferenceChart, {
+			props: { data: mockHcData, percentiles: mockPercentiles, dateOfBirth: '2026-01-15' }
+		});
+		const config = chartConstructorCalls[0][1] as {
+			options: { plugins: { tooltip: { callbacks: { title: unknown } } } };
+		};
+		expect(config.options.plugins.tooltip.callbacks.title).toBe(dateTooltipTitle);
 	});
 });

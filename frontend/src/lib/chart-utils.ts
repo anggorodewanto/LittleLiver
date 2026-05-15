@@ -1,4 +1,4 @@
-import type { LegendItem, ChartDataset } from 'chart.js';
+import type { LegendItem, ChartDataset, TooltipItem, ChartType } from 'chart.js';
 
 export const LINE_COLORS = [
 	'#ef4444',
@@ -22,6 +22,13 @@ export function testColorMap(testNames: string[]): Map<string, string> {
 
 export const dateTickCallback = (value: string | number) =>
 	new Date(value as number).toLocaleDateString();
+
+/** Tooltip title callback that formats the x value (epoch ms) as a locale date+time string */
+export function dateTooltipTitle(items: TooltipItem<ChartType>[]): string {
+	if (items.length === 0) return '';
+	const x = (items[0].parsed as { x: number }).x;
+	return new Date(x).toLocaleString();
+}
 
 /** Filters reference datasets (dashed lines, zero-width borders) out of the legend */
 export function legendFilter(item: LegendItem, chartData: { datasets: ChartDataset[] }): boolean {

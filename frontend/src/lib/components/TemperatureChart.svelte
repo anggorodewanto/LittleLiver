@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ChartConfiguration } from 'chart.js';
 	import ChartWrapper from './ChartWrapper.svelte';
-	import { dateTickCallback, legendFilter } from '$lib/chart-utils';
+	import { dateTickCallback, legendFilter, dateTooltipTitle } from '$lib/chart-utils';
 
 	interface TemperatureDataPoint {
 		timestamp: string;
@@ -105,7 +105,8 @@
 			options: {
 				responsive: true,
 				plugins: {
-					legend: { labels: { filter: legendFilter } }
+					legend: { labels: { filter: legendFilter } },
+					tooltip: { callbacks: { title: dateTooltipTitle } }
 				},
 				scales: {
 					x: {

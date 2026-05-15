@@ -8,6 +8,7 @@ vi.mock('chart.js', () => ({
 }));
 
 import HeightChart from '$lib/components/HeightChart.svelte';
+import { dateTooltipTitle } from '$lib/chart-utils';
 
 const mockHeightData = [
 	{ timestamp: '2026-03-01T10:00:00Z', height_cm: 54.0, measurement_source: 'home_scale' },
@@ -134,5 +135,15 @@ describe('HeightChart', () => {
 		});
 		expect(container.textContent).toContain('No data available');
 		expect(chartConstructorCalls.length).toBe(0);
+	});
+
+	it('configures tooltip title callback to format x value as date', () => {
+		render(HeightChart, {
+			props: { data: mockHeightData, percentiles: mockPercentiles, dateOfBirth: '2026-01-15' }
+		});
+		const config = chartConstructorCalls[0][1] as {
+			options: { plugins: { tooltip: { callbacks: { title: unknown } } } };
+		};
+		expect(config.options.plugins.tooltip.callbacks.title).toBe(dateTooltipTitle);
 	});
 });

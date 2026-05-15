@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { testColorMap, LINE_COLORS } from '$lib/chart-utils';
+import { testColorMap, LINE_COLORS, dateTooltipTitle } from '$lib/chart-utils';
+import type { ChartType, TooltipItem } from 'chart.js';
 
 describe('testColorMap', () => {
 	it('returns a map with correct color for each test in order', () => {
@@ -21,5 +22,17 @@ describe('testColorMap', () => {
 	it('returns an empty map for empty input', () => {
 		const map = testColorMap([]);
 		expect(map.size).toBe(0);
+	});
+});
+
+describe('dateTooltipTitle', () => {
+	it('formats epoch ms x value as locale date+time string', () => {
+		const ts = new Date('2026-03-15T14:30:00Z').getTime();
+		const items = [{ parsed: { x: ts } }] as unknown as TooltipItem<ChartType>[];
+		expect(dateTooltipTitle(items)).toBe(new Date(ts).toLocaleString());
+	});
+
+	it('returns empty string for empty items', () => {
+		expect(dateTooltipTitle([] as TooltipItem<ChartType>[])).toBe('');
 	});
 });
