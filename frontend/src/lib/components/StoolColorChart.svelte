@@ -2,7 +2,7 @@
 	import type { ChartConfiguration } from 'chart.js';
 	import ChartWrapper from './ChartWrapper.svelte';
 	import { COLOR_SWATCHES } from '$lib/stool-colors';
-	import { dateTickCallback } from '$lib/chart-utils';
+	import { dateTickCallback, dateTooltipTitle } from '$lib/chart-utils';
 
 	interface StoolDataPoint {
 		timestamp: string;
@@ -61,7 +61,8 @@
 				}
 			},
 			plugins: {
-				legend: { display: false }
+				legend: { display: false },
+				tooltip: { callbacks: { title: dateTooltipTitle } }
 			}
 		}
 	});

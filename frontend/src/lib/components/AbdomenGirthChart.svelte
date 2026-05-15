@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ChartConfiguration } from 'chart.js';
 	import ChartWrapper from './ChartWrapper.svelte';
-	import { dateTickCallback } from '$lib/chart-utils';
+	import { dateTickCallback, dateTooltipTitle } from '$lib/chart-utils';
 
 	interface AbdomenGirthDataPoint {
 		timestamp: string;
@@ -34,6 +34,9 @@
 		},
 		options: {
 			responsive: true,
+			plugins: {
+				tooltip: { callbacks: { title: dateTooltipTitle } }
+			},
 			scales: {
 				x: {
 					type: 'linear',

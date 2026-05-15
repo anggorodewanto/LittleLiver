@@ -2,7 +2,12 @@
 	import type { ChartConfiguration } from 'chart.js';
 	import ChartWrapper from './ChartWrapper.svelte';
 	import type { Percentiles } from '$lib/types/percentiles';
-	import { legendFilter, percentileSubtitle, dateTickCallback } from '$lib/chart-utils';
+	import {
+		legendFilter,
+		percentileSubtitle,
+		dateTickCallback,
+		dateTooltipTitle
+	} from '$lib/chart-utils';
 
 	interface HeadCircumferenceDataPoint {
 		timestamp: string;
@@ -75,7 +80,8 @@
 			responsive: true,
 			plugins: {
 				legend: { labels: { filter: legendFilter } },
-				subtitle: percentileSubtitle
+				subtitle: percentileSubtitle,
+				tooltip: { callbacks: { title: dateTooltipTitle } }
 			},
 			scales: {
 				x: {

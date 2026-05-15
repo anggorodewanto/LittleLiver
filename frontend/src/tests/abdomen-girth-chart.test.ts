@@ -8,6 +8,7 @@ vi.mock('chart.js', () => ({
 }));
 
 import AbdomenGirthChart from '$lib/components/AbdomenGirthChart.svelte';
+import { dateTooltipTitle } from '$lib/chart-utils';
 
 const mockAbdomenData = [
 	{ timestamp: '2026-03-13T08:00:00Z', girth_cm: 38.5 },
@@ -87,5 +88,13 @@ describe('AbdomenGirthChart', () => {
 
 		expect(container.textContent).toContain('No data available');
 		expect(chartConstructorCalls.length).toBe(0);
+	});
+
+	it('configures tooltip title callback to format x value as date', () => {
+		render(AbdomenGirthChart, { props: { data: mockAbdomenData } });
+		const config = chartConstructorCalls[0][1] as {
+			options: { plugins: { tooltip: { callbacks: { title: unknown } } } };
+		};
+		expect(config.options.plugins.tooltip.callbacks.title).toBe(dateTooltipTitle);
 	});
 });
