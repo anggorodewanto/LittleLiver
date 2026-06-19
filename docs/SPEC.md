@@ -253,6 +253,40 @@ Care plans are a passive scheduling surface for clinician-prescribed regimens th
 
 **Endpoints.** See §5.9.
 
+### 3.16 Immunizations
+
+Tracks a baby's vaccinations against the **IDAI (Ikatan Dokter Anak Indonesia)** childhood immunization schedule. The app stores the doses that have been *administered*, then computes — from the baby's date of birth and a built-in reference schedule — which doses are completed and which are upcoming, covering both **mandatory** (national program / "wajib") and **optional** ("pilihan" / recommended-additional) vaccines.
+
+**Reference schedule (code, not DB).** The static IDAI schedule lives in `internal/immunization` (a Go data table), mirroring how WHO growth data is bundled. Each entry is one dose slot:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| Code | text | Vaccine code, e.g. `DTP_HB_HIB`, `PCV`, `MR` |
+| Name | text | Display name, e.g. "DTP-HB-Hib (Pentavalent)" |
+| Dose number | integer | 1-based dose index within the vaccine |
+| Dose label | text | e.g. "Dose 1", "Booster", "HB-0" |
+| Age (months) | integer | Canonical recommended age (`0` = at birth); used to compute the due date |
+| Age label | text | Human range for display, e.g. "12–15 months" |
+| Mandatory | boolean | `true` = universal national program; `false` = IDAI optional/recommended |
+
+The mandatory/optional split follows the Indonesian national program (Kemenkes) for the universal infant set (HB, BCG, Polio, DTP-HB-Hib, PCV, Rotavirus, MR) as mandatory; IDAI-recommended additions (Influenza, JE, Varicella, Hepatitis A, Typhoid, HPV, Dengue) as optional. This is reference data for a personal-use app, not medical advice — ages and classification should be verified against current official IDAI/Kemenkes guidance, and the data table is the single place to adjust them.
+
+**Administered records (DB).** The `immunizations` table stores what was actually given:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| Vaccine code | text | Links the record to a reference slot (empty for off-schedule/custom vaccines) |
+| Vaccine name | text | Required; display name as logged |
+| Dose number | integer | Optional; which dose this was |
+| Administered date | date (YYYY-MM-DD) | Required. Date-only, like care-plan phase dates |
+| Provider | text | Optional, e.g. clinic name |
+| Lot number | text | Optional |
+| Notes | text | Optional |
+
+**Schedule/status computation.** "Today" is evaluated in the request's timezone. For each reference slot, the due date is `date_of_birth + age_months`. A slot is **done** when an administered record matches its `(code, dose_number)`, **due** when its due date is on/before today and not done, otherwise **upcoming**. Administered records that don't match any reference slot are surfaced as off-schedule "done" entries so the completed list stays comprehensive. No notifications are sent for immunizations (the page is a passive tracker, like care plans).
+
+**Endpoints.** See §5.10.
+
 ---
 
 ## 4. Technology Stack
@@ -554,6 +588,22 @@ DELETE /api/babies/:id/care-plans/:planId      → Hard-delete the plan (cascade
 ```
 
 Phases are nested inside the plan request and response — there are no separate phase-level endpoints. The server validates that `seq` values are unique within a plan; phases are returned ordered by `seq`. `start_date` is a naive `YYYY-MM-DD` string interpreted in the plan's `timezone`. The plan's `timezone` is required at creation. Setting `active=false` keeps the plan visible for editing but prevents the scheduler from sending phase-transition notifications and excludes it from `current_care_plan_phases` on the dashboard.
+
+### 5.10 Immunizations
+
+CRUD for administered vaccine records (see §3.16), plus a computed schedule view and a static reference endpoint.
+
+```
+POST   /api/babies/:id/immunizations              → Log an administered dose
+GET    /api/babies/:id/immunizations              → List administered records (newest first; no pagination — counts are small; envelope { "data": [...], "next_cursor": null })
+GET    /api/babies/:id/immunizations/:entryId     → Get a single record
+PUT    /api/babies/:id/immunizations/:entryId     → Edit a record
+DELETE /api/babies/:id/immunizations/:entryId     → Hard-delete a record
+GET    /api/babies/:id/immunizations/schedule     → Computed status: IDAI reference slots overlaid with the baby's completed doses, plus due/upcoming computed from DOB. Response: { "slots": [ { code, name, dose_number, dose_label, age_months, age_label, mandatory, status, due_date, administered_date?, record_id?, off_schedule } ] }
+GET    /api/immunizations/reference               → The static IDAI reference schedule (baby-independent), used by the log-form vaccine picker. Response: { "schedule": [ ScheduleEntry ] }
+```
+
+`status` is one of `done` / `due` / `upcoming`. The `schedule` literal path takes precedence over the `:entryId` wildcard. `administered_date` and the schedule due dates are `YYYY-MM-DD`; "today" for the due/upcoming split is evaluated in the request's `X-Timezone`. Records are hard-deleted (no soft delete), consistent with other metrics.
 
 ---
 

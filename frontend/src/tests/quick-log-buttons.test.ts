@@ -11,11 +11,11 @@ describe('QuickLogButtons', () => {
 		onnavigate = vi.fn();
 	});
 
-	it('renders all 18 log-entry buttons unconditionally (5 primary + 13 extra)', () => {
+	it('renders all 19 log-entry buttons unconditionally (5 primary + 14 extra)', () => {
 		render(QuickLogButtons, { props: { onselect, onnavigate } });
 
 		const buttons = screen.getAllByRole('button');
-		expect(buttons).toHaveLength(18);
+		expect(buttons).toHaveLength(19);
 	});
 
 	it('renders Feed, Wet Diaper, Stool, Temp, and Medication Given buttons', () => {
@@ -118,5 +118,19 @@ describe('QuickLogButtons', () => {
 		await fireEvent.click(screen.getByRole('button', { name: /manage medications/i }));
 
 		expect(onnavigate).toHaveBeenCalledWith('/medications');
+	});
+
+	it('renders an Immunization button', () => {
+		render(QuickLogButtons, { props: { onselect, onnavigate } });
+
+		expect(screen.getByRole('button', { name: /immunization/i })).toBeInTheDocument();
+	});
+
+	it('calls onnavigate with "/log/immunization" when Immunization is clicked', async () => {
+		render(QuickLogButtons, { props: { onselect, onnavigate } });
+
+		await fireEvent.click(screen.getByRole('button', { name: /immunization/i }));
+
+		expect(onnavigate).toHaveBeenCalledWith('/log/immunization');
 	});
 });
