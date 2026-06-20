@@ -61,6 +61,21 @@
 		}
 	}
 
+	// dedupeById drops repeated entries by id, preserving first-seen order.
+	// Cursor pagination can surface the same backdated entry on more than one
+	// page (SPEC §5.3), which would otherwise produce duplicate keys in the
+	// {#each} blocks below.
+	function dedupeById<T extends { id: string }>(items: T[]): T[] {
+		const seen = new Set<string>();
+		const out: T[] = [];
+		for (const item of items) {
+			if (seen.has(item.id)) continue;
+			seen.add(item.id);
+			out.push(item);
+		}
+		return out;
+	}
+
 	async function fetchAllLabs(from: string, to: string): Promise<LabResult[]> {
 		const accumulated: LabResult[] = [];
 		let cursor: string | null = null;
@@ -71,7 +86,7 @@
 			accumulated.push(...page.data);
 			cursor = page.next_cursor;
 		} while (cursor);
-		return accumulated;
+		return dedupeById(accumulated);
 	}
 
 	async function fetchAllImagingStudies(from: string, to: string): Promise<ImagingStudy[]> {
@@ -90,7 +105,7 @@
 		} catch {
 			// Imaging studies are optional in mixed view; non-fatal
 		}
-		return accumulated;
+		return dedupeById(accumulated);
 	}
 
 	function handleRangeChange(range: string, cFrom?: string, cTo?: string): void {

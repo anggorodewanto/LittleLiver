@@ -135,6 +135,31 @@ describe('LabResultsView', () => {
 		});
 	});
 
+	it('dedupes lab results that repeat across paginated pages', async () => {
+		// A backdated entry can appear on more than one page (per the cursor
+		// pagination notes in SPEC §5.3). The keyed {#each} must not see a
+		// duplicate id, and the row must render exactly once.
+		let labCall = 0;
+		mockGet.mockImplementation((path: string) => {
+			if (path.includes('/imaging-studies')) {
+				return Promise.resolve({ data: [], next_cursor: null });
+			}
+			labCall += 1;
+			if (labCall === 1) {
+				return Promise.resolve({ data: [mockResults[0]], next_cursor: 'c1' });
+			}
+			return Promise.resolve({ data: [mockResults[0], mockResults[1]], next_cursor: null });
+		});
+
+		render(LabResultsView, { props: { babyId: 'b1' } });
+
+		await waitFor(() => {
+			expect(screen.getAllByText('ALT').length).toBeGreaterThan(0);
+		});
+		// lr1 (ALT, value 120) appears on both pages but must render once.
+		expect(screen.getAllByText('120')).toHaveLength(1);
+	});
+
 	it('shows loading state', () => {
 		mockGet.mockReturnValue(new Promise(() => {})); // never resolves
 
