@@ -249,17 +249,17 @@ type BruisingObservation struct {
 // ImagingStudy represents a non-numeric lab artifact for a baby (CT, Ultrasound, MRI,
 // radiology PDFs, etc.). Distinct from LabResult, which captures numeric test values.
 type ImagingStudy struct {
-	ID         string    `json:"id"`
-	BabyID     string    `json:"baby_id"`
-	LoggedBy   string    `json:"logged_by"`
-	UpdatedBy  *string   `json:"updated_by,omitempty"`
-	Timestamp  time.Time `json:"timestamp"`
-	StudyDate  string    `json:"study_date"`
-	StudyType  string    `json:"study_type"`
-	Notes      *string   `json:"notes,omitempty"`
-	PhotoKeys  string    `json:"photo_keys"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
+	BabyID    string    `json:"baby_id"`
+	LoggedBy  string    `json:"logged_by"`
+	UpdatedBy *string   `json:"updated_by,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+	StudyDate string    `json:"study_date"`
+	StudyType string    `json:"study_type"`
+	Notes     *string   `json:"notes,omitempty"`
+	PhotoKeys string    `json:"photo_keys"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // LabResult represents a single lab result entry for a baby (EAV-style).
@@ -305,26 +305,26 @@ type Invite struct {
 
 // Medication represents a medication definition/schedule for a baby.
 type Medication struct {
-	ID        string    `json:"id"`
-	BabyID    string    `json:"baby_id"`
-	LoggedBy  string    `json:"logged_by"`
-	UpdatedBy *string   `json:"updated_by,omitempty"`
-	Name      string    `json:"name"`
-	Dose      string    `json:"dose"`
-	Frequency    string    `json:"frequency"`
-	Schedule     *string   `json:"schedule,omitempty"`
-	Timezone     *string   `json:"timezone,omitempty"`
-	IntervalDays *int      `json:"interval_days,omitempty"`
-	StartsFrom   *string   `json:"starts_from,omitempty"`
-	Active       bool      `json:"active"`
+	ID           string  `json:"id"`
+	BabyID       string  `json:"baby_id"`
+	LoggedBy     string  `json:"logged_by"`
+	UpdatedBy    *string `json:"updated_by,omitempty"`
+	Name         string  `json:"name"`
+	Dose         string  `json:"dose"`
+	Frequency    string  `json:"frequency"`
+	Schedule     *string `json:"schedule,omitempty"`
+	Timezone     *string `json:"timezone,omitempty"`
+	IntervalDays *int    `json:"interval_days,omitempty"`
+	StartsFrom   *string `json:"starts_from,omitempty"`
+	Active       bool    `json:"active"`
 	// DoseAmount and DoseUnit together describe how much stock to deduct per
 	// administration. Both must be set for auto-decrement to apply.
-	DoseAmount        *float64 `json:"dose_amount,omitempty"`
-	DoseUnit          *string  `json:"dose_unit,omitempty"`
-	LowStockThreshold *int     `json:"low_stock_threshold,omitempty"`
-	ExpiryWarningDays *int     `json:"expiry_warning_days,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	DoseAmount        *float64  `json:"dose_amount,omitempty"`
+	DoseUnit          *string   `json:"dose_unit,omitempty"`
+	LowStockThreshold *int      `json:"low_stock_threshold,omitempty"`
+	ExpiryWarningDays *int      `json:"expiry_warning_days,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // MedLog represents a single medication administration log entry.
@@ -342,22 +342,22 @@ type MedLog struct {
 	// ContainerID and StockDeducted record which stock container this dose
 	// drew from and how much was taken. Both are nil when no stock tracking
 	// applied (legacy log, skipped dose, or medication without dose_amount).
-	ContainerID    *string  `json:"container_id,omitempty"`
-	StockDeducted  *float64 `json:"stock_deducted,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	ContainerID   *string   `json:"container_id,omitempty"`
+	StockDeducted *float64  `json:"stock_deducted,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // MedicationContainer represents one physical inventory unit of a medication
 // (e.g. a bottle, a packet, a pill pack). A medication may have many.
 type MedicationContainer struct {
-	ID                  string    `json:"id"`
-	MedicationID        string    `json:"medication_id"`
-	BabyID              string    `json:"baby_id"`
-	Kind                string    `json:"kind"`
-	Unit                string    `json:"unit"`
-	QuantityInitial     float64   `json:"quantity_initial"`
-	QuantityRemaining   float64   `json:"quantity_remaining"`
+	ID                  string     `json:"id"`
+	MedicationID        string     `json:"medication_id"`
+	BabyID              string     `json:"baby_id"`
+	Kind                string     `json:"kind"`
+	Unit                string     `json:"unit"`
+	QuantityInitial     float64    `json:"quantity_initial"`
+	QuantityRemaining   float64    `json:"quantity_remaining"`
 	OpenedAt            *time.Time `json:"opened_at,omitempty"`
 	MaxDaysAfterOpening *int       `json:"max_days_after_opening,omitempty"`
 	ExpirationDate      *string    `json:"expiration_date,omitempty"`
@@ -373,13 +373,13 @@ type MedicationContainer struct {
 // (top-up, spillage correction, "switched bottles" reconciliation).
 // Auto-decrement from logging a dose does NOT write here.
 type MedicationStockAdjustment struct {
-	ID           string    `json:"id"`
-	ContainerID  string    `json:"container_id"`
-	Delta        float64   `json:"delta"`
-	Reason       *string   `json:"reason,omitempty"`
-	AdjustedBy   string    `json:"adjusted_by"`
-	AdjustedAt   time.Time `json:"adjusted_at"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID          string    `json:"id"`
+	ContainerID string    `json:"container_id"`
+	Delta       float64   `json:"delta"`
+	Reason      *string   `json:"reason,omitempty"`
+	AdjustedBy  string    `json:"adjusted_by"`
+	AdjustedAt  time.Time `json:"adjusted_at"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // CarePlan represents a phased "what's currently active" schedule for a baby.
@@ -431,4 +431,23 @@ type PushSubscription struct {
 	P256dh    string    `json:"p256dh"`
 	Auth      string    `json:"auth"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// Immunization represents an administered vaccine dose for a baby. The
+// reference schedule (vaccine list, recommended ages, mandatory flag) lives in
+// the immunization package; this records what was actually given.
+type Immunization struct {
+	ID               string    `json:"id"`
+	BabyID           string    `json:"baby_id"`
+	LoggedBy         string    `json:"logged_by"`
+	UpdatedBy        *string   `json:"updated_by,omitempty"`
+	VaccineCode      string    `json:"vaccine_code"`
+	VaccineName      string    `json:"vaccine_name"`
+	DoseNumber       *int      `json:"dose_number,omitempty"`
+	AdministeredDate string    `json:"administered_date"` // YYYY-MM-DD
+	Provider         *string   `json:"provider,omitempty"`
+	LotNumber        *string   `json:"lot_number,omitempty"`
+	Notes            *string   `json:"notes,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }

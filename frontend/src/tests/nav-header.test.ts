@@ -66,10 +66,31 @@ describe('NavHeader', () => {
 	it('shows baby selector when user has multiple babies', () => {
 		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
 		babies.set([
-			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null },
-			{ id: 'b2', name: 'Bob', date_of_birth: '2025-09-01', sex: 'male', diagnosis_date: null, kasai_date: null }
+			{
+				id: 'b1',
+				name: 'Alice',
+				date_of_birth: '2025-06-01',
+				sex: 'female',
+				diagnosis_date: null,
+				kasai_date: null
+			},
+			{
+				id: 'b2',
+				name: 'Bob',
+				date_of_birth: '2025-09-01',
+				sex: 'male',
+				diagnosis_date: null,
+				kasai_date: null
+			}
 		]);
-		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
+		activeBaby.set({
+			id: 'b1',
+			name: 'Alice',
+			date_of_birth: '2025-06-01',
+			sex: 'female',
+			diagnosis_date: null,
+			kasai_date: null
+		});
 
 		render(NavHeader);
 
@@ -79,9 +100,23 @@ describe('NavHeader', () => {
 	it('shows baby name when user has one baby', () => {
 		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
 		babies.set([
-			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null }
+			{
+				id: 'b1',
+				name: 'Alice',
+				date_of_birth: '2025-06-01',
+				sex: 'female',
+				diagnosis_date: null,
+				kasai_date: null
+			}
 		]);
-		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
+		activeBaby.set({
+			id: 'b1',
+			name: 'Alice',
+			date_of_birth: '2025-06-01',
+			sex: 'female',
+			diagnosis_date: null,
+			kasai_date: null
+		});
 
 		render(NavHeader);
 
@@ -91,9 +126,23 @@ describe('NavHeader', () => {
 	it('shows navigation tabs when user has babies', () => {
 		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
 		babies.set([
-			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null }
+			{
+				id: 'b1',
+				name: 'Alice',
+				date_of_birth: '2025-06-01',
+				sex: 'female',
+				diagnosis_date: null,
+				kasai_date: null
+			}
 		]);
-		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
+		activeBaby.set({
+			id: 'b1',
+			name: 'Alice',
+			date_of_birth: '2025-06-01',
+			sex: 'female',
+			diagnosis_date: null,
+			kasai_date: null
+		});
 
 		render(NavHeader);
 
@@ -106,9 +155,23 @@ describe('NavHeader', () => {
 	it('shows Labs tab linking to /labs', () => {
 		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
 		babies.set([
-			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null }
+			{
+				id: 'b1',
+				name: 'Alice',
+				date_of_birth: '2025-06-01',
+				sex: 'female',
+				diagnosis_date: null,
+				kasai_date: null
+			}
 		]);
-		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
+		activeBaby.set({
+			id: 'b1',
+			name: 'Alice',
+			date_of_birth: '2025-06-01',
+			sex: 'female',
+			diagnosis_date: null,
+			kasai_date: null
+		});
 
 		render(NavHeader);
 
@@ -120,9 +183,23 @@ describe('NavHeader', () => {
 	it('shows Logs tab linking to /logs', () => {
 		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
 		babies.set([
-			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null }
+			{
+				id: 'b1',
+				name: 'Alice',
+				date_of_birth: '2025-06-01',
+				sex: 'female',
+				diagnosis_date: null,
+				kasai_date: null
+			}
 		]);
-		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
+		activeBaby.set({
+			id: 'b1',
+			name: 'Alice',
+			date_of_birth: '2025-06-01',
+			sex: 'female',
+			diagnosis_date: null,
+			kasai_date: null
+		});
 
 		render(NavHeader);
 
@@ -131,12 +208,91 @@ describe('NavHeader', () => {
 		expect(logsLink.getAttribute('href')).toBe('/logs');
 	});
 
+	it('shows Immunizations tab linking to /immunizations', () => {
+		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
+		babies.set([
+			{
+				id: 'b1',
+				name: 'Alice',
+				date_of_birth: '2025-06-01',
+				sex: 'female',
+				diagnosis_date: null,
+				kasai_date: null
+			}
+		]);
+		activeBaby.set({
+			id: 'b1',
+			name: 'Alice',
+			date_of_birth: '2025-06-01',
+			sex: 'female',
+			diagnosis_date: null,
+			kasai_date: null
+		});
+
+		render(NavHeader);
+
+		const vaxLink = screen.getByRole('link', { name: /vax/i });
+		expect(vaxLink).toBeInTheDocument();
+		expect(vaxLink.getAttribute('href')).toBe('/immunizations');
+	});
+
+	it('Immunizations tab is active when on /immunizations path', () => {
+		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
+		babies.set([
+			{
+				id: 'b1',
+				name: 'Alice',
+				date_of_birth: '2025-06-01',
+				sex: 'female',
+				diagnosis_date: null,
+				kasai_date: null
+			}
+		]);
+		activeBaby.set({
+			id: 'b1',
+			name: 'Alice',
+			date_of_birth: '2025-06-01',
+			sex: 'female',
+			diagnosis_date: null,
+			kasai_date: null
+		});
+
+		pageStore.set({ url: new URL('http://localhost/immunizations') });
+
+		render(NavHeader);
+
+		const vaxLink = screen.getByRole('link', { name: /vax/i });
+		expect(vaxLink.classList.contains('active')).toBe(true);
+	});
+
+	it('does not show Immunizations tab when user has no babies', () => {
+		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
+
+		render(NavHeader);
+
+		expect(screen.queryByRole('link', { name: /vax/i })).not.toBeInTheDocument();
+	});
+
 	it('Logs tab is active when on /logs path', () => {
 		currentUser.set({ id: 'u1', email: 'test@example.com', name: 'Test' });
 		babies.set([
-			{ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null }
+			{
+				id: 'b1',
+				name: 'Alice',
+				date_of_birth: '2025-06-01',
+				sex: 'female',
+				diagnosis_date: null,
+				kasai_date: null
+			}
 		]);
-		activeBaby.set({ id: 'b1', name: 'Alice', date_of_birth: '2025-06-01', sex: 'female', diagnosis_date: null, kasai_date: null });
+		activeBaby.set({
+			id: 'b1',
+			name: 'Alice',
+			date_of_birth: '2025-06-01',
+			sex: 'female',
+			diagnosis_date: null,
+			kasai_date: null
+		});
 
 		pageStore.set({ url: new URL('http://localhost/logs') });
 

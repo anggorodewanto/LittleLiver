@@ -168,13 +168,20 @@ func NewMux(opts ...Option) *http.ServeMux {
 			mux.Handle("PUT /api/babies/{id}/medications/{medId}/containers/{containerId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateMedicationContainerHandler(cfg.db))))))
 			mux.Handle("DELETE /api/babies/{id}/medications/{medId}/containers/{containerId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteMedicationContainerHandler(cfg.db))))))
 			mux.Handle("POST /api/babies/{id}/medications/{medId}/containers/{containerId}/adjust", rateMw(authMw(csrfMw(http.HandlerFunc(AdjustMedicationContainerHandler(cfg.db))))))
-	
+
 			// Care plan CRUD endpoints (passive rotating-schedule tracker; no per-dose logs)
 			mux.Handle("POST /api/babies/{id}/care-plans", rateMw(authMw(csrfMw(http.HandlerFunc(CreateCarePlanHandler(cfg.db))))))
 			mux.Handle("GET /api/babies/{id}/care-plans", rateMw(authMw(http.HandlerFunc(ListCarePlansHandler(cfg.db)))))
 			mux.Handle("GET /api/babies/{id}/care-plans/{planId}", rateMw(authMw(http.HandlerFunc(GetCarePlanHandler(cfg.db)))))
 			mux.Handle("PUT /api/babies/{id}/care-plans/{planId}", rateMw(authMw(csrfMw(http.HandlerFunc(UpdateCarePlanHandler(cfg.db))))))
 			mux.Handle("DELETE /api/babies/{id}/care-plans/{planId}", rateMw(authMw(csrfMw(http.HandlerFunc(DeleteCarePlanHandler(cfg.db))))))
+
+			// Immunization CRUD endpoints + computed schedule view (vs IDAI reference)
+			registerMetricCRUD(mux, "/api/babies/{id}/immunizations", rateMw, authMw, csrfMw,
+				CreateImmunizationHandler(cfg.db), ListImmunizationsHandler(cfg.db),
+				GetImmunizationHandler(cfg.db), UpdateImmunizationHandler(cfg.db), DeleteImmunizationHandler(cfg.db))
+			mux.Handle("GET /api/babies/{id}/immunizations/schedule", rateMw(authMw(http.HandlerFunc(ImmunizationScheduleHandler(cfg.db)))))
+			mux.Handle("GET /api/immunizations/reference", rateMw(authMw(http.HandlerFunc(ImmunizationReferenceHandler()))))
 
 			// Med-log CRUD endpoints
 			mux.Handle("POST /api/babies/{id}/med-logs", rateMw(authMw(csrfMw(http.HandlerFunc(CreateMedLogHandler(cfg.db))))))
