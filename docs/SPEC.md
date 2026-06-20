@@ -269,7 +269,7 @@ Tracks a baby's vaccinations against the **IDAI (Ikatan Dokter Anak Indonesia)**
 | Age label | text | Human range for display, e.g. "12–15 months" |
 | Mandatory | boolean | `true` = universal national program; `false` = IDAI optional/recommended |
 
-The mandatory/optional split follows the Indonesian national program (Kemenkes) for the universal infant set (HB, BCG, Polio, DTP-HB-Hib, PCV, Rotavirus, MR) as mandatory; IDAI-recommended additions (Influenza, JE, Varicella, Hepatitis A, Typhoid, HPV, Dengue) as optional. This is reference data for a personal-use app, not medical advice — ages and classification should be verified against current official IDAI/Kemenkes guidance, and the data table is the single place to adjust them.
+The split follows the Indonesian national program (Kemenkes, KMK 1098/2024 + 35/2025): mandatory = the universal program (HB, BCG, Polio OPV+IPV, DTP-HB-Hib, PCV, Rotavirus, MR, and HPV for girls); optional = IDAI-recommended additions (Influenza, Japanese Encephalitis — a program antigen but endemic-areas-only, so optional nationally — Varicella, Hepatitis A, Typhoid, the DTaP 5–7y booster, and Dengue). **Mandatory-vaccine ages follow the Kemenkes program** (the "wajib" schedule a child actually receives, e.g. PCV at 2/3/12 mo, Rotavirus 3 doses at 2/3/4 mo, MR at 9/18 mo + grade 1, HPV single dose at grade 5); optional-vaccine ages follow the IDAI recommendation. This is reference data for a personal-use app, not medical advice — ages and classification should be verified against current official IDAI/Kemenkes guidance, and the data table is the single place to adjust them.
 
 **Administered records (DB).** The `immunizations` table stores what was actually given:
 
