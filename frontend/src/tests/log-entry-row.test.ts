@@ -84,6 +84,22 @@ describe('LogEntryRow', () => {
 		expect(screen.getByText(/65\s*kcal/)).toBeInTheDocument();
 	});
 
+	it('renders inline solid feeding summary with grams and ingredients', () => {
+		const entry = {
+			id: 'f3',
+			timestamp: '2026-03-20T12:00:00Z',
+			feed_type: 'solid',
+			amount_g: 45.5,
+			ingredients: 'rice porridge, carrot'
+		};
+
+		render(LogEntryRow, { props: { entry, logType: feedingType, ondelete } });
+
+		expect(screen.getByText(/solid/i)).toBeInTheDocument();
+		expect(screen.getByText(/45\.5\s*g/)).toBeInTheDocument();
+		expect(screen.getByText(/rice porridge, carrot/)).toBeInTheDocument();
+	});
+
 	it('renders inline stool summary', () => {
 		const entry = {
 			id: 's1',

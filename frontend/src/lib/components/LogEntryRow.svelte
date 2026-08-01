@@ -63,8 +63,10 @@
 		if (logType.key === 'feeding') {
 			if (entry.feed_type) parts.push(capitalize(entry.feed_type));
 			if (entry.volume_ml) parts.push(`${entry.volume_ml} mL`);
+			if (entry.amount_g) parts.push(`${entry.amount_g} g`);
 			if (entry.calories) parts.push(`${entry.calories} kcal`);
 			if (entry.duration_min) parts.push(`${entry.duration_min} min`);
+			if (entry.ingredients) parts.push(truncate(entry.ingredients, 60));
 		} else if (logType.key === 'stool') {
 			if (entry.color_rating) parts.push(`Color ${entry.color_rating}/7`);
 			if (entry.consistency) parts.push(capitalize(entry.consistency));

@@ -69,8 +69,10 @@
 		{#if logType.key === 'feeding'}
 			{#if entry.feed_type}<div class="field">{capitalize(entry.feed_type)}</div>{/if}
 			{#if entry.volume_ml}<div class="field">{entry.volume_ml} mL</div>{/if}
+			{#if entry.amount_g}<div class="field">{entry.amount_g} g</div>{/if}
 			{#if entry.calories}<div class="field">{entry.calories} kcal</div>{/if}
 			{#if entry.duration_min}<div class="field">{entry.duration_min} min</div>{/if}
+			{#if entry.ingredients}<div class="field">{entry.ingredients}</div>{/if}
 		{:else if logType.key === 'stool'}
 			{#if entry.color_rating}<div class="field">Color: {entry.color_rating}/7</div>{/if}
 			{#if entry.consistency}<div class="field">{capitalize(entry.consistency)}</div>{/if}

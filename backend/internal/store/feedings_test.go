@@ -485,6 +485,7 @@ func TestFeedingsTable_Columns(t *testing.T) {
 		"id", "baby_id", "logged_by", "updated_by", "timestamp",
 		"feed_type", "volume_ml", "cal_density", "calories",
 		"used_default_cal", "duration_min", "notes", "created_at", "updated_at",
+		"amount_g", "ingredients",
 	}
 	assertColumns(t, db, "feedings", expected)
 }
@@ -846,5 +847,254 @@ func TestRecalculateFeedingCalories_UpdatesAffectedEntries(t *testing.T) {
 				t.Errorf("expected calories=80.0 for recalculated breast-direct, got %v", f.Calories)
 			}
 		}
+	}
+}
+
+// --- Solid food intake ---
+
+func TestCreateFeedingWith_SolidStoresAmountGAndIngredients(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google-solid-1", "solid1@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	amountG := 45.5
+	ingredients := "rice porridge, carrot, chicken"
+
+	feeding, err := CreateFeedingWith(db, baby.ID, user.ID, FeedingInput{
+		Timestamp:   "2025-12-01T08:00:00Z",
+		FeedType:    "solid",
+		AmountG:     &amountG,
+		Ingredients: &ingredients,
+	}, model.DefaultCalPerFeed)
+	if err != nil {
+		t.Fatalf("CreateFeedingWith failed: %v", err)
+	}
+
+	if feeding.FeedType != "solid" {
+		t.Errorf("expected feed_type=solid, got %q", feeding.FeedType)
+	}
+	if feeding.AmountG == nil || *feeding.AmountG != 45.5 {
+		t.Errorf("expected amount_g=45.5, got %v", feeding.AmountG)
+	}
+	if feeding.Ingredients == nil || *feeding.Ingredients != ingredients {
+		t.Errorf("expected ingredients=%q, got %v", ingredients, feeding.Ingredients)
+	}
+	if feeding.VolumeMl != nil {
+		t.Errorf("expected nil volume_ml for a gram-measured solid, got %v", feeding.VolumeMl)
+	}
+
+	// Round-trips through a read
+	got, err := GetFeedingByID(db, baby.ID, feeding.ID)
+	if err != nil {
+		t.Fatalf("GetFeedingByID failed: %v", err)
+	}
+	if got.AmountG == nil || *got.AmountG != 45.5 {
+		t.Errorf("expected amount_g=45.5 after read, got %v", got.AmountG)
+	}
+	if got.Ingredients == nil || *got.Ingredients != ingredients {
+		t.Errorf("expected ingredients after read, got %v", got.Ingredients)
+	}
+}
+
+func TestCreateFeedingWith_SolidInMlCountsAsFluidIntake(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google-solid-2", "solid2@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	volMl := 80.0
+	ingredients := "banana puree"
+	feeding, err := CreateFeedingWith(db, baby.ID, user.ID, FeedingInput{
+		Timestamp:   "2025-12-01T09:00:00Z",
+		FeedType:    "solid",
+		VolumeMl:    &volMl,
+		Ingredients: &ingredients,
+	}, model.DefaultCalPerFeed)
+	if err != nil {
+		t.Fatalf("CreateFeedingWith failed: %v", err)
+	}
+	if feeding.AmountG != nil {
+		t.Errorf("expected nil amount_g for an mL-measured solid, got %v", feeding.AmountG)
+	}
+
+	var fluidVol sql.NullFloat64
+	err = db.QueryRow(
+		"SELECT volume_ml FROM fluid_log WHERE source_type = 'feeding' AND source_id = ?", feeding.ID,
+	).Scan(&fluidVol)
+	if err != nil {
+		t.Fatalf("query fluid_log failed: %v", err)
+	}
+	if !fluidVol.Valid || fluidVol.Float64 != 80.0 {
+		t.Errorf("expected fluid_log volume_ml=80, got %v", fluidVol)
+	}
+}
+
+func TestCreateFeedingWith_SolidInGramsHasNoFluidVolume(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google-solid-3", "solid3@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	amountG := 60.0
+	feeding, err := CreateFeedingWith(db, baby.ID, user.ID, FeedingInput{
+		Timestamp: "2025-12-01T10:00:00Z",
+		FeedType:  "solid",
+		AmountG:   &amountG,
+	}, model.DefaultCalPerFeed)
+	if err != nil {
+		t.Fatalf("CreateFeedingWith failed: %v", err)
+	}
+
+	var fluidVol sql.NullFloat64
+	err = db.QueryRow(
+		"SELECT volume_ml FROM fluid_log WHERE source_type = 'feeding' AND source_id = ?", feeding.ID,
+	).Scan(&fluidVol)
+	if err != nil {
+		t.Fatalf("query fluid_log failed: %v", err)
+	}
+	if fluidVol.Valid {
+		t.Errorf("expected NULL fluid_log volume_ml for grams, got %v", fluidVol.Float64)
+	}
+}
+
+func TestUpdateFeedingWith_UpdatesSolidFields(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google-solid-4", "solid4@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	amountG := 30.0
+	original := "pear puree"
+	feeding, err := CreateFeedingWith(db, baby.ID, user.ID, FeedingInput{
+		Timestamp:   "2025-12-01T11:00:00Z",
+		FeedType:    "solid",
+		AmountG:     &amountG,
+		Ingredients: &original,
+	}, model.DefaultCalPerFeed)
+	if err != nil {
+		t.Fatalf("CreateFeedingWith failed: %v", err)
+	}
+
+	newAmount := 75.0
+	newIngredients := "pear puree, oatmeal"
+	updated, err := UpdateFeedingWith(db, baby.ID, feeding.ID, user.ID, FeedingInput{
+		Timestamp:   "2025-12-01T11:30:00Z",
+		FeedType:    "solid",
+		AmountG:     &newAmount,
+		Ingredients: &newIngredients,
+	}, model.DefaultCalPerFeed)
+	if err != nil {
+		t.Fatalf("UpdateFeedingWith failed: %v", err)
+	}
+
+	if updated.AmountG == nil || *updated.AmountG != 75.0 {
+		t.Errorf("expected amount_g=75, got %v", updated.AmountG)
+	}
+	if updated.Ingredients == nil || *updated.Ingredients != newIngredients {
+		t.Errorf("expected ingredients=%q, got %v", newIngredients, updated.Ingredients)
+	}
+}
+
+func TestUpdateFeedingWith_ClearsSolidFields(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google-solid-5", "solid5@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	amountG := 30.0
+	ingredients := "pear puree"
+	feeding, err := CreateFeedingWith(db, baby.ID, user.ID, FeedingInput{
+		Timestamp:   "2025-12-01T12:00:00Z",
+		FeedType:    "solid",
+		AmountG:     &amountG,
+		Ingredients: &ingredients,
+	}, model.DefaultCalPerFeed)
+	if err != nil {
+		t.Fatalf("CreateFeedingWith failed: %v", err)
+	}
+
+	volMl := 100.0
+	updated, err := UpdateFeedingWith(db, baby.ID, feeding.ID, user.ID, FeedingInput{
+		Timestamp: "2025-12-01T12:00:00Z",
+		FeedType:  "formula",
+		VolumeMl:  &volMl,
+	}, model.DefaultCalPerFeed)
+	if err != nil {
+		t.Fatalf("UpdateFeedingWith failed: %v", err)
+	}
+
+	if updated.AmountG != nil {
+		t.Errorf("expected amount_g cleared, got %v", updated.AmountG)
+	}
+	if updated.Ingredients != nil {
+		t.Errorf("expected ingredients cleared, got %v", updated.Ingredients)
+	}
+}
+
+func TestCreateFeeding_LeavesSolidFieldsNil(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	defer db.Close()
+
+	user, err := UpsertUser(db, "google-solid-6", "solid6@b.com", "Parent")
+	if err != nil {
+		t.Fatalf("UpsertUser failed: %v", err)
+	}
+	baby, err := CreateBaby(db, user.ID, "Luna", "female", "2025-06-15", nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateBaby failed: %v", err)
+	}
+
+	vol := 120.0
+	feeding, err := CreateFeeding(db, baby.ID, user.ID, "2025-12-01T13:00:00Z", "formula", &vol, nil, nil, nil, model.DefaultCalPerFeed)
+	if err != nil {
+		t.Fatalf("CreateFeeding failed: %v", err)
+	}
+	if feeding.AmountG != nil {
+		t.Errorf("expected nil amount_g, got %v", feeding.AmountG)
+	}
+	if feeding.Ingredients != nil {
+		t.Errorf("expected nil ingredients, got %v", feeding.Ingredients)
 	}
 }
