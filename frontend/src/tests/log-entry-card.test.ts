@@ -69,6 +69,21 @@ describe('LogEntryCard', () => {
 		expect(screen.getByText(/20\s*min/)).toBeInTheDocument();
 	});
 
+	it('renders solid feeding fields', () => {
+		const entry = {
+			id: 'f3',
+			timestamp: '2026-03-20T12:00:00Z',
+			feed_type: 'solid',
+			amount_g: 45.5,
+			ingredients: 'rice porridge, carrot'
+		};
+
+		render(LogEntryCard, { props: { entry, logType: feedingType, ondelete } });
+
+		expect(screen.getByText(/45\.5\s*g/)).toBeInTheDocument();
+		expect(screen.getByText(/rice porridge, carrot/)).toBeInTheDocument();
+	});
+
 	it('renders temperature-specific fields', () => {
 		const entry = {
 			id: 't1',

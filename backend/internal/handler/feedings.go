@@ -19,7 +19,23 @@ type feedingRequest struct {
 	VolumeMl    *float64 `json:"volume_ml,omitempty"`
 	CalDensity  *float64 `json:"cal_density,omitempty"`
 	DurationMin *int     `json:"duration_min,omitempty"`
+	AmountG     *float64 `json:"amount_g,omitempty"`
+	Ingredients *string  `json:"ingredients,omitempty"`
 	Notes       *string  `json:"notes,omitempty"`
+}
+
+// toStoreInput converts the request into the store-layer feeding input.
+func (req *feedingRequest) toStoreInput() store.FeedingInput {
+	return store.FeedingInput{
+		Timestamp:   req.Timestamp,
+		FeedType:    req.FeedType,
+		VolumeMl:    req.VolumeMl,
+		CalDensity:  req.CalDensity,
+		DurationMin: req.DurationMin,
+		AmountG:     req.AmountG,
+		Ingredients: req.Ingredients,
+		Notes:       req.Notes,
+	}
 }
 
 // validate checks required fields for a feeding request.
@@ -36,6 +52,10 @@ func (req *feedingRequest) validate() (string, bool) {
 	// cal_density without volume is invalid
 	if req.CalDensity != nil && req.VolumeMl == nil {
 		return "cal_density cannot be provided without volume_ml", false
+	}
+	// an intake is measured either in mL or in grams, never both
+	if req.AmountG != nil && req.VolumeMl != nil {
+		return "amount_g and volume_ml cannot both be provided", false
 	}
 	return "", true
 }
@@ -54,6 +74,8 @@ type feedingResponse struct {
 	Calories       *float64 `json:"calories,omitempty"`
 	UsedDefaultCal bool     `json:"used_default_cal"`
 	DurationMin    *int     `json:"duration_min,omitempty"`
+	AmountG        *float64 `json:"amount_g,omitempty"`
+	Ingredients    *string  `json:"ingredients,omitempty"`
 	Notes          *string  `json:"notes,omitempty"`
 	CreatedAt      string   `json:"created_at"`
 	UpdatedAt      string   `json:"updated_at"`
@@ -72,6 +94,8 @@ func toFeedingResponse(f *model.Feeding) feedingResponse {
 		Calories:       f.Calories,
 		UsedDefaultCal: f.UsedDefaultCal,
 		DurationMin:    f.DurationMin,
+		AmountG:        f.AmountG,
+		Ingredients:    f.Ingredients,
 		Notes:          f.Notes,
 		CreatedAt:      f.CreatedAt.Format(model.DateTimeFormat),
 		UpdatedAt:      f.UpdatedAt.Format(model.DateTimeFormat),
@@ -116,7 +140,7 @@ func CreateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		feeding, err := store.CreateFeeding(db, baby.ID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes, baby.DefaultCalPerFeed)
+		feeding, err := store.CreateFeedingWith(db, baby.ID, user.ID, req.toStoreInput(), baby.DefaultCalPerFeed)
 		if err != nil {
 			log.Printf("create feeding: %v", err)
 			http.Error(w, "failed to create feeding", http.StatusInternalServerError)
@@ -217,7 +241,7 @@ func UpdateFeedingHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		feeding, err := store.UpdateFeeding(db, baby.ID, entryID, user.ID, req.Timestamp, req.FeedType, req.VolumeMl, req.CalDensity, req.DurationMin, req.Notes, baby.DefaultCalPerFeed)
+		feeding, err := store.UpdateFeedingWith(db, baby.ID, entryID, user.ID, req.toStoreInput(), baby.DefaultCalPerFeed)
 		if err != nil {
 			handleStoreError(w, err, "feeding not found")
 			return

@@ -11,15 +11,16 @@ import (
 // scanFeeding scans a single feeding row from the given scanner.
 func scanFeeding(s scanner) (*model.Feeding, error) {
 	var f model.Feeding
-	var updatedBy, notes sql.NullString
-	var volMl, calDensity, calories sql.NullFloat64
+	var updatedBy, ingredients, notes sql.NullString
+	var volMl, calDensity, calories, amountG sql.NullFloat64
 	var durMin sql.NullInt64
 	var tsStr, createdStr, updatedStr string
 
 	err := s.Scan(
 		&f.ID, &f.BabyID, &f.LoggedBy, &updatedBy, &tsStr,
 		&f.FeedType, &volMl, &calDensity, &calories,
-		&f.UsedDefaultCal, &durMin, &notes, &createdStr, &updatedStr,
+		&f.UsedDefaultCal, &durMin, &amountG, &ingredients,
+		&notes, &createdStr, &updatedStr,
 	)
 	if err != nil {
 		return nil, err
@@ -35,6 +36,8 @@ func scanFeeding(s scanner) (*model.Feeding, error) {
 	f.CalDensity = nullFloat(calDensity)
 	f.Calories = nullFloat(calories)
 	f.DurationMin = nullInt(durMin)
+	f.AmountG = nullFloat(amountG)
+	f.Ingredients = nullStr(ingredients)
 	f.Notes = nullStr(notes)
 
 	return &f, nil
@@ -42,12 +45,40 @@ func scanFeeding(s scanner) (*model.Feeding, error) {
 
 const feedingColumns = `id, baby_id, logged_by, updated_by, timestamp,
 	feed_type, volume_ml, cal_density, calories,
-	used_default_cal, duration_min, notes, created_at, updated_at`
+	used_default_cal, duration_min, amount_g, ingredients,
+	notes, created_at, updated_at`
+
+// FeedingInput carries the caller-supplied fields of a feeding entry.
+// Solids are measured either in mL (VolumeMl — counts toward fluid intake)
+// or in grams (AmountG — does not).
+type FeedingInput struct {
+	Timestamp   string
+	FeedType    string
+	VolumeMl    *float64
+	CalDensity  *float64
+	DurationMin *int
+	AmountG     *float64
+	Ingredients *string
+	Notes       *string
+}
 
 // CreateFeeding inserts a new feeding entry with calorie calculation and returns it.
 // Also creates a linked fluid_log entry (direction=intake) within the same transaction.
 func CreateFeeding(db *sql.DB, babyID, loggedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string, defaultCalPerFeed float64) (*model.Feeding, error) {
-	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCalPerFeed)
+	return CreateFeedingWith(db, babyID, loggedBy, FeedingInput{
+		Timestamp:   timestamp,
+		FeedType:    feedType,
+		VolumeMl:    volumeMl,
+		CalDensity:  calDensity,
+		DurationMin: durationMin,
+		Notes:       notes,
+	}, defaultCalPerFeed)
+}
+
+// CreateFeedingWith inserts a new feeding entry with calorie calculation and returns it.
+// Also creates a linked fluid_log entry (direction=intake) within the same transaction.
+func CreateFeedingWith(db *sql.DB, babyID, loggedBy string, in FeedingInput, defaultCalPerFeed float64) (*model.Feeding, error) {
+	calResult, err := model.CalculateCalories(in.FeedType, in.VolumeMl, in.CalDensity, defaultCalPerFeed)
 	if err != nil {
 		return nil, fmt.Errorf("create feeding: %w", err)
 	}
@@ -61,9 +92,9 @@ func CreateFeeding(db *sql.DB, babyID, loggedBy, timestamp, feedType string, vol
 	defer tx.Rollback()
 
 	_, err = tx.Exec(
-		`INSERT INTO feedings (id, baby_id, logged_by, timestamp, feed_type, volume_ml, cal_density, calories, used_default_cal, duration_min, notes)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, babyID, loggedBy, timestamp, feedType, volumeMl, calResult.CalDensity, calResult.Calories, calResult.UsedDefaultCal, durationMin, notes,
+		`INSERT INTO feedings (id, baby_id, logged_by, timestamp, feed_type, volume_ml, cal_density, calories, used_default_cal, duration_min, amount_g, ingredients, notes)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, babyID, loggedBy, in.Timestamp, in.FeedType, in.VolumeMl, calResult.CalDensity, calResult.Calories, calResult.UsedDefaultCal, in.DurationMin, in.AmountG, in.Ingredients, in.Notes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create feeding: %w", err)
@@ -71,7 +102,7 @@ func CreateFeeding(db *sql.DB, babyID, loggedBy, timestamp, feedType string, vol
 
 	srcType := "feeding"
 	fluidID := model.NewULID()
-	if err := createFluidLogTx(tx, fluidID, babyID, loggedBy, timestamp, "intake", feedType, volumeMl, &srcType, &id, notes); err != nil {
+	if err := createFluidLogTx(tx, fluidID, babyID, loggedBy, in.Timestamp, "intake", in.FeedType, in.VolumeMl, &srcType, &id, in.Notes); err != nil {
 		return nil, fmt.Errorf("create feeding: fluid_log: %w", err)
 	}
 
@@ -106,7 +137,20 @@ func ListFeedingsWithTZ(db *sql.DB, babyID string, from, to, cursor *string, lim
 // UpdateFeeding updates a feeding entry with calorie recalculation.
 // Also updates the linked fluid_log entry within the same transaction.
 func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType string, volumeMl, calDensity *float64, durationMin *int, notes *string, defaultCalPerFeed float64) (*model.Feeding, error) {
-	calResult, err := model.CalculateCalories(feedType, volumeMl, calDensity, defaultCalPerFeed)
+	return UpdateFeedingWith(db, babyID, feedingID, updatedBy, FeedingInput{
+		Timestamp:   timestamp,
+		FeedType:    feedType,
+		VolumeMl:    volumeMl,
+		CalDensity:  calDensity,
+		DurationMin: durationMin,
+		Notes:       notes,
+	}, defaultCalPerFeed)
+}
+
+// UpdateFeedingWith updates a feeding entry with calorie recalculation.
+// Also updates the linked fluid_log entry within the same transaction.
+func UpdateFeedingWith(db *sql.DB, babyID, feedingID, updatedBy string, in FeedingInput, defaultCalPerFeed float64) (*model.Feeding, error) {
+	calResult, err := model.CalculateCalories(in.FeedType, in.VolumeMl, in.CalDensity, defaultCalPerFeed)
 	if err != nil {
 		return nil, fmt.Errorf("update feeding: %w", err)
 	}
@@ -127,12 +171,14 @@ func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType
 		`UPDATE feedings SET
 			updated_by = ?, timestamp = ?, feed_type = ?,
 			volume_ml = ?, cal_density = ?, calories = ?,
-			used_default_cal = ?, duration_min = ?, notes = ?,
+			used_default_cal = ?, duration_min = ?,
+			amount_g = ?, ingredients = ?, notes = ?,
 			updated_at = CURRENT_TIMESTAMP
 		 WHERE id = ? AND baby_id = ?`,
-		updatedBy, timestamp, feedType,
-		volumeMl, calResult.CalDensity, calResult.Calories,
-		calResult.UsedDefaultCal, durationMin, notes,
+		updatedBy, in.Timestamp, in.FeedType,
+		in.VolumeMl, calResult.CalDensity, calResult.Calories,
+		calResult.UsedDefaultCal, in.DurationMin,
+		in.AmountG, in.Ingredients, in.Notes,
 		feedingID, babyID,
 	)
 	if err != nil {
@@ -143,7 +189,7 @@ func UpdateFeeding(db *sql.DB, babyID, feedingID, updatedBy, timestamp, feedType
 		return nil, err
 	}
 
-	if err := upsertFluidLogBySourceTx(tx, babyID, existing.LoggedBy, updatedBy, timestamp, "intake", feedType, volumeMl, "feeding", feedingID, notes); err != nil {
+	if err := upsertFluidLogBySourceTx(tx, babyID, existing.LoggedBy, updatedBy, in.Timestamp, "intake", in.FeedType, in.VolumeMl, "feeding", feedingID, in.Notes); err != nil {
 		return nil, fmt.Errorf("update feeding: fluid_log: %w", err)
 	}
 

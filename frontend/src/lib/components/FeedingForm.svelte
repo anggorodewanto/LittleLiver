@@ -7,6 +7,8 @@
 		volume_ml?: number;
 		cal_density?: number;
 		duration_min?: number;
+		amount_g?: number;
+		ingredients?: string;
 		notes?: string;
 	}
 
@@ -16,6 +18,8 @@
 		volume_ml?: number;
 		cal_density?: number;
 		duration_min?: number;
+		amount_g?: number;
+		ingredients?: string;
 		notes?: string;
 	}
 
@@ -34,7 +38,12 @@
 	let calDensity = $state('');
 	let durationMin = $state('');
 	let notes = $state('');
+	let amount = $state('');
+	let amountUnit = $state('g');
+	let ingredients = $state('');
 	let validationError = $state('');
+
+	let isSolid = $derived(feedType === 'solid');
 
 	$effect(() => {
 		if (initialData) {
@@ -44,6 +53,14 @@
 			calDensity = String(initialData.cal_density ?? '');
 			durationMin = String(initialData.duration_min ?? '');
 			notes = initialData.notes ?? '';
+			ingredients = initialData.ingredients ?? '';
+			if (initialData.amount_g != null) {
+				amount = String(initialData.amount_g);
+				amountUnit = 'g';
+			} else if (initialData.feed_type === 'solid' && initialData.volume_ml != null) {
+				amount = String(initialData.volume_ml);
+				amountUnit = 'ml';
+			}
 		}
 	});
 
@@ -61,11 +78,24 @@
 			feed_type: feedType
 		};
 
-		if (volumeMl) {
-			payload.volume_ml = Number(volumeMl);
-		}
-		if (calDensity) {
-			payload.cal_density = Number(calDensity);
+		if (isSolid) {
+			if (amount) {
+				if (amountUnit === 'g') {
+					payload.amount_g = Number(amount);
+				} else {
+					payload.volume_ml = Number(amount);
+				}
+			}
+			if (ingredients.trim()) {
+				payload.ingredients = ingredients.trim();
+			}
+		} else {
+			if (volumeMl) {
+				payload.volume_ml = Number(volumeMl);
+			}
+			if (calDensity) {
+				payload.cal_density = Number(calDensity);
+			}
 		}
 		if (durationMin) {
 			payload.duration_min = Number(durationMin);
@@ -96,15 +126,35 @@
 		</select>
 	</div>
 
-	<div>
-		<label for="feeding-volume">Volume (mL)</label>
-		<input id="feeding-volume" type="number" step="any" min="0" bind:value={volumeMl} />
-	</div>
+	{#if isSolid}
+		<div>
+			<label for="feeding-amount">Amount</label>
+			<input id="feeding-amount" type="number" step="any" min="0" bind:value={amount} />
+		</div>
 
-	<div>
-		<label for="feeding-cal-density">Caloric density (kcal/mL)</label>
-		<input id="feeding-cal-density" type="number" step="any" min="0" bind:value={calDensity} placeholder="0.676 (default)" />
-	</div>
+		<div>
+			<label for="feeding-amount-unit">Unit</label>
+			<select id="feeding-amount-unit" bind:value={amountUnit}>
+				<option value="g">g</option>
+				<option value="ml">mL</option>
+			</select>
+		</div>
+
+		<div>
+			<label for="feeding-ingredients">Ingredients</label>
+			<textarea id="feeding-ingredients" bind:value={ingredients} placeholder="rice porridge, carrot, chicken"></textarea>
+		</div>
+	{:else}
+		<div>
+			<label for="feeding-volume">Volume (mL)</label>
+			<input id="feeding-volume" type="number" step="any" min="0" bind:value={volumeMl} />
+		</div>
+
+		<div>
+			<label for="feeding-cal-density">Caloric density (kcal/mL)</label>
+			<input id="feeding-cal-density" type="number" step="any" min="0" bind:value={calDensity} placeholder="0.676 (default)" />
+		</div>
+	{/if}
 
 	<div>
 		<label for="feeding-duration">Duration (min)</label>

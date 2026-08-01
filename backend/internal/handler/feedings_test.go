@@ -943,3 +943,172 @@ func TestCreateFeedingHandler_BreastMilkWithVolume_DefaultsCal(t *testing.T) {
 		t.Errorf("expected used_default_cal=false, got %v", resp["used_default_cal"])
 	}
 }
+
+// --- Solid food intake ---
+
+func TestCreateFeedingHandler_SolidWithGramsAndIngredients(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"timestamp":"2025-12-01T08:00:00Z","feed_type":"solid","amount_g":45.5,"ingredients":"rice porridge, carrot, chicken"}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/feedings")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateFeedingHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/feedings", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if resp["feed_type"] != "solid" {
+		t.Errorf("expected feed_type=solid, got %v", resp["feed_type"])
+	}
+	if resp["amount_g"] != 45.5 {
+		t.Errorf("expected amount_g=45.5, got %v", resp["amount_g"])
+	}
+	if resp["ingredients"] != "rice porridge, carrot, chicken" {
+		t.Errorf("expected ingredients echoed, got %v", resp["ingredients"])
+	}
+}
+
+func TestCreateFeedingHandler_RejectsAmountGWithVolumeMl(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	body := `{"timestamp":"2025-12-01T08:00:00Z","feed_type":"solid","amount_g":45.5,"volume_ml":80}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPost, "/api/babies/"+baby.ID+"/feedings")
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.CreateFeedingHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/babies/{id}/feedings", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestListFeedingsHandler_IncludesSolidEntries(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	amountG := 60.0
+	ingredients := "avocado"
+	if _, err := store.CreateFeedingWith(db, baby.ID, user.ID, store.FeedingInput{
+		Timestamp:   "2025-12-01T08:00:00Z",
+		FeedType:    "solid",
+		AmountG:     &amountG,
+		Ingredients: &ingredients,
+	}, 67.0); err != nil {
+		t.Fatalf("CreateFeedingWith failed: %v", err)
+	}
+
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodGet, "/api/babies/"+baby.ID+"/feedings")
+	authMw := middleware.Auth(db, testCookieName)
+	h := authMw(http.HandlerFunc(handler.ListFeedingsHandler(db)))
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /api/babies/{id}/feedings", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 feeding, got %d", len(resp.Data))
+	}
+	if resp.Data[0]["amount_g"] != 60.0 {
+		t.Errorf("expected amount_g=60 in list, got %v", resp.Data[0]["amount_g"])
+	}
+	if resp.Data[0]["ingredients"] != "avocado" {
+		t.Errorf("expected ingredients in list, got %v", resp.Data[0]["ingredients"])
+	}
+}
+
+func TestUpdateFeedingHandler_SolidFields(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	amountG := 20.0
+	ingredients := "carrot"
+	feeding, err := store.CreateFeedingWith(db, baby.ID, user.ID, store.FeedingInput{
+		Timestamp:   "2025-12-01T08:00:00Z",
+		FeedType:    "solid",
+		AmountG:     &amountG,
+		Ingredients: &ingredients,
+	}, 67.0)
+	if err != nil {
+		t.Fatalf("CreateFeedingWith failed: %v", err)
+	}
+
+	body := `{"timestamp":"2025-12-01T08:30:00Z","feed_type":"solid","amount_g":90,"ingredients":"carrot, potato"}`
+	req := testutil.AuthenticatedRequest(t, db, user.ID, testCookieName, testSecret, http.MethodPut, "/api/babies/"+baby.ID+"/feedings/"+feeding.ID)
+	req.Body = io.NopCloser(bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	authMw := middleware.Auth(db, testCookieName)
+	csrfMw := middleware.CSRF(db, testCookieName, testSecret)
+	h := authMw(csrfMw(http.HandlerFunc(handler.UpdateFeedingHandler(db))))
+
+	mux := http.NewServeMux()
+	mux.Handle("PUT /api/babies/{id}/feedings/{entryId}", h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if resp["amount_g"] != 90.0 {
+		t.Errorf("expected amount_g=90, got %v", resp["amount_g"])
+	}
+	if resp["ingredients"] != "carrot, potato" {
+		t.Errorf("expected updated ingredients, got %v", resp["ingredients"])
+	}
+}

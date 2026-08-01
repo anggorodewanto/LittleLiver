@@ -66,6 +66,8 @@ type Feeding struct {
 	Calories       *float64  `json:"calories,omitempty"`
 	UsedDefaultCal bool      `json:"used_default_cal"`
 	DurationMin    *int      `json:"duration_min,omitempty"`
+	AmountG        *float64  `json:"amount_g,omitempty"`
+	Ingredients    *string   `json:"ingredients,omitempty"`
 	Notes          *string   `json:"notes,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`

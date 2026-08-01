@@ -139,4 +139,106 @@ describe('FeedingForm', () => {
 		expect((screen.getByLabelText(/notes/i) as HTMLTextAreaElement).value).toBe('tolerated well');
 		expect(screen.getByRole('button', { name: /update feeding/i })).toBeInTheDocument();
 	});
+	// --- Solid food intake ---
+
+	it('shows amount, unit, and ingredients fields when feed type is solid', async () => {
+		render(FeedingForm, { props: { onsubmit } });
+
+		expect(screen.queryByLabelText(/ingredients/i)).not.toBeInTheDocument();
+
+		await fireEvent.change(screen.getByLabelText(/feed type/i), { target: { value: 'solid' } });
+
+		expect(screen.getByLabelText(/^amount$/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/unit/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/ingredients/i)).toBeInTheDocument();
+		expect(screen.queryByLabelText(/volume \(mL\)/i)).not.toBeInTheDocument();
+		expect(screen.queryByLabelText(/caloric density/i)).not.toBeInTheDocument();
+	});
+
+	it('unit selector offers mL and g', async () => {
+		render(FeedingForm, { props: { onsubmit } });
+		await fireEvent.change(screen.getByLabelText(/feed type/i), { target: { value: 'solid' } });
+
+		const unit = screen.getByLabelText(/unit/i) as HTMLSelectElement;
+		const options = Array.from(unit.options).map((o) => o.value);
+		expect(options).toEqual(['g', 'ml']);
+	});
+
+	it('submits solid amount in grams as amount_g with ingredients', async () => {
+		render(FeedingForm, { props: { onsubmit } });
+
+		await fireEvent.change(screen.getByLabelText(/feed type/i), { target: { value: 'solid' } });
+		await fireEvent.input(screen.getByLabelText(/^amount$/i), { target: { value: '45.5' } });
+		await fireEvent.change(screen.getByLabelText(/unit/i), { target: { value: 'g' } });
+		await fireEvent.input(screen.getByLabelText(/ingredients/i), {
+			target: { value: 'rice porridge, carrot' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: /log feeding/i }));
+
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.feed_type).toBe('solid');
+		expect(payload.amount_g).toBe(45.5);
+		expect(payload.ingredients).toBe('rice porridge, carrot');
+		expect(payload.volume_ml).toBeUndefined();
+	});
+
+	it('submits solid amount in mL as volume_ml', async () => {
+		render(FeedingForm, { props: { onsubmit } });
+
+		await fireEvent.change(screen.getByLabelText(/feed type/i), { target: { value: 'solid' } });
+		await fireEvent.change(screen.getByLabelText(/unit/i), { target: { value: 'ml' } });
+		await fireEvent.input(screen.getByLabelText(/^amount$/i), { target: { value: '80' } });
+		await fireEvent.click(screen.getByRole('button', { name: /log feeding/i }));
+
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.volume_ml).toBe(80);
+		expect(payload.amount_g).toBeUndefined();
+	});
+
+	it('does not send solid fields for a non-solid feed type', async () => {
+		render(FeedingForm, { props: { onsubmit } });
+
+		await fireEvent.change(screen.getByLabelText(/feed type/i), { target: { value: 'solid' } });
+		await fireEvent.input(screen.getByLabelText(/^amount$/i), { target: { value: '45' } });
+		await fireEvent.input(screen.getByLabelText(/ingredients/i), { target: { value: 'carrot' } });
+		await fireEvent.change(screen.getByLabelText(/feed type/i), { target: { value: 'formula' } });
+		await fireEvent.input(screen.getByLabelText(/volume/i), { target: { value: '120' } });
+		await fireEvent.click(screen.getByRole('button', { name: /log feeding/i }));
+
+		const payload = onsubmit.mock.calls[0][0];
+		expect(payload.volume_ml).toBe(120);
+		expect(payload.amount_g).toBeUndefined();
+		expect(payload.ingredients).toBeUndefined();
+	});
+
+	it('pre-populates solid fields from initialData in grams', () => {
+		const initialData = {
+			timestamp: '2025-12-01T08:00:00Z',
+			feed_type: 'solid',
+			amount_g: 45.5,
+			ingredients: 'rice porridge, carrot'
+		};
+
+		render(FeedingForm, { props: { onsubmit, initialData } });
+
+		expect((screen.getByLabelText(/^amount$/i) as HTMLInputElement).value).toBe('45.5');
+		expect((screen.getByLabelText(/unit/i) as HTMLSelectElement).value).toBe('g');
+		expect((screen.getByLabelText(/ingredients/i) as HTMLTextAreaElement).value).toBe(
+			'rice porridge, carrot'
+		);
+	});
+
+	it('pre-populates solid fields from initialData in mL', () => {
+		const initialData = {
+			timestamp: '2025-12-01T08:00:00Z',
+			feed_type: 'solid',
+			volume_ml: 80,
+			ingredients: 'banana puree'
+		};
+
+		render(FeedingForm, { props: { onsubmit, initialData } });
+
+		expect((screen.getByLabelText(/^amount$/i) as HTMLInputElement).value).toBe('80');
+		expect((screen.getByLabelText(/unit/i) as HTMLSelectElement).value).toBe('ml');
+	});
 });
