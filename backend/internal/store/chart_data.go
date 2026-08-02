@@ -16,11 +16,14 @@ type FeedingByType struct {
 
 // FeedingDailyEntry holds aggregated feeding data for a single day.
 type FeedingDailyEntry struct {
-	Date          string        `json:"date"`
-	TotalVolumeMl float64       `json:"total_volume_ml"`
-	TotalCalories float64       `json:"total_calories"`
-	FeedCount     int           `json:"feed_count"`
-	ByType        FeedingByType `json:"by_type"`
+	Date           string        `json:"date"`
+	TotalVolumeMl  float64       `json:"total_volume_ml"`
+	LiquidVolumeMl float64       `json:"liquid_volume_ml"`
+	SolidVolumeMl  float64       `json:"solid_volume_ml"`
+	SolidAmountG   float64       `json:"solid_amount_g"`
+	TotalCalories  float64       `json:"total_calories"`
+	FeedCount      int           `json:"feed_count"`
+	ByType         FeedingByType `json:"by_type"`
 }
 
 // DiaperDailyEntry holds aggregated diaper data for a single day.
@@ -97,6 +100,9 @@ func GetFeedingDaily(db *sql.DB, babyID, from, to string, loc *time.Location) ([
 	rows, err := db.Query(
 		`SELECT DATE(datetime(timestamp, ? || ' seconds')) as date,
 			COALESCE(SUM(volume_ml), 0) as total_volume_ml,
+			COALESCE(SUM(CASE WHEN feed_type != 'solid' THEN volume_ml END), 0) as liquid_volume_ml,
+			COALESCE(SUM(CASE WHEN feed_type = 'solid' THEN volume_ml END), 0) as solid_volume_ml,
+			COALESCE(SUM(CASE WHEN feed_type = 'solid' THEN amount_g END), 0) as solid_amount_g,
 			COALESCE(SUM(calories), 0) as total_calories,
 			COUNT(*) as feed_count,
 			SUM(CASE WHEN feed_type = 'breast_milk' OR feed_type = 'fortified_breast_milk' THEN 1 ELSE 0 END) as breast_milk,
@@ -117,7 +123,8 @@ func GetFeedingDaily(db *sql.DB, babyID, from, to string, loc *time.Location) ([
 	var entries []FeedingDailyEntry
 	for rows.Next() {
 		var e FeedingDailyEntry
-		if err := rows.Scan(&e.Date, &e.TotalVolumeMl, &e.TotalCalories, &e.FeedCount,
+		if err := rows.Scan(&e.Date, &e.TotalVolumeMl, &e.LiquidVolumeMl, &e.SolidVolumeMl, &e.SolidAmountG,
+			&e.TotalCalories, &e.FeedCount,
 			&e.ByType.BreastMilk, &e.ByType.Formula, &e.ByType.Solid, &e.ByType.Other); err != nil {
 			return nil, fmt.Errorf("scan feeding daily: %w", err)
 		}

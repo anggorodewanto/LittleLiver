@@ -92,6 +92,151 @@ func TestGetFeedingDaily_EmptyData(t *testing.T) {
 	}
 }
 
+func TestGetFeedingDaily_LiquidOnlyDay(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	today := time.Now().UTC().Format("2006-01-02")
+
+	vol1 := 120.0
+	vol2 := 100.0
+	store.CreateFeeding(db, baby.ID, user.ID, today+"T08:00:00Z", "formula", &vol1, nil, nil, nil, 67.0)
+	store.CreateFeeding(db, baby.ID, user.ID, today+"T12:00:00Z", "breast_milk", &vol2, nil, nil, nil, 67.0)
+
+	series, err := store.GetFeedingDaily(db, baby.ID, today, today, time.UTC)
+	if err != nil {
+		t.Fatalf("GetFeedingDaily failed: %v", err)
+	}
+	if len(series) != 1 {
+		t.Fatalf("expected 1 daily entry, got %d", len(series))
+	}
+
+	e := series[0]
+	if e.TotalVolumeMl != 220 {
+		t.Errorf("expected total_volume_ml=220, got %.1f", e.TotalVolumeMl)
+	}
+	if e.LiquidVolumeMl != 220 {
+		t.Errorf("expected liquid_volume_ml=220, got %.1f", e.LiquidVolumeMl)
+	}
+	if e.SolidVolumeMl != 0 {
+		t.Errorf("expected solid_volume_ml=0, got %.1f", e.SolidVolumeMl)
+	}
+	if e.SolidAmountG != 0 {
+		t.Errorf("expected solid_amount_g=0, got %.1f", e.SolidAmountG)
+	}
+}
+
+func TestGetFeedingDaily_SplitsLiquidAndSolid(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	today := time.Now().UTC().Format("2006-01-02")
+
+	formulaVol := 120.0
+	solidG := 25.0
+	solidVol := 60.0
+
+	// Liquid feed measured in mL
+	if _, err := store.CreateFeedingWith(db, baby.ID, user.ID, store.FeedingInput{
+		Timestamp: today + "T08:00:00Z",
+		FeedType:  "formula",
+		VolumeMl:  &formulaVol,
+	}, 67.0); err != nil {
+		t.Fatalf("create formula feeding: %v", err)
+	}
+	// Solid feed measured in grams
+	if _, err := store.CreateFeedingWith(db, baby.ID, user.ID, store.FeedingInput{
+		Timestamp: today + "T11:00:00Z",
+		FeedType:  "solid",
+		AmountG:   &solidG,
+	}, 67.0); err != nil {
+		t.Fatalf("create solid (g) feeding: %v", err)
+	}
+	// Solid feed measured in mL (e.g. puree)
+	if _, err := store.CreateFeedingWith(db, baby.ID, user.ID, store.FeedingInput{
+		Timestamp: today + "T15:00:00Z",
+		FeedType:  "solid",
+		VolumeMl:  &solidVol,
+	}, 67.0); err != nil {
+		t.Fatalf("create solid (mL) feeding: %v", err)
+	}
+
+	series, err := store.GetFeedingDaily(db, baby.ID, today, today, time.UTC)
+	if err != nil {
+		t.Fatalf("GetFeedingDaily failed: %v", err)
+	}
+	if len(series) != 1 {
+		t.Fatalf("expected 1 daily entry, got %d", len(series))
+	}
+
+	e := series[0]
+	if e.FeedCount != 3 {
+		t.Errorf("expected feed_count=3, got %d", e.FeedCount)
+	}
+	if e.TotalVolumeMl != 180 {
+		t.Errorf("expected total_volume_ml=180, got %.1f", e.TotalVolumeMl)
+	}
+	if e.LiquidVolumeMl != 120 {
+		t.Errorf("expected liquid_volume_ml=120, got %.1f", e.LiquidVolumeMl)
+	}
+	if e.SolidVolumeMl != 60 {
+		t.Errorf("expected solid_volume_ml=60, got %.1f", e.SolidVolumeMl)
+	}
+	if e.SolidAmountG != 25 {
+		t.Errorf("expected solid_amount_g=25, got %.1f", e.SolidAmountG)
+	}
+}
+
+func TestGetFeedingDaily_SolidGramsExcludedFromVolume(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.CreateTestBaby(t, db, user.ID)
+
+	today := time.Now().UTC().Format("2006-01-02")
+
+	solidG := 30.0
+	if _, err := store.CreateFeedingWith(db, baby.ID, user.ID, store.FeedingInput{
+		Timestamp: today + "T09:00:00Z",
+		FeedType:  "solid",
+		AmountG:   &solidG,
+	}, 67.0); err != nil {
+		t.Fatalf("create solid (g) feeding: %v", err)
+	}
+
+	series, err := store.GetFeedingDaily(db, baby.ID, today, today, time.UTC)
+	if err != nil {
+		t.Fatalf("GetFeedingDaily failed: %v", err)
+	}
+	if len(series) != 1 {
+		t.Fatalf("expected 1 daily entry, got %d", len(series))
+	}
+
+	e := series[0]
+	if e.SolidAmountG != 30 {
+		t.Errorf("expected solid_amount_g=30, got %.1f", e.SolidAmountG)
+	}
+	if e.TotalVolumeMl != 0 {
+		t.Errorf("expected total_volume_ml=0 for grams-only solid, got %.1f", e.TotalVolumeMl)
+	}
+	if e.LiquidVolumeMl != 0 {
+		t.Errorf("expected liquid_volume_ml=0 for grams-only solid, got %.1f", e.LiquidVolumeMl)
+	}
+	if e.SolidVolumeMl != 0 {
+		t.Errorf("expected solid_volume_ml=0 for grams-only solid, got %.1f", e.SolidVolumeMl)
+	}
+}
+
 func TestGetDiaperDaily_CombinesStoolAndUrine(t *testing.T) {
 	t.Parallel()
 	db := testutil.SetupTestDB(t)

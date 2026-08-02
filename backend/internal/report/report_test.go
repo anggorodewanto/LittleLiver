@@ -335,6 +335,42 @@ func TestGeneratePDF_NoteWithoutCategory(t *testing.T) {
 	}
 }
 
+func TestGeneratePDF_SolidOnlyFeedingDay(t *testing.T) {
+	t.Parallel()
+	db := testutil.SetupTestDB(t)
+	defer db.Close()
+
+	user := testutil.CreateTestUser(t, db)
+	baby := testutil.SeedBabyWithKasai(t, db, user.ID)
+
+	// A day with only a solid feed logged in grams (no volume_ml at all).
+	ts := time.Date(2025, 8, 1, 12, 0, 0, 0, time.UTC).Format(model.DateTimeFormat)
+	_, err := db.Exec(
+		`INSERT INTO feedings (id, baby_id, logged_by, timestamp, feed_type, amount_g)
+		 VALUES (?, ?, ?, ?, 'solid', 25.0)`,
+		model.NewULID(), baby.ID, user.ID, ts,
+	)
+	if err != nil {
+		t.Fatalf("insert solid feeding: %v", err)
+	}
+
+	var buf bytes.Buffer
+	err = report.Generate(db, nil, baby, "2025-08-01", "2025-08-01", &buf, nil)
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+
+	data := string(buf.Bytes())
+	if len(data) < 5 || data[:5] != "%PDF-" {
+		t.Fatal("output is not a valid PDF")
+	}
+	for _, frag := range []string{"Avg Daily Liquid", "Avg Daily Solid", "25 g"} {
+		if !containsText(data, frag) {
+			t.Errorf("PDF does not contain expected text %q", frag)
+		}
+	}
+}
+
 // createTestPNG generates a small valid PNG image for testing.
 func createTestPNG(t *testing.T) []byte {
 	t.Helper()
