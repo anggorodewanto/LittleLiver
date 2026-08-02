@@ -28,7 +28,7 @@
 			weight: { timestamp: string; weight_kg: number; measurement_source: string }[];
 			height: { timestamp: string; height_cm: number; measurement_source: string }[];
 			stool_color: { timestamp: string; color_score: number }[];
-			feeding_daily: { date: string; total_volume_ml: number; total_calories: number; feed_count: number; by_type: Record<string, number> }[];
+			feeding_daily: { date: string; total_volume_ml: number; liquid_volume_ml?: number; solid_volume_ml?: number; solid_amount_g?: number; total_calories: number; feed_count: number; by_type: Record<string, number> }[];
 			diaper_daily: { date: string; wet_count: number; stool_count: number }[];
 			abdomen_girth: { timestamp: string; girth_cm: number }[];
 			head_circumference: { timestamp: string; circumference_cm: number }[];

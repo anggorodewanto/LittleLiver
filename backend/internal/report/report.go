@@ -974,35 +974,44 @@ func addFeedingSummary(m core.Maroto, feedings []store.FeedingDailyEntry) {
 	}
 
 	// Calculate averages
-	totalVol := 0.0
+	totalLiquidMl := 0.0
+	totalSolidMl := 0.0
+	totalSolidG := 0.0
 	totalCal := 0.0
 	for _, f := range feedings {
-		totalVol += f.TotalVolumeMl
+		totalLiquidMl += f.LiquidVolumeMl
+		totalSolidMl += f.SolidVolumeMl
+		totalSolidG += f.SolidAmountG
 		totalCal += f.TotalCalories
 	}
 	days := float64(len(feedings))
-	avgVol := totalVol / days
+	avgLiquidMl := totalLiquidMl / days
+	avgSolidMl := totalSolidMl / days
+	avgSolidG := totalSolidG / days
 	avgCal := totalCal / days
 
 	m.AddRow(7,
-		text.NewCol(6, fmt.Sprintf("Avg Daily Volume: %.0f mL", math.Round(avgVol)), valueStyle),
-		text.NewCol(6, fmt.Sprintf("Avg Daily Calories: %.0f kcal", math.Round(avgCal)), valueStyle),
+		text.NewCol(4, fmt.Sprintf("Avg Daily Liquid: %.0f mL", math.Round(avgLiquidMl)), valueStyle),
+		text.NewCol(4, fmt.Sprintf("Avg Daily Solid: %s", formatSolidTotal(avgSolidMl, avgSolidG)), valueStyle),
+		text.NewCol(4, fmt.Sprintf("Avg Daily Calories: %.0f kcal", math.Round(avgCal)), valueStyle),
 	)
 
 	// Daily table
 	m.AddRows(row.New(7).Add(
 		text.NewCol(3, "Date", tableHeaderStyle),
-		text.NewCol(3, "Volume (mL)", tableHeaderStyle),
-		text.NewCol(3, "Calories", tableHeaderStyle),
-		text.NewCol(3, "Feed Count", tableHeaderStyle),
+		text.NewCol(2, "Liquid (mL)", tableHeaderStyle),
+		text.NewCol(3, "Solid", tableHeaderStyle),
+		text.NewCol(2, "Calories", tableHeaderStyle),
+		text.NewCol(2, "Feed Count", tableHeaderStyle),
 	).WithStyle(headerBg))
 
 	for _, f := range feedings {
 		m.AddRows(row.New(6).Add(
 			text.NewCol(3, f.Date, tableCellStyle),
-			text.NewCol(3, fmt.Sprintf("%.0f", f.TotalVolumeMl), tableCellStyle),
-			text.NewCol(3, fmt.Sprintf("%.0f", f.TotalCalories), tableCellStyle),
-			text.NewCol(3, fmt.Sprintf("%d", f.FeedCount), tableCellStyle),
+			text.NewCol(2, fmt.Sprintf("%.0f", f.LiquidVolumeMl), tableCellStyle),
+			text.NewCol(3, formatSolidTotal(f.SolidVolumeMl, f.SolidAmountG), tableCellStyle),
+			text.NewCol(2, fmt.Sprintf("%.0f", f.TotalCalories), tableCellStyle),
+			text.NewCol(2, fmt.Sprintf("%d", f.FeedCount), tableCellStyle),
 		).WithStyle(cellBorder))
 	}
 
@@ -1095,6 +1104,21 @@ func addNotableObservations(m core.Maroto, notes []noteEntry, bruisingEntries []
 // spacerRow creates an empty spacer row.
 func spacerRow(height float64) core.Row {
 	return row.New(height).Add(col.New())
+}
+
+// formatSolidTotal renders a solid-food total that may be measured in
+// millilitres, grams, or both. Returns "-" when there is nothing to show.
+func formatSolidTotal(ml, g float64) string {
+	if ml > 0 && g > 0 {
+		return fmt.Sprintf("%.0f mL, %.0f g", ml, g)
+	}
+	if ml > 0 {
+		return fmt.Sprintf("%.0f mL", ml)
+	}
+	if g > 0 {
+		return fmt.Sprintf("%.0f g", g)
+	}
+	return "-"
 }
 
 // formatTimestamp formats a UTC datetime string for display.
