@@ -147,7 +147,7 @@ describe('/log/immunization page', () => {
 
 		const select = (await screen.findByLabelText(/vaccine/i)) as HTMLSelectElement;
 		await fireEvent.change(select, { target: { value: 'HEPB::1' } });
-		await fireEvent.change(screen.getByLabelText(/date administered/i), {
+		await fireEvent.input(screen.getByLabelText(/date administered/i), {
 			target: { value: '2026-06-20' }
 		});
 		await fireEvent.click(screen.getByRole('button', { name: /save|log/i }));
@@ -174,7 +174,7 @@ describe('/log/immunization page', () => {
 
 		const nameInput = await screen.findByLabelText(/vaccine name/i);
 		await fireEvent.input(nameInput, { target: { value: 'Travel Vaccine' } });
-		await fireEvent.change(screen.getByLabelText(/date administered/i), {
+		await fireEvent.input(screen.getByLabelText(/date administered/i), {
 			target: { value: '2026-06-20' }
 		});
 		await fireEvent.click(screen.getByRole('button', { name: /save|log/i }));
