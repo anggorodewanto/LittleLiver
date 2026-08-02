@@ -179,10 +179,31 @@
 		return groups;
 	});
 
-	let feedingTotalMl = $derived(
-		entries
-			.filter((e) => e.logType.key === 'feeding')
+	let feedingEntries = $derived(entries.filter((e) => e.logType.key === 'feeding'));
+
+	let liquidFeedingTotalMl = $derived(
+		feedingEntries
+			.filter((e) => e.entry.feed_type !== 'solid')
 			.reduce((sum, e) => sum + (Number(e.entry.volume_ml) || 0), 0)
+	);
+
+	let solidFeedingEntries = $derived(feedingEntries.filter((e) => e.entry.feed_type === 'solid'));
+
+	let solidFeedingTotalMl = $derived(
+		solidFeedingEntries.reduce((sum, e) => sum + (Number(e.entry.volume_ml) || 0), 0)
+	);
+
+	let solidFeedingTotalG = $derived(
+		solidFeedingEntries.reduce((sum, e) => sum + (Number(e.entry.amount_g) || 0), 0)
+	);
+
+	let solidFeedingTotalLabel = $derived(
+		[
+			solidFeedingTotalMl > 0 ? `${solidFeedingTotalMl} mL` : '',
+			solidFeedingTotalG > 0 ? `${solidFeedingTotalG} g` : ''
+		]
+			.filter(Boolean)
+			.join(', ')
 	);
 
 	let fluidOutputTotalMl = $derived(
@@ -232,10 +253,13 @@
 	{:else if entries.length === 0}
 		<div class="empty">No entries found.</div>
 	{:else}
-		{#if feedingTotalMl > 0 || fluidOutputTotalMl > 0}
+		{#if liquidFeedingTotalMl > 0 || solidFeedingTotalLabel || fluidOutputTotalMl > 0}
 			<div class="totals">
-				{#if feedingTotalMl > 0}
-					<span class="total-item">Feeding: {feedingTotalMl} mL</span>
+				{#if liquidFeedingTotalMl > 0}
+					<span class="total-item">Feeding (liquid): {liquidFeedingTotalMl} mL</span>
+				{/if}
+				{#if solidFeedingTotalLabel}
+					<span class="total-item">Feeding (solid): {solidFeedingTotalLabel}</span>
 				{/if}
 				{#if fluidOutputTotalMl > 0}
 					<span class="total-item">Output: {fluidOutputTotalMl} mL</span>
