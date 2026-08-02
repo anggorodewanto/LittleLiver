@@ -135,7 +135,7 @@ describe('RawLogList', () => {
 		expect(remaining.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it('shows feeding total volume', async () => {
+	it('shows liquid feeding total volume', async () => {
 		mockAllEndpoints({
 			feedings: {
 				data: [
@@ -148,7 +148,58 @@ describe('RawLogList', () => {
 
 		render(RawLogList, { props: { babyId: 'baby-1' } });
 
-		expect(await screen.findByText(/Feeding:\s*200\s*mL/)).toBeInTheDocument();
+		expect(await screen.findByText(/Feeding \(liquid\):\s*200\s*mL/)).toBeInTheDocument();
+		expect(screen.queryByText(/Feeding \(solid\):/)).not.toBeInTheDocument();
+	});
+
+	it('shows solid feeding total in grams separately from liquid', async () => {
+		mockAllEndpoints({
+			feedings: {
+				data: [
+					{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'formula', volume_ml: 120 },
+					{ id: 'f2', timestamp: '2026-03-31T12:00:00Z', feed_type: 'solid', amount_g: 45 },
+					{ id: 'f3', timestamp: '2026-03-31T10:00:00Z', feed_type: 'solid', amount_g: 30 }
+				],
+				next_cursor: null
+			}
+		});
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		expect(await screen.findByText(/Feeding \(liquid\):\s*120\s*mL/)).toBeInTheDocument();
+		expect(screen.getByText(/Feeding \(solid\):\s*75\s*g/)).toBeInTheDocument();
+	});
+
+	it('counts solids measured in mL toward the solid total, not the liquid total', async () => {
+		mockAllEndpoints({
+			feedings: {
+				data: [
+					{ id: 'f1', timestamp: '2026-03-31T14:00:00Z', feed_type: 'breast_milk', volume_ml: 100 },
+					{ id: 'f2', timestamp: '2026-03-31T12:00:00Z', feed_type: 'solid', volume_ml: 60 },
+					{ id: 'f3', timestamp: '2026-03-31T10:00:00Z', feed_type: 'solid', amount_g: 25 }
+				],
+				next_cursor: null
+			}
+		});
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		expect(await screen.findByText(/Feeding \(liquid\):\s*100\s*mL/)).toBeInTheDocument();
+		expect(screen.getByText(/Feeding \(solid\):\s*60\s*mL,\s*25\s*g/)).toBeInTheDocument();
+	});
+
+	it('omits the liquid total when only solid feedings exist', async () => {
+		mockAllEndpoints({
+			feedings: {
+				data: [{ id: 'f1', timestamp: '2026-03-31T10:00:00Z', feed_type: 'solid', amount_g: 40 }],
+				next_cursor: null
+			}
+		});
+
+		render(RawLogList, { props: { babyId: 'baby-1' } });
+
+		expect(await screen.findByText(/Feeding \(solid\):\s*40\s*g/)).toBeInTheDocument();
+		expect(screen.queryByText(/Feeding \(liquid\):/)).not.toBeInTheDocument();
 	});
 
 	it('shows fluid output total volume', async () => {
@@ -315,7 +366,7 @@ describe('RawLogList', () => {
 		});
 
 		// Feeding total should update (no more feeding entries)
-		expect(screen.queryByText(/Feeding:/)).not.toBeInTheDocument();
+		expect(screen.queryByText(/Feeding \(/)).not.toBeInTheDocument();
 	});
 
 	describe('quick date range presets', () => {
