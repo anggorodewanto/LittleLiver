@@ -9,6 +9,7 @@ vi.mock('$lib/api', () => ({
 
 import { apiClient } from '$lib/api';
 import LabExtractionReview from '$lib/components/LabExtractionReview.svelte';
+import { formatDateISO } from '$lib/datetime';
 
 describe('LabExtractionReview', () => {
 	let onconfirm: ReturnType<typeof vi.fn>;
@@ -473,6 +474,49 @@ describe('LabExtractionReview', () => {
 				expect(screen.getByDisplayValue('mmol/L')).toBeInTheDocument();
 				expect(screen.getByDisplayValue('3.5-5.0')).toBeInTheDocument();
 			});
+		});
+	});
+
+	describe('report date', () => {
+		it('renders an editable report date input prefilled from the reportDate prop', () => {
+			render(LabExtractionReview, {
+				props: { extracted: mockExtracted, notes: '', onconfirm, oncancel, reportDate: '2026-08-04' }
+			});
+
+			const dateInput = screen.getByLabelText(/report date/i) as HTMLInputElement;
+			expect(dateInput.type).toBe('date');
+			expect(dateInput.value).toBe('2026-08-04');
+		});
+
+		it('defaults the report date to today when no reportDate is given', () => {
+			render(LabExtractionReview, {
+				props: { extracted: mockExtracted, notes: '', onconfirm, oncancel }
+			});
+
+			const dateInput = screen.getByLabelText(/report date/i) as HTMLInputElement;
+			expect(dateInput.value).toBe(formatDateISO(new Date()));
+		});
+
+		it('passes the report date to onconfirm', async () => {
+			render(LabExtractionReview, {
+				props: { extracted: mockExtracted, notes: '', onconfirm, oncancel, reportDate: '2026-08-04' }
+			});
+
+			await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+			expect(onconfirm.mock.calls[0][1]).toBe('2026-08-04');
+		});
+
+		it('passes the user-corrected report date to onconfirm', async () => {
+			render(LabExtractionReview, {
+				props: { extracted: mockExtracted, notes: '', onconfirm, oncancel, reportDate: '2026-04-08' }
+			});
+
+			const dateInput = screen.getByLabelText(/report date/i);
+			await fireEvent.input(dateInput, { target: { value: '2026-08-04' } });
+			await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+			expect(onconfirm.mock.calls[0][1]).toBe('2026-08-04');
 		});
 	});
 
