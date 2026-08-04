@@ -5,6 +5,7 @@
 		findSuggestionMatch,
 		type LabTestSuggestion
 	} from '$lib/labSuggestions';
+	import { formatDateISO } from '$lib/datetime';
 
 	export interface ExtractedItem {
 		test_name: string;
@@ -30,12 +31,17 @@
 	interface Props {
 		extracted: ExtractedItem[];
 		notes: string;
-		onconfirm: (items: ReviewedLabPayload[]) => void;
+		onconfirm: (items: ReviewedLabPayload[], reportDate: string) => void;
 		oncancel: () => void;
 		babyId?: string;
+		reportDate?: string;
 	}
 
-	let { extracted, notes, onconfirm, oncancel, babyId }: Props = $props();
+	let { extracted, notes, onconfirm, oncancel, babyId, reportDate = '' }: Props = $props();
+
+	// Editable copy — the extracted date can be wrong (e.g. 04/08 read as Apr 8
+	// instead of Aug 4), so the user gets to correct it before saving.
+	let editableDate = $derived(reportDate || formatDateISO(new Date()));
 
 	let dbSuggestions = $state<LabTestSuggestion[]>([]);
 	let suggestionsReady = $state(false);
@@ -132,7 +138,7 @@
 				if (r.normal_range) item.normal_range = r.normal_range;
 				return item;
 			});
-		onconfirm(payload);
+		onconfirm(payload, editableDate);
 	}
 </script>
 
@@ -145,6 +151,12 @@
 	{#if notes}
 		<p class="extraction-notes">{notes}</p>
 	{/if}
+
+	<div class="field-group report-date">
+		<label for="report-date">Report date</label>
+		<input id="report-date" type="date" bind:value={editableDate} />
+		<span class="report-date-hint">Check this — dates read from photos can be wrong.</span>
+	</div>
 
 	<div class="review-rows">
 		{#each rows as row, i (i)}
@@ -254,6 +266,15 @@
 		width: auto;
 		min-width: 60px;
 		max-width: 150px;
+	}
+
+	.report-date {
+		margin-bottom: var(--space-3, 1rem);
+	}
+
+	.report-date-hint {
+		font-size: var(--font-size-xs, 0.75rem);
+		color: var(--color-text-muted);
 	}
 
 	.confidence-badge {

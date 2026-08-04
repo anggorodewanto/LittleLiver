@@ -83,14 +83,14 @@
 		}
 	}
 
-	function buildTimestamp(): string {
-		if (reportDate) {
-			return toISO8601(`${reportDate}T12:00`);
+	function buildTimestamp(date: string): string {
+		if (date) {
+			return toISO8601(`${date}T12:00`);
 		}
 		return toISO8601(defaultTimestamp());
 	}
 
-	async function handleConfirm(items: ReviewedLabPayload[]) {
+	async function handleConfirm(items: ReviewedLabPayload[], confirmedDate: string) {
 		const validItems = items.filter((item) => item.test_name.trim() !== '');
 		if (validItems.length === 0) {
 			oncancel();
@@ -100,7 +100,7 @@
 		state = 'saving';
 		error = '';
 
-		const timestamp = buildTimestamp();
+		const timestamp = buildTimestamp(confirmedDate);
 
 		try {
 			await apiClient.post(`/babies/${babyId}/labs/batch`, {
@@ -171,6 +171,7 @@
 		onconfirm={handleConfirm}
 		{oncancel}
 		{babyId}
+		{reportDate}
 	/>
 {:else if state === 'saving'}
 	<div class="loading-state">

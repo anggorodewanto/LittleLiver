@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import LabImportFlow from '$lib/components/LabImportFlow.svelte';
+import { formatDateISO } from '$lib/datetime';
 
 vi.mock('$lib/api', () => ({
 	apiClient: {
@@ -252,6 +253,69 @@ describe('LabImportFlow', () => {
 			const payload = batchCall![1] as { items: { timestamp: string }[] };
 			expect(payload.items[0].timestamp).toContain('2026-03-15');
 		});
+	});
+
+	it('shows the parsed report date in the review step and uses the corrected date', async () => {
+		vi.mocked(apiClient.postForm).mockResolvedValue({ r2_key: 'photos/key1.jpg' });
+
+		vi.mocked(apiClient.post)
+			.mockResolvedValueOnce({
+				extracted: [
+					{ test_name: 'ALT', value: '45', unit: 'U/L', normal_range: '7-56', confidence: 'high' }
+				],
+				notes: '',
+				report_date: '2026-04-08'
+			})
+			.mockResolvedValueOnce([]);
+
+		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
+
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
+
+		await waitFor(() => {
+			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
+		});
+
+		const dateInput = screen.getByLabelText(/report date/i) as HTMLInputElement;
+		expect(dateInput.value).toBe('2026-04-08');
+
+		await fireEvent.input(dateInput, { target: { value: '2026-08-04' } });
+		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+		await waitFor(() => {
+			const batchCall = vi
+				.mocked(apiClient.post)
+				.mock.calls.find((call) => call[0] === '/babies/baby-1/labs/batch');
+			expect(batchCall).toBeDefined();
+			const payload = batchCall![1] as { items: { timestamp: string }[] };
+			expect(payload.items[0].timestamp).toContain('2026-08-04');
+		});
+	});
+
+	it('prefills the report date with today when extraction returns no date', async () => {
+		vi.mocked(apiClient.postForm).mockResolvedValue({ r2_key: 'photos/key1.jpg' });
+
+		vi.mocked(apiClient.post)
+			.mockResolvedValueOnce({
+				extracted: [
+					{ test_name: 'ALT', value: '45', unit: 'U/L', normal_range: '7-56', confidence: 'high' }
+				],
+				notes: ''
+			})
+			.mockResolvedValueOnce([]);
+
+		render(LabImportFlow, { props: { babyId: 'baby-1', oncancel, onsaved } });
+
+		await addFiles([makeFile('report.jpg')]);
+		await clickSubmit();
+
+		await waitFor(() => {
+			expect(screen.getByText(/review extracted results/i)).toBeInTheDocument();
+		});
+
+		const dateInput = screen.getByLabelText(/report date/i) as HTMLInputElement;
+		expect(dateInput.value).toBe(formatDateISO(new Date()));
 	});
 
 	it('filters out items with empty test_name on confirm', async () => {
