@@ -234,10 +234,16 @@ func NewMux(opts ...Option) *http.ServeMux {
 		// so client-side routing (SvelteKit) handles navigation.
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			path := staticDir + r.URL.Path
-			if _, err := os.Stat(path); err == nil {
+			// Directories (including "/") fall through to the SPA shell: serving them
+			// would expose a FileServer directory listing, and "/" would otherwise
+			// escape the no-cache header below — leaving the PWA start_url free to be
+			// heuristically cached, pinning clients to a stale JS bundle.
+			if info, err := os.Stat(path); err == nil && !info.IsDir() {
 				// Immutable hashed assets can be cached aggressively
 				if strings.HasPrefix(r.URL.Path, "/_app/immutable/") {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else {
+					w.Header().Set("Cache-Control", "no-cache")
 				}
 				fs.ServeHTTP(w, r)
 				return
